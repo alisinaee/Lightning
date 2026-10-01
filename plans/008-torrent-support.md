@@ -99,51 +99,23 @@ torrent-discovery ─────┼─► peer addresses ─► peer pool ─�
 
 Each phase names its own focused spec.
 
-## Phase A: split the HTTP transfer out of the manager (no behaviour change)
+## Phase A: split the HTTP transfer out of the manager (no behaviour change) — DONE
 
-1. **Add the seam** in a new `src/main/download/transfer.ts`. Start from this, and keep it this small. Add a member only when moving the code needs it.
+Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
-   ```ts
-   export interface Transfer {
-     /** Brings its connections in line with the networks that may carry traffic now. */
-     reconcile(usable: DownloadNetwork[]): void
-     /** Called every run tick: watchdogs, sizing. */
-     tick(now: number): void
-     /** Drops every connection; resolves when all have settled. */
-     stop(): Promise<void>
-     /** Networks changed or the computer woke: get connections going again. */
-     wake(pick: (networkId: string) => boolean, reconnect: (networkId: string) => boolean): void
-     /** Anything to check before a resume (HTTP: the file still exists). */
-     beforeResume(): Promise<string | null>
-     /** Moves the finished bytes into place; returns the published path. */
-     publish(
-       destinationPath: string,
-       beforeAttempt: (candidate: string) => Promise<void>
-     ): Promise<string>
-     discard(): Promise<void>
-   }
-   ```
+1. **`src/main/download/transfer.ts`** holds the seam and what both sides share:
+   - `Transfer` has seven members: `reconcile()`, `tick(now)`, `running()`, `abort()`, `reset()`, `wake(pick, reconnect)` and `systemResumed(now)`.
+   - `TransferTarget` is the slice of the runtime a transfer works on: `state`, `requestPayload`, `blocks`, `file`, `stop` and `speedSamplesByChunk`. It is the manager's own runtime object, so a new `stop` controller for each run is seen at once.
+   - `TransferHost` holds the manager's callbacks: `networks`, `reconcile()`, `failDownload()`, `failNetwork()` and `scheduleUpdate()`.
+   - The shared helpers moved here unchanged: the speed sampling functions, `updateSpeeds`, `clearSpeeds`, `recomputeAggregates` and `delay`.
+2. **`src/main/download/httpTransfer.ts`** (`HttpTransfer`) holds everything the plan listed: streams, attempts, hedges, retries, the stall and slow watchdogs, `ConcurrencyController`, `confirmSameBytes`, the HTTP constants and the HTTP-only runtime fields. The moved code is the same statements in the same order, with only `runtime.x` turned into `this.x`. `traffic()` became `trafficOf()` because it would otherwise clash with the `traffic` field.
+3. **`DownloadManager`** keeps lifecycle, network statuses, persistence, updates and publishing. Each run tick calls `transfer.tick(now)`, and `reconcile` ends with `transfer.reconcile()`.
+4. **Deliberately left for phase C, where the torrent transfer first needs them:**
+   - **The staging file stays with the manager.** Every download has one, so `publish`, `discard` and `beforeResume` weren't added to `Transfer`. Phase C gives `DownloadFile` a folder variant with the same methods (`size`, `sync`, `publish`, `discard`) instead.
+   - **The manifest has no `transfer` field yet.** A missing field will mean `'http'`, so adding it in phase C costs nothing.
+   - **`start` still plans HTTP blocks inline.** Phase C branches there on `request.infoHash`.
 
-2. **Move to `httpTransfer.ts`** (`class HttpTransfer implements Transfer`):
-   - Methods: `wake`, `backOff`, the bottom half of `reconcile` (from `const canSplit`), `liveStreams`, `traffic`, `startStreams`, `adjustStreams`, `refreshStuckConnections`, `markUnreachable`, `isSilent`, `isCrawling`, `abortAttempt`, `attemptPosition`, `otherAttemptsPosition`, `goIdle`, `beginAttempt`, `endAttempt`, `executeAttempt`, `onNetworkProgress`, `onAttemptProgress`, `finishAttempt`, `finishCompleted`, `finishStopped`, `finishAborted`, `finishFailed`, `letGo`, `concurrencySnapshot`, `addStreams`, `retireStreams`, `removeStream`, `runWorker`, `confirmSameBytes`.
-   - The HTTP constants: retry, slow, silent, hedge and `SCHEDULER_POLICY`.
-   - The HTTP-only runtime fields listed under "Current state", and `file: DownloadFile`.
-
-   The transfer reaches back into the manager only through a small `host` object passed to its constructor: `state`, `blocks`, `scheduleUpdate()`, `persist()`, `failDownload(message, discard?)`, `failNetwork(network, message)`, `notify(title, body)`.
-
-3. **Stay in `DownloadManager`:**
-   - `restorePersistedDownloads`, `getCurrentDownload`, `hasActiveDownload`, and `start`. `start` builds the transfer; the HTTP-specific parts (host resolution, `planDownload`) move behind a `createHttpTransfer(request)` call.
-   - `pause`, `resume` and `resumeAfterVerifying`, which call `transfer.stop()` / `transfer.beforeResume()`.
-   - `setNetworkEnabled`, `networksChanged`, `systemResumed`, `keepAwake`, `cancel`, `remove` and `suspendAll`.
-   - `run`, the tick loop, which calls `transfer.tick` and `transfer.publish`, then completes.
-   - `stopRun`, `failDownload`, `failNetwork`, `network`, the top half of `reconcile` (it then calls `transfer.reconcile(usable)`), `notify`, `recomputeAggregates`, `scheduleUpdate`, `pushUpdate`, `takeUpdate`, `schedulePersistence`, `persistNow` and `removePersistedDownload`.
-   - The speed helpers (`updateSpeeds`, `sampleSpeeds`, `clearSpeeds`) and `speedSamplesByChunk`, because peers have speeds too.
-
-4. **Manifest:** add `transfer: 'http' | 'torrent'` to `PersistedDownloadBase`. A missing field means `'http'`, so existing manifests load unchanged. Keep `version: 5`.
-
-5. **Where a method mixes both kinds**, split it at that line. The split is mechanical: the same statements run in the same order.
-
-   **Verify**: the full suite and the static checks pass, with **no test edited** apart from import paths. Also `wc -l src/main/download/downloadManager.ts` should come in under 1,000.
+   **Verified**: typecheck, lint and the full e2e suite (174 tests) pass, with no test edited. `downloadManager.ts` went from 2,168 lines to 936.
 
 ## Phase B: torrent metadata and getting a torrent in (no transfer yet)
 
