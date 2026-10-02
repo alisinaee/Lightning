@@ -31,6 +31,12 @@ export function formatEta(remainingBytes: number, bytesPerSec: number): string {
   return `${hrs}h ${remMins}m`
 }
 
+/** "3 files", or "2 of 4 files" when only some were chosen. */
+export function describeFileCount(chosen: number, total: number): string {
+  const files = `${total} ${total === 1 ? 'file' : 'files'}`
+  return chosen === total ? files : `${chosen} of ${files}`
+}
+
 /** What a download fetches: all of it, bar a torrent's pieces no chosen file needs. */
 export function wantedBytes(download: { totalBytes: number; skippedBytes?: number }): number {
   return download.totalBytes - (download.skippedBytes ?? 0)

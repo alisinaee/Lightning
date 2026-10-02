@@ -127,6 +127,8 @@ export interface DownloadState {
   id: string
   /** Set for a torrent: its streams are peers, and its blocks are the torrent's pieces. */
   kind?: 'torrent'
+  /** A torrent's files: how many there are, and how many were chosen to download. */
+  files?: { chosen: number; total: number }
   url: string
   fileName: string
   destinationPath: string

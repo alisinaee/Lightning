@@ -103,6 +103,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   const peakSpeedBytesPerSec = useAppStore((store) => store.peakSpeedBytesPerSec)
   const networkVisual = useNetworkVisuals()
   const isPaused = download.status === 'paused'
+  const isTorrent = download.kind === 'torrent'
   const percent = formatPercent(download.bytesDownloaded, wantedBytes(download))
   const knownSize = download.totalBytes > 0
   const [now, setNow] = useState(() => Date.now())
@@ -293,6 +294,14 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   <span className="font-semibold text-foreground">{percent}%</span>
                 </>
               )}
+              {isTorrent && (
+                <>
+                  <Dot />
+                  <span>
+                    {download.chunks.length} {download.chunks.length === 1 ? 'peer' : 'peers'}
+                  </span>
+                </>
+              )}
               {!isPaused && knownSize && effectiveSpeed > 0 && (
                 <>
                   <Dot />
@@ -329,6 +338,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
           knownSize={knownSize}
           remainingBytes={remainingBytes}
           isPaused={isPaused}
+          pieces={isTorrent}
         />
 
         <div className="mt-3">
@@ -367,6 +377,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 }
                 totalBytes={wantedBytes(download)}
                 blocks={download.blocks}
+                peers={isTorrent}
                 onSwitch={(enabled) =>
                   void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
                 }

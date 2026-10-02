@@ -236,7 +236,16 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
 13. A torrent with more than one file shows a checklist before Start, with everything checked. Unchecked files are `deselect()`ed. webtorrent still fetches pieces that cross into an unchecked file, and the bytes of those pieces stay in the staging folder and are removed at publication. Saved with the manifest, so a resume keeps the choice. Tests: a deselected file never appears in the destination, and the selected files are exact.
 
-## Phase D: wording and screens
+## Phase D: wording and screens — DONE
+
+> **Built** on branch `torrent-phase-d`, as follows:
+>
+> - **Network rows** (`NetworkRow`, `peers` prop): "N peers", "Peer #N", and the badge reads "Piece #K". A peer row shows "—" for percent and what that peer has sent, since a piece counts only once verified and several peers may send parts of it. "Can't reach server" becomes "Can't reach peers".
+> - **Block grid** (`BlockGrid`, `pieces` prop): "Piece #N" and "N pieces".
+> - **Downloading screen**: the total peer count beside the progress.
+> - **Complete screen**: "Peers" in place of "Streams", and "written in N pieces", counting only the pieces the chosen files needed. The subtitle carries "3 files", or "2 of 4 files" when some were skipped, from the new `DownloadState.files` (`{ chosen, total }`, set at start).
+> - **Reveal** shows the published folder for a multi-file torrent, unchanged, since `showItemInFolder` works on folders.
+> - **Tests**: `ui.spec.ts` has a full torrent journey through the UI (open a `.torrent`, untick a file, start, see peers and pieces, finish with "2 of 3 files"), and the HTTP journey now checks that HTTP keeps "streams" and "chunks".
 
 14. When `state.kind === 'torrent'`:
     - `NetworkRow` says "peer/peers", and `BlockGrid` says "pieces".

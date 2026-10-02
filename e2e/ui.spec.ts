@@ -1,7 +1,9 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { BLOCK, expect, interfacesEnv, NETWORKS, test } from './fixtures'
+import { BLOCK, expect, interfacesEnv, NETWORKS, test, treeSha } from './fixtures'
+import { seededBytes } from './origin'
+import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 // G. A handful of journeys through the real UI, to prove the screens are wired to the main
 // process. Download correctness is covered far more thoroughly by the API-level specs; these
@@ -21,6 +23,50 @@ async function stubNativeUi(
     shell.showItemInFolder = (path: string) => void revealed.push(path)
   }, destination)
 }
+
+test.describe('a torrent through the UI', () => {
+  test('choose its files, watch its peers, finish', async ({ plexo, dirs }) => {
+    const swarm = await new Swarm().start()
+    try {
+      const files = ['a.bin', 'b.bin', 'c.bin'].map((name, index) =>
+        named(seededBytes(1024 * 1024, 81 + index), name)
+      )
+      // Two seeders, slow enough to look at the download while it runs.
+      const options = { folder: 'Trio', pieceLength: 64 * 1024, uploadLimit: 200 * 1024 }
+      await swarm.seed(files, options)
+      const torrent = await swarm.seed(files, options)
+      await stubNativeUi(plexo, dirs.dest)
+      const page = plexo.page
+
+      await page.getByRole('button', { name: 'Browse…' }).click()
+      await page.getByRole('textbox', { name: 'LINK' }).fill(await torrentFileOnDisk(torrent))
+      await page.getByRole('checkbox', { name: /b\.bin/ }).click()
+      await plexo.expectNextDownload(
+        treeSha(
+          [files[0], files[2]].map((data) => ({ path: (data as { name?: string }).name!, data }))
+        )
+      )
+      await page.getByRole('button', { name: 'Start' }).click()
+
+      // Running: its connections are peers, and its blocks pieces.
+      const peers = page.getByRole('button', { name: /^\d+ peers?/ }).first()
+      await expect(peers).toBeVisible()
+      await peers.click()
+      await expect(page.getByText('Peer #1')).toBeVisible()
+      await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
+
+      // Done: two of its three files, with what fetched them.
+      await expect(
+        page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
+      ).toBeVisible({ timeout: 60_000 })
+      await expect(page.getByText(/^2 of 3 files · /)).toBeVisible()
+      await expect(page.getByText('Peers', { exact: true })).toBeVisible()
+      await expect(page.getByText(/^written in \d+ pieces/)).toBeVisible()
+    } finally {
+      await swarm.stop()
+    }
+  })
+})
 
 test.describe('UI journeys @smoke', () => {
   test('paste a link, start, pause, resume, finish, reveal the file', async ({
@@ -44,11 +90,16 @@ test.describe('UI journeys @smoke', () => {
 
     await page.getByRole('button', { name: 'Pause' }).click()
     await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
+    // An HTTP download's connections are streams, and its blocks chunks.
+    await expect(page.getByRole('button', { name: /^\d+ streams?/ }).first()).toBeVisible()
+    await expect(page.getByText(/^\d+ chunks · /)).toBeVisible()
     origin.release()
     await page.getByRole('button', { name: 'Resume' }).click()
 
     const reveal = page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
     await expect(reveal).toBeVisible()
+    await expect(page.getByText('Streams', { exact: true })).toBeVisible()
+    await expect(page.getByText(/^written in \d+ chunks/)).toBeVisible()
     await reveal.click()
     const { destinationPath } = (await plexo.current())!
     await expect

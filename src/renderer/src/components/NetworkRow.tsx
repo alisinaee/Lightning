@@ -16,6 +16,8 @@ interface NetworkRowProps {
   sharePercent: number
   totalBytes?: number | null
   blocks?: BlockState[]
+  /** A torrent's network: its streams are peers, and its blocks the torrent's pieces. */
+  peers?: boolean
   onSwitch: (enabled: boolean) => void
 }
 
@@ -85,14 +87,28 @@ function describeStream(
   return { block, size, downloaded: block.bytesDownloaded, percent, done }
 }
 
+/** A torrent's peer has no block of its own to measure: a piece only counts once verified, and
+ * several peers may send parts of it. It shows the piece it is sending and all it has sent. */
+function describePeer(
+  chunk: ChunkState,
+  blocks: BlockState[] | undefined
+): ReturnType<typeof describeStream> {
+  const block = chunk.currentBlockIndex != null ? blocks?.[chunk.currentBlockIndex] : undefined
+  return { block, size: 0, downloaded: chunk.bytesDownloaded, percent: 0, done: false }
+}
+
 export function NetworkRow({
   group,
   visual,
   sharePercent,
   totalBytes,
   blocks,
+  peers = false,
   onSwitch
 }: NetworkRowProps): React.JSX.Element {
+  const words = peers
+    ? { stream: 'peer', Stream: 'Peer', Block: 'Piece', unreachable: 'Can’t reach peers' }
+    : { stream: 'stream', Stream: 'Stream', Block: 'Chunk', unreachable: STATUS_TEXT.unreachable }
   const [expanded, setExpanded] = useState(false)
   const hasError = group.status === 'failed'
   const isActive = group.chunks.some((chunk) => chunk.status === 'downloading')
@@ -145,7 +161,7 @@ export function NetworkRow({
               aria-expanded={expanded}
               className="h-auto cursor-pointer rounded-[4px] border-[0.5px] bg-card px-[7px] py-[3px] font-mono text-[10.5px] leading-none font-medium text-[var(--text-secondary)] aria-expanded:bg-secondary dark:bg-card"
             >
-              {group.chunks.length} {group.chunks.length === 1 ? 'stream' : 'streams'}
+              {`${group.chunks.length} ${words.stream}${group.chunks.length === 1 ? '' : 's'}`}
               <span aria-hidden className="text-[7.5px] opacity-75">
                 {expanded ? '▲' : '▼'}
               </span>
@@ -161,7 +177,7 @@ export function NetworkRow({
                       hasError ? 'text-destructive' : 'text-muted-foreground'
                     }`}
                   >
-                    {STATUS_TEXT[group.status]}
+                    {group.status === 'unreachable' ? words.unreachable : STATUS_TEXT[group.status]}
                   </span>
                 }
               />
@@ -206,7 +222,7 @@ export function NetworkRow({
           const isFirst = index === 0
           const isLast = index === group.chunks.length - 1
           const isChunkActive = chunk.status === 'downloading'
-          const stream = describeStream(chunk, blocks)
+          const stream = peers ? describePeer(chunk, blocks) : describeStream(chunk, blocks)
           const statusText = stream.done
             ? 'Done'
             : chunk.status === 'paused'
@@ -235,11 +251,11 @@ export function NetworkRow({
 
               <div role="cell" className="flex min-w-0 items-center gap-[6px]">
                 <span className="font-medium whitespace-nowrap text-foreground">
-                  Stream #{index + 1}
+                  {words.Stream} #{index + 1}
                 </span>
                 {stream.block && (
                   <span className="rounded-[3px] border-[0.5px] border-border bg-secondary px-[4.5px] py-[1.5px] font-mono text-[9px] leading-none whitespace-nowrap text-muted-foreground">
-                    Chunk #{stream.block.index + 1}
+                    {words.Block} #{stream.block.index + 1}
                   </span>
                 )}
                 {isChunkActive ? (
@@ -279,7 +295,7 @@ export function NetworkRow({
 
               <ProgressBar
                 className="h-[5px]"
-                label={`Stream #${index + 1} progress`}
+                label={`${words.Stream} #${index + 1} progress`}
                 percent={stream.percent}
                 color={visual.solid}
               />
@@ -295,7 +311,7 @@ export function NetworkRow({
                       : 'var(--text-tertiary)'
                 }}
               >
-                {stream.block || stream.done ? `${Math.round(stream.percent)}%` : '—'}
+                {!peers && (stream.block || stream.done) ? `${Math.round(stream.percent)}%` : '—'}
               </div>
 
               <div

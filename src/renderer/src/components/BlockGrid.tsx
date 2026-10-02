@@ -144,6 +144,8 @@ interface BlockGridProps {
   knownSize: boolean
   remainingBytes: number
   isPaused?: boolean
+  /** A torrent's grid: its blocks are the torrent's pieces. */
+  pieces?: boolean
 }
 
 export function BlockGrid({
@@ -152,8 +154,10 @@ export function BlockGrid({
   visuals,
   knownSize,
   remainingBytes,
-  isPaused = false
+  isPaused = false,
+  pieces = false
 }: BlockGridProps): React.JSX.Element {
+  const unit = pieces ? 'Piece' : 'Chunk'
   const [gridWidth, setGridWidth] = useState(0)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
@@ -206,9 +210,9 @@ export function BlockGrid({
           : hoveredCell.status === 'skipped'
             ? 'skipped: in no file chosen'
             : '—')
-      readout = `Chunk #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
+      readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
     } else {
-      readout = `${blocks.length} chunks · ${formatBytes(chunkBytes)} each`
+      readout = `${blocks.length} ${unit.toLowerCase()}s · ${formatBytes(chunkBytes)} each`
     }
 
     return (

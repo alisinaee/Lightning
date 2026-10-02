@@ -491,6 +491,9 @@ export class DownloadManager {
     const state: DownloadState = {
       id,
       kind: torrent ? 'torrent' : undefined,
+      files: torrent
+        ? { chosen: chosen?.size ?? torrent.files.length, total: torrent.files.length }
+        : undefined,
       url: requestPayload.url,
       fileName: basename(destinationPath),
       destinationPath,

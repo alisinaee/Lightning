@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import {
+  describeFileCount,
   dirnameOf,
   formatBytes,
   formatDuration,
@@ -45,8 +46,13 @@ export function CompleteScreen({
   const visuals = groups.map((group) => networkVisual(group.id, group.kind, group.label))
   const totalWeight = groups.reduce((sum, group) => sum + group.bytesDownloaded, 0) || 1
   const totalRetries = download.networks.reduce((sum, network) => sum + network.retries, 0)
-  // "Chunks" in the block grid means byte ranges, not parallel connections.
-  const totalChunkCount = download.totalBlocks ?? download.blocks?.length ?? 1
+  const isTorrent = download.kind === 'torrent'
+  // "Chunks" in the block grid means byte ranges, not parallel connections. A torrent's are its
+  // pieces, those its chosen files needed.
+  const totalChunkCount = isTorrent
+    ? (download.blocks?.filter((block) => block.status !== 'skipped').length ?? 0)
+    : (download.totalBlocks ?? download.blocks?.length ?? 1)
+  const files = download.files && download.files.total > 1 ? download.files : null
 
   const handleReveal = (): void => void window.plexo.revealInFolder(download.destinationPath)
 
@@ -74,6 +80,7 @@ export function CompleteScreen({
               {download.fileName}
             </div>
             <div className="mt-[5px] truncate font-mono text-[11.5px] leading-[1.3] text-muted-foreground">
+              {files && `${describeFileCount(files.chosen, files.total)} · `}
               {formatBytes(finalSize)} ·{' '}
               {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
             </div>
@@ -101,7 +108,10 @@ export function CompleteScreen({
           { label: 'Peak', value: formatSpeed(peakSpeedBytesPerSec) },
           { label: 'Networks', value: String(groups.length) },
           // The most it ran at once: streams that didn't make it faster were closed along the way.
-          { label: 'Streams', value: String(download.peakStreams ?? download.chunks.length) }
+          {
+            label: isTorrent ? 'Peers' : 'Streams',
+            value: String(download.peakStreams ?? download.chunks.length)
+          }
         ].map((stat, index) => (
           <div
             key={stat.label}
@@ -159,7 +169,7 @@ export function CompleteScreen({
 
       <ScreenFooter>
         <div className="shrink-0 font-mono text-[11px] leading-[1.4] whitespace-nowrap text-muted-foreground">
-          {`written in ${totalChunkCount} chunks · ${totalRetries} ${
+          {`written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'} · ${totalRetries} ${
             totalRetries === 1 ? 'retry' : 'retries'
           }`}
         </div>

@@ -10,7 +10,7 @@ import { Checkbox } from '../components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
 import { useLatencyPolling } from '../hooks/useNetworks'
 import { useAppStore } from '../store/useAppStore'
-import { describeError, formatBytes, toDisplayPath } from '../utils/format'
+import { describeError, describeFileCount, formatBytes, toDisplayPath } from '../utils/format'
 
 type StreamsChoice = 'auto' | number
 /** Streams per network the user can pick instead of Auto. */
@@ -26,8 +26,6 @@ const PROBE_DEBOUNCE_MS = 600
 const PASTE_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
 
 const fieldLabelClass = 'shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted-foreground'
-
-const fileCount = (count: number): string => `${count} ${count === 1 ? 'file' : 'files'}`
 
 function ErrorAlert({ message }: { message: string }): React.JSX.Element {
   return (
@@ -192,14 +190,7 @@ export function IdleScreen(): React.JSX.Element {
         : '1 stream: the server can’t split this file'
     )
   }
-  if (torrent) {
-    const total = torrent.files.length
-    footerParts.push(
-      chosenFiles.length === total
-        ? fileCount(total)
-        : `${chosenFiles.length} of ${fileCount(total)}`
-    )
-  }
+  if (torrent) footerParts.push(describeFileCount(chosenFiles.length, torrent.files.length))
   if (sizeToFetch !== null) footerParts.push(formatBytes(sizeToFetch))
 
   let subnetConflict: { subnet: string; names: string[] } | null = null
@@ -360,7 +351,7 @@ export function IdleScreen(): React.JSX.Element {
 
         {torrent && (
           <InfoAlert
-            title={`Torrent · ${fileCount(torrent.files.length)}`}
+            title={`Torrent · ${describeFileCount(torrent.files.length, torrent.files.length)}`}
             message="Peers can see this computer’s address on each network in use."
           />
         )}
