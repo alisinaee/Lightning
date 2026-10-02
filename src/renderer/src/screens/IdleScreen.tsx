@@ -1,6 +1,6 @@
 import type { ProbeResult } from '@shared/types'
 import { cn } from 'cn'
-import { AlertTriangle, ClipboardPaste, Info } from 'lucide-react'
+import { AlertTriangle, ClipboardPaste, FolderOpen, Info } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { NetworkCard } from '../components/NetworkCard'
 import { ScreenFooter } from '../components/ScreenFooter'
@@ -25,6 +25,8 @@ const PROBE_DEBOUNCE_MS = 600
 const PASTE_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
 
 const fieldLabelClass = 'shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted-foreground'
+
+const fileCount = (count: number): string => `${count} ${count === 1 ? 'file' : 'files'}`
 
 function ErrorAlert({ message }: { message: string }): React.JSX.Element {
   return (
@@ -109,6 +111,8 @@ export function IdleScreen(): React.JSX.Element {
   }, [url])
 
   const ready = probe.status === 'ready' ? probe.result : null
+  const torrent = ready?.torrent ?? null
+  const findingPeers = probe.status === 'probing' && /^magnet:/i.test(url.trim())
   const multiChunkAllowed = ready !== null && ready.supportsRanges && ready.totalBytes !== null
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
   // One request has to carry the whole file: either the server can't serve parts of it, or it
@@ -122,6 +126,8 @@ export function IdleScreen(): React.JSX.Element {
   const startLabel = starting ? 'Starting…' : probe.status === 'probing' ? 'Checking…' : 'Start'
   const canStart =
     probe.status === 'ready' &&
+    // Torrents can be looked at, not yet downloaded (plans/008-torrent-support.md, phase C).
+    !torrent &&
     selectedInterfaceIds.length > 0 &&
     Boolean(destinationDir) &&
     !starting
@@ -137,6 +143,7 @@ export function IdleScreen(): React.JSX.Element {
         : '1 stream: the server can’t split this file'
     )
   }
+  if (torrent) footerParts.push(fileCount(torrent.files.length))
   if (ready && ready.totalBytes !== null) footerParts.push(formatBytes(ready.totalBytes))
 
   let subnetConflict: { subnet: string; names: string[] } | null = null
@@ -191,6 +198,21 @@ export function IdleScreen(): React.JSX.Element {
     if (text.trim()) setUrl(text.trim())
   }
 
+  // A .torrent file goes in the link field as its path; the probe reads it from there.
+  const handleOpenTorrent = async (): Promise<void> => {
+    const path = await window.plexo.chooseTorrentFile()
+    if (path) setUrl(path)
+  }
+
+  const handleDrop = (event: React.DragEvent): void => {
+    // Never let a drop navigate the window to the file; only a .torrent is taken.
+    event.preventDefault()
+    const file = event.dataTransfer.files[0]
+    if (!file || !/\.torrent$/i.test(file.name)) return
+    const path = window.plexo.pathForFile(file)
+    if (path) setUrl(path)
+  }
+
   const handleStart = async (): Promise<void> => {
     if (probe.status !== 'ready' || !canStart) return
     setStarting(true)
@@ -215,7 +237,11 @@ export function IdleScreen(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div
+      className="flex h-full flex-col bg-background"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={handleDrop}
+    >
       <div className="flex flex-col gap-[9px] px-5 pt-4 pb-3.5">
         <div className="flex items-center gap-[9px]">
           <div
@@ -228,10 +254,10 @@ export function IdleScreen(): React.JSX.Element {
               LINK
             </div>
             <input
-              type="url"
+              type="text"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://"
+              placeholder="https:// or magnet:"
               spellCheck={false}
               aria-labelledby="idle-link-label"
               className="min-w-0 flex-1 rounded-[3px] border-none bg-transparent font-mono text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -246,6 +272,17 @@ export function IdleScreen(): React.JSX.Element {
               <ClipboardPaste data-icon="inline-start" />
               Paste {PASTE_SHORTCUT}
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={handleOpenTorrent}
+              aria-label="Open a .torrent file"
+              className="shrink-0 font-mono text-[9.5px] uppercase tracking-wide"
+            >
+              <FolderOpen data-icon="inline-start" />
+              .torrent
+            </Button>
           </div>
           <Button
             type="button"
@@ -258,6 +295,17 @@ export function IdleScreen(): React.JSX.Element {
         </div>
 
         {probe.status === 'error' && <ErrorAlert message={probe.message} />}
+
+        {findingPeers && (
+          <InfoAlert message="Finding peers that have this torrent, to read what’s in it…" />
+        )}
+
+        {torrent && (
+          <InfoAlert
+            title={`Torrent · ${fileCount(torrent.files.length)}`}
+            message="Peers can see this computer’s address on each network in use. Downloading torrents arrives in the next update."
+          />
+        )}
 
         {isSingleStreamOnly && (
           <InfoAlert
@@ -291,6 +339,7 @@ export function IdleScreen(): React.JSX.Element {
             value={ready ? (fileNameOverride ?? ready.suggestedFileName) : ''}
             onChange={(event) => setFileNameOverride(event.target.value)}
             disabled={!ready}
+            readOnly={!!torrent}
             placeholder="—"
             aria-labelledby="idle-saveas-label"
             className="min-w-0 flex-1 rounded-[3px] border-none bg-transparent font-mono text-[12.5px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -321,7 +370,9 @@ export function IdleScreen(): React.JSX.Element {
         <div
           className={cn(
             'flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 rounded-[9px] border border-border px-3 py-1.5',
-            isSingleStreamOnly && 'opacity-60'
+            isSingleStreamOnly && 'opacity-60',
+            // A torrent's connections are its peers: there's no count to pick.
+            torrent && 'hidden'
           )}
         >
           <div id="idle-streams-label" className={fieldLabelClass}>

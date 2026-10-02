@@ -106,6 +106,8 @@ export class PlexoApp {
             // Fixed for the same reason, and for downloads started through the UI.
             PLEXO_E2E_STREAMS: '2',
             PLEXO_E2E_INTERFACES: interfacesEnv(NETWORKS),
+            // Torrent tests find their peers from the link itself; a run never joins the real DHT.
+            PLEXO_E2E_DHT: '0',
             ...this.extraEnv
           }
         })

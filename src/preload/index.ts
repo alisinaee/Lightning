@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type {
@@ -30,6 +30,9 @@ const plexoApi = {
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
   probeUrl: (url: string) => invoke('probeUrl', url),
   chooseDestinationFolder: (defaultPath: string) => invoke('chooseDestinationFolder', defaultPath),
+  chooseTorrentFile: () => invoke('chooseTorrentFile'),
+  /** Where a file dropped on the window is on disk ('' for one that isn't a file). */
+  pathForFile: (file: File) => webUtils.getPathForFile(file),
   readClipboardText: () => invoke('readClipboardText'),
   revealInFolder: (filePath: string) => invoke('revealInFolder', filePath),
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>

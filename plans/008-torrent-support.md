@@ -130,7 +130,18 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
    **Verified**: typecheck, lint and the full e2e suite (174 tests) pass, with no test edited. `downloadManager.ts` went from 2,168 lines to 936.
 
-## Phase B: the engine in, and getting a torrent in (Start stays disabled for torrents)
+## Phase B: the engine in, and getting a torrent in (Start stays disabled for torrents) — DONE
+
+> **Built** on branch `torrent-phase-b`. Two differences from the steps below:
+>
+> - **A `.torrent` file goes through the link field as its path.** The Open button (IPC `chooseTorrentFile`) and a drop on the window (`pathForFile` in the preload) both put the file's path in the field, and `probeUrl` reads any absolute path ending in `.torrent`. So there's no separate `openTorrentFile` probe.
+> - **`ProbeResult.torrent`** is one optional object (`infoHash`, `pieceLength`, `files`), not separate fields. `StartDownloadRequest.infoHash` waits for phase C.
+>
+> **Verified**:
+>
+> - typecheck, lint and format pass
+> - the full e2e suite passes: 187 tests, 174 old plus 13 new in `torrentPaths.spec.ts` and `torrentProbe.spec.ts`
+> - **package check**: in `npm run build:unpack`, the packaged binary run in Node mode loads the patched webtorrent from `app.asar` and `node-datachannel` from `app.asar.unpacked`, and downloads through the `connect` hook
 
 1. **Dependencies:**
    - `npm i -E webtorrent@3.0.21 parse-torrent@11.0.24` and `npm i -D -E patch-package`.

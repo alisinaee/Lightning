@@ -33,6 +33,16 @@ export interface ProbeResult {
   /** Strong validators, used to detect if the remote content changes between pause and resume. */
   etag: string | null
   lastModified: string | null
+  /** Set when the link is a torrent: a magnet link, a link to a .torrent, or a .torrent file. */
+  torrent?: TorrentInfo
+}
+
+export interface TorrentInfo {
+  infoHash: string
+  pieceLength: number
+  /** Where each file will be written, relative to the destination folder, already checked to be
+   * safe (see main/download/torrent/paths.ts). */
+  files: { path: string; length: number }[]
 }
 
 export type DownloadStatus = 'downloading' | 'paused' | 'completed' | 'error' | 'cancelled'
