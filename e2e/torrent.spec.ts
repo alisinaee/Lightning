@@ -1,5 +1,5 @@
 import type { Torrent, Wire } from 'webtorrent'
-import { expect, interfacesEnv, LAN_ADDRESS, test, treeSha, type PlexoApp } from './fixtures'
+import { expect, LAN_ADDRESS, test, treeSha } from './fixtures'
 import { seededBytes, sha256 } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
@@ -171,17 +171,17 @@ test.describe('torrents over two networks', () => {
   })
 })
 
-test.describe('a USB-tethered network', () => {
-  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the tethered network')
+test.describe('uploading', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the network')
+  // A USB-tethered network, the one kind once left out: every network uploads, whatever its kind.
+  test.use({ appEnv: { PLEXO_E2E_INTERFACES: `b=${LAN_ADDRESS}==usb` } })
 
-  /** Downloads a torrent over network `b` alone, with another client fetching it too. Returns
-   * what that client received from Plexo, and whether Plexo connected to it at all. */
-  async function uploadedToOthers(
-    plexo: PlexoApp
-  ): Promise<{ fromPlexo: number; connected: boolean }> {
+  test('peers get pieces back over every network, USB-tethered ones too', async ({ plexo }) => {
     const data = seededBytes(4 * MB, 51)
-    const file = named(data, 'shared.bin')
-    const torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit: 400 * KB })
+    const torrent = await swarm.seed([named(data, 'shared.bin')], {
+      pieceLength: PIECE,
+      uploadLimit: 400 * KB
+    })
     const other = await swarm.leech(torrent)
     let fromPlexo = 0
     let connected = false
@@ -195,26 +195,7 @@ test.describe('a USB-tethered network', () => {
 
     await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
     await plexo.waitForStatus('completed', 60_000)
-    return { fromPlexo, connected }
-  }
-
-  test.describe('as USB', () => {
-    test.use({ appEnv: { PLEXO_E2E_INTERFACES: `b=${LAN_ADDRESS}==usb` } })
-    test('nothing is uploaded over it', async ({ plexo }) => {
-      const { fromPlexo, connected } = await uploadedToOthers(plexo)
-      expect(connected, 'Plexo connected to the other client').toBe(true)
-      expect(fromPlexo).toBe(0)
-    })
-  })
-
-  test.describe('the same network as Ethernet', () => {
-    test.use({ appEnv: { PLEXO_E2E_INTERFACES: interfacesEnv({ b: LAN_ADDRESS ?? '' }) } })
-    test('uploads as usual: what the USB test rules out does happen otherwise', async ({
-      plexo
-    }) => {
-      const { fromPlexo, connected } = await uploadedToOthers(plexo)
-      expect(connected).toBe(true)
-      expect(fromPlexo).toBeGreaterThan(0)
-    })
+    expect(connected, 'Plexo connected to the other client').toBe(true)
+    expect(fromPlexo, 'what the other client received from Plexo').toBeGreaterThan(0)
   })
 })

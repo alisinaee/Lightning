@@ -242,9 +242,8 @@ export class TorrentTransfer implements Transfer {
       wire.destroy()
       return
     }
-    // Tethered data is metered: nothing is uploaded over a USB network. webtorrent unchokes a
-    // peer through this method alone.
-    if (network.kind === 'usb') wire.unchoke = () => {}
+    // Every network uploads, whatever its kind: each has an address of its own, and webtorrent's
+    // tit-for-tat gives a network's peers back what they send it.
 
     const reach = this.reachOf(network.id)
     reach.dials = 0

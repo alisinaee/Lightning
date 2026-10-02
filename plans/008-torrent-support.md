@@ -76,7 +76,10 @@ DownloadManager.start() ── request.infoHash ──► TorrentTransfer ─►
    - Without it, webtorrent trusts the bitfield but hash-checks up to two pieces per file, and re-checks a whole file if one fails. That's cheap, and safe after a relaunch.
    - On `ready`, any piece Plexo had as done that webtorrent didn't confirm goes back to pending, so nothing is published early.
    - webtorrent's own `pause()` is not used, because it only stops new connections.
-7. **Upload while downloading, never after.** webtorrent's tit-for-tat runs as normal. At 100% the client is destroyed: no seeding. **Wires on a `usb`-kind network never upload**: on each such wire, `wire.unchoke` is replaced with a no-op before webtorrent can call it.
+7. **Upload while downloading, never after, over every network.** webtorrent's tit-for-tat runs as normal. At 100% the client is destroyed: no seeding.
+   - **Revised after phase E:** every network uploads, USB-tethered ones included. Each network has an address of its own, and tit-for-tat gives each one's peers back what they send, which keeps every network at its best download speed. (The first version kept USB networks from uploading.)
+   - **Speed and upload limits** will be a separate feature, for HTTP downloads too.
+   - **Upload isn't shown in the UI** for now.
 8. **Disk.**
    - The staging folder is `<destinationDir>/<name>.plexo/`, passed as webtorrent's `path`.
    - At completion, the torrent's top entry (the file, or the folder of a multi-file torrent) is renamed to `<destinationDir>/<name>` with `DownloadFile.publish`'s " (n)" rules, and the staging folder is removed.
@@ -192,7 +195,7 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 > - **The staging folder is `StagingFolder`, a `DownloadFile` subclass** (`torrent/stagingFolder.ts`). Its `path` is the torrent's top entry, so the manager's publish, sync, discard and restore code works unchanged.
 > - **Torrents are marked by `DownloadState.kind: 'torrent'`**, which restore reads, rather than a separate manifest `transfer` field. The `.torrent` is saved as `metadata.torrent` beside the manifest.
 > - **A piece shows `downloading` once its first bytes arrive.** Its bytes count only on `verified`, split across networks by `creditPiece()`.
-> - **The test swarm uses a local tracker** (`e2e/torrentSwarm.ts`) rather than `x.pe`. The USB test has an Ethernet control run, showing the same setup does upload when the network isn't USB.
+> - **The test swarm uses a local tracker** (`e2e/torrentSwarm.ts`) rather than `x.pe`. Its upload test checks that a USB-kind network uploads too (Decision 7, as revised).
 > - **`checkEvents`** keeps its HTTP stream rules (one stream per block) for HTTP downloads only; for torrents it checks that every peer is on a known network. **`checkFinalState`** hashes a published folder with `treeSha`.
 >
 > **Verified**:
@@ -203,7 +206,7 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 9. **`torrent/peers.ts`:** `pickNetwork()` (Decision 3) and `networkForLocalAddress()` (Decision 4), both pure, with unit tests in `e2e/torrentPeers.spec.ts`.
 10. **`torrent/torrentTransfer.ts`** (`class TorrentTransfer implements Transfer`):
     - The run starts by creating the client, whose `connect` is the hook that calls `pickNetwork()` then `connectRoute()`, and adding the torrent (Decision 6).
-    - **Each wire:** find its network (from the hook's address map, or the local address for incoming peers), record a `ChunkState`, apply the USB rule (Decision 7), and count `piece` bytes per network.
+    - **Each wire:** find its network (from the hook's address map, or the local address for incoming peers), record a `ChunkState`, and count `piece` bytes per network.
     - **`verified(index)`:** credit the piece (Decision 5).
     - **`reconcile()`:** set `client.maxConns`, and destroy the wires of networks that are off or offline.
     - **`tick()`:** refresh peer speeds and statuses. A network is `unreachable` when 5 or more of its connection attempts got no handshake in 60 s while other networks have peers.
@@ -220,7 +223,7 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
     - with two networks, both deliver bytes
     - switching a network off mid-download leaves the rest to the other
     - pause, quit, relaunch and resume finishes without re-downloading the completed pieces
-    - a peer on a `usb`-kind network is never unchoked (extend `testKnobs` so `kind` accepts `usb`)
+    - peers get pieces back over every network, a `usb`-kind one included (`testKnobs`' `kind` accepts `usb`)
     - nothing is written outside the staging folder
 
     **Verify**: as for phase B.
@@ -294,7 +297,7 @@ README section "Torrents":
 
 - the ways in
 - every network is used
-- upload happens only while downloading, never over USB-tethered networks, and there's no seeding after completion
+- upload happens only while downloading, over every network, and there's no seeding after completion
 - peers can see each network's address
 - v2-only torrents aren't supported
 
@@ -326,7 +329,7 @@ README section "Torrents":
 
 - An outgoing peer socket is opened without the hook, so without `connectRoute()`. Check: `net.connect` is reached only through the patched `_drain`, and uTP and web seeds stay off.
 - A torrent path reaches the disk without `safeTorrentPaths()`, or a write lands outside the staging folder.
-- Plexo uploads after completion, or unchokes a wire on a `usb`-kind network.
+- Plexo uploads after completion.
 - The packaged build can't load `webtorrent` or `node-datachannel`.
 - `patch-package` fails to apply after an install. Never upgrade webtorrent without redoing the patch and the hook test.
 
