@@ -74,6 +74,58 @@ test.describe('torrent downloads', () => {
   })
 })
 
+test.describe('choosing files', () => {
+  /** Files of sizes that don't line up with pieces, so pieces straddle chosen and skipped ones. */
+  function album(size: number, seed: number): Buffer[] {
+    return ['a.bin', 'b.bin', 'c.bin', 'd.bin'].map((name, index) =>
+      named(seededBytes(size + 7 * index + 5, seed + index), name)
+    )
+  }
+  const shaOf = (files: Buffer[]): string =>
+    treeSha(files.map((data) => ({ path: (data as { name?: string }).name!, data })))
+
+  test('only the chosen files are downloaded and published', async ({ plexo }) => {
+    const files = album(300 * KB, 61)
+    const torrent = await swarm.seed(files, { folder: 'Album', pieceLength: PIECE })
+
+    // a and c chosen: b and d never appear, though the pieces at their edges are fetched.
+    await plexo.start(await torrentFileOnDisk(torrent), shaOf([files[0], files[2]]), {
+      selectedFiles: [0, 2]
+    })
+    const done = await plexo.waitForStatus('completed', 30_000)
+    expect(done.skippedBytes).toBeGreaterThan(0)
+    expect(done.bytesDownloaded).toBe(done.totalBytes - done.skippedBytes!)
+    expect(done.blocks?.filter((block) => block.status === 'skipped').length).toBeGreaterThan(0)
+  })
+
+  test('the choice is kept through a quit, a relaunch and a resume', async ({ plexo }) => {
+    const files = album(1500 * KB, 71)
+    let torrent = await swarm.seed(files, {
+      folder: 'Set',
+      pieceLength: PIECE,
+      uploadLimit: 300 * KB
+    })
+    for (let seeder = 1; seeder < 3; seeder++) {
+      torrent = await swarm.seed(files, {
+        folder: 'Set',
+        pieceLength: PIECE,
+        uploadLimit: 300 * KB
+      })
+    }
+
+    const id = await plexo.start(await torrentFileOnDisk(torrent), shaOf([files[1], files[3]]), {
+      selectedFiles: [1, 3]
+    })
+    await plexo.waitUntil((state) => state.bytesDownloaded >= 1 * MB, 30_000)
+    const before = await plexo.current()
+    await plexo.relaunch()
+    const paused = await plexo.waitForStatus('paused')
+    expect(paused.skippedBytes).toBe(before!.skippedBytes)
+    await plexo.api.resumeDownload(id)
+    await plexo.waitForStatus('completed', 60_000)
+  })
+})
+
 test.describe('torrents over two networks', () => {
   test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for a second network')
 

@@ -54,6 +54,8 @@ interface StartOptions {
   streamsPerNetwork?: number
   fileName?: string
   destinationDir?: string
+  /** For a torrent: the files to download, by index. */
+  selectedFiles?: number[]
 }
 
 interface Tracked {
@@ -213,7 +215,8 @@ export class PlexoApp {
       etag: probe.etag,
       lastModified: probe.lastModified,
       streamsPerNetwork: options.streamsPerNetwork,
-      infoHash: probe.torrent?.infoHash
+      infoHash: probe.torrent?.infoHash,
+      selectedFiles: options.selectedFiles
     })
     this.tracked.set(id, { expectedSha, destBefore, destinationDir })
     return id

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
-import { describeError, fileExtensionBadge, formatBytes } from '../utils/format'
+import { describeError, fileExtensionBadge, formatBytes, wantedBytes } from '../utils/format'
 
 export function ErrorScreen({
   download,
@@ -21,7 +21,7 @@ export function ErrorScreen({
   const resumable = !cancelled && download.resumable !== false && download.bytesDownloaded > 0
   const knownSize = download.totalBytes > 0
   const percent = knownSize
-    ? Math.min(100, Math.round((download.bytesDownloaded / download.totalBytes) * 100))
+    ? Math.min(100, Math.round((download.bytesDownloaded / wantedBytes(download)) * 100))
     : 0
   const heading = cancelled ? 'Download Cancelled' : 'Download Failed'
   const description = cancelled
@@ -121,7 +121,7 @@ export function ErrorScreen({
                   <>
                     {formatBytes(download.bytesDownloaded)}
                     {knownSize
-                      ? ` of ${formatBytes(download.totalBytes)} (${percent}%)`
+                      ? ` of ${formatBytes(wantedBytes(download))} (${percent}%)`
                       : ' transferred'}
                   </>
                 ) : (

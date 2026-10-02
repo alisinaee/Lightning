@@ -1,4 +1,4 @@
-import type { ProbeResult } from '@shared/types'
+import type { ProbeResult, TorrentInfo } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, ClipboardPaste, FolderOpen, Info } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -6,6 +6,7 @@ import { NetworkCard } from '../components/NetworkCard'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
 import { useLatencyPolling } from '../hooks/useNetworks'
 import { useAppStore } from '../store/useAppStore'
@@ -61,6 +62,44 @@ function InfoAlert({ title, message }: { title?: string; message: string }): Rea
   )
 }
 
+/** A torrent's files, each ticked to be downloaded; a tick for all of them above. */
+function TorrentFileList({
+  files,
+  skipped,
+  onChange
+}: {
+  files: TorrentInfo['files']
+  skipped: number[]
+  onChange: (skipped: number[]) => void
+}): React.JSX.Element {
+  // Every path starts with the torrent's own folder: the files are listed within it.
+  const inFolder = (path: string): string => path.split(/[\\/]/).slice(1).join('/') || path
+  return (
+    <div className="max-h-36 overflow-y-auto rounded-[9px] border border-border px-3 py-1.5">
+      <label className="flex items-center gap-2 py-0.5 text-[12px] font-medium">
+        <Checkbox
+          checked={skipped.length === 0}
+          indeterminate={skipped.length > 0 && skipped.length < files.length}
+          onCheckedChange={(checked) => onChange(checked ? [] : files.map((_, index) => index))}
+        />
+        All files
+      </label>
+      {files.map((file, index) => (
+        <label key={index} className="flex items-center gap-2 py-0.5 font-mono text-[11.5px]">
+          <Checkbox
+            checked={!skipped.includes(index)}
+            onCheckedChange={(checked) =>
+              onChange(checked ? skipped.filter((entry) => entry !== index) : [...skipped, index])
+            }
+          />
+          <span className="min-w-0 flex-1 truncate">{inFolder(file.path)}</span>
+          <span className="shrink-0 text-muted-foreground">{formatBytes(file.length)}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
 export function IdleScreen(): React.JSX.Element {
   useLatencyPolling()
 
@@ -78,6 +117,8 @@ export function IdleScreen(): React.JSX.Element {
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [fileNameOverride, setFileNameOverride] = useState<string | null>(null)
+  // A torrent's files left out, by index: every file is downloaded unless unticked.
+  const [skippedFiles, setSkippedFiles] = useState<number[]>([])
   // Auto unless the user picks a count for this download; not remembered for the next one.
   const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
 
@@ -90,12 +131,14 @@ export function IdleScreen(): React.JSX.Element {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setProbe({ status: 'idle' })
       setFileNameOverride(null)
+      setSkippedFiles([])
       return
     }
 
     const requestId = ++probeRequestId.current
     setProbe({ status: 'probing' })
     setFileNameOverride(null)
+    setSkippedFiles([])
     const timer = setTimeout(async () => {
       try {
         const result = await window.plexo.probeUrl(trimmed)
@@ -112,6 +155,13 @@ export function IdleScreen(): React.JSX.Element {
 
   const ready = probe.status === 'ready' ? probe.result : null
   const torrent = ready?.torrent ?? null
+  const chosenFiles = torrent
+    ? torrent.files.flatMap((_, index) => (skippedFiles.includes(index) ? [] : [index]))
+    : []
+  // What will be downloaded: a torrent's chosen files, or the whole file.
+  const sizeToFetch = torrent
+    ? chosenFiles.reduce((sum, index) => sum + torrent.files[index].length, 0)
+    : (ready?.totalBytes ?? null)
   const findingPeers = probe.status === 'probing' && /^magnet:/i.test(url.trim())
   const multiChunkAllowed = ready !== null && ready.supportsRanges && ready.totalBytes !== null
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
@@ -126,6 +176,7 @@ export function IdleScreen(): React.JSX.Element {
   const startLabel = starting ? 'Starting…' : probe.status === 'probing' ? 'Checking…' : 'Start'
   const canStart =
     probe.status === 'ready' &&
+    (!torrent || chosenFiles.length > 0) &&
     selectedInterfaceIds.length > 0 &&
     Boolean(destinationDir) &&
     !starting
@@ -141,8 +192,15 @@ export function IdleScreen(): React.JSX.Element {
         : '1 stream: the server can’t split this file'
     )
   }
-  if (torrent) footerParts.push(fileCount(torrent.files.length))
-  if (ready && ready.totalBytes !== null) footerParts.push(formatBytes(ready.totalBytes))
+  if (torrent) {
+    const total = torrent.files.length
+    footerParts.push(
+      chosenFiles.length === total
+        ? fileCount(total)
+        : `${chosenFiles.length} of ${fileCount(total)}`
+    )
+  }
+  if (sizeToFetch !== null) footerParts.push(formatBytes(sizeToFetch))
 
   let subnetConflict: { subnet: string; names: string[] } | null = null
   if (selectedInterfaceIds.length > 1) {
@@ -226,7 +284,8 @@ export function IdleScreen(): React.JSX.Element {
         etag: probe.result.etag,
         lastModified: probe.result.lastModified,
         streamsPerNetwork: streamsChoice === 'auto' || torrent ? undefined : streamsChoice,
-        infoHash: torrent?.infoHash
+        infoHash: torrent?.infoHash,
+        selectedFiles: torrent && skippedFiles.length > 0 ? chosenFiles : undefined
       })
     } catch (error) {
       setStartError(describeError(error))
@@ -306,6 +365,14 @@ export function IdleScreen(): React.JSX.Element {
           />
         )}
 
+        {torrent && torrent.files.length > 1 && (
+          <TorrentFileList
+            files={torrent.files}
+            skipped={skippedFiles}
+            onChange={setSkippedFiles}
+          />
+        )}
+
         {isSingleStreamOnly && (
           <InfoAlert
             title="Single-connection mode"
@@ -343,9 +410,10 @@ export function IdleScreen(): React.JSX.Element {
             aria-labelledby="idle-saveas-label"
             className="min-w-0 flex-1 rounded-[3px] border-none bg-transparent font-mono text-[12.5px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           />
-          {ready && ready.totalBytes !== null && (
+          {sizeToFetch !== null && (
             <div className="shrink-0 whitespace-nowrap font-mono text-[11px] font-medium text-muted-foreground">
-              {formatBytes(ready.totalBytes)} (est.)
+              {formatBytes(sizeToFetch)}
+              {torrent ? '' : ' (est.)'}
             </div>
           )}
         </div>

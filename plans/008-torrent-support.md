@@ -223,7 +223,16 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
     **Verify**: as for phase B.
 
-## Phase C2: choosing files
+## Phase C2: choosing files — DONE
+
+> **Built** on branch `torrent-phase-c2`, as follows:
+>
+> - **Choosing.** `StartDownloadRequest.selectedFiles` holds the chosen indexes, and is left out when every file is chosen. It's saved in the manifest with the rest of the request. `chosenFiles()` (`torrent/files.ts`) refuses an empty choice or an index that isn't in the torrent.
+> - **Skipped pieces.** Pieces that only unchosen files need get a new block status, **`skipped`**, from `wantedPieces()`. They're recomputed on every start and restore, so the saved-progress format is unchanged.
+> - **The manager** counts `skipped` as done (`isDone`), so completion, publishing and restore all treat it that way. `DownloadState.skippedBytes` lets the screens count progress against what was chosen (`wantedBytes()` in the renderer), while `totalBytes` stays the torrent's full size, which restore needs to rebuild the blocks.
+> - **Disk.** The disk-space check counts only what's chosen, since skipped files are sparse. At publication `StagingFolder` removes the unchosen files (partly written by pieces at their edges) and any folders that leaves empty.
+> - **Start screen.** A checklist with an "All files" box. The size shown is what will be fetched, and Start needs at least one file.
+> - **Tests.** A property test of `wantedPieces` against a plain-definition reference, a download of chosen files only, the choice surviving a quit/relaunch/resume, and the checklist on the start screen.
 
 13. A torrent with more than one file shows a checklist before Start, with everything checked. Unchecked files are `deselect()`ed. webtorrent still fetches pieces that cross into an unchecked file, and the bytes of those pieces stay in the staging folder and are removed at publication. Saved with the manifest, so a resume keeps the choice. Tests: a deselected file never appears in the destination, and the selected files are exact.
 

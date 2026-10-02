@@ -146,4 +146,34 @@ test.describe('getting a torrent in', () => {
     // A torrent's connections are its peers: there's no stream count to pick.
     await expect(plexo.page.getByText('STREAMS')).toBeHidden()
   })
+
+  test('a torrent of several files lists them, each ticked to be downloaded', async ({ plexo }) => {
+    const { client, torrent } = await seed(
+      [
+        named(seededBytes(1000, 8), 'one.bin'),
+        named(seededBytes(2000, 9), 'two.bin'),
+        named(seededBytes(3000, 10), 'three.bin')
+      ],
+      'Pack'
+    )
+    clients.push(client)
+    const { page } = plexo
+    await page
+      .getByRole('textbox', { name: 'LINK' })
+      .fill(`${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`)
+
+    const all = page.getByRole('checkbox', { name: 'All files' })
+    await expect(all).toBeChecked({ timeout: 15_000 })
+    await expect(page.getByText('3 files · 5.9 KB')).toBeVisible()
+
+    // Untick everything: nothing to download, nothing to start.
+    await all.click()
+    await expect(page.getByRole('checkbox', { name: /two\.bin/ })).not.toBeChecked()
+    await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled()
+
+    // Tick one: the footer counts it, and only its size.
+    await page.getByRole('checkbox', { name: /two\.bin/ }).click()
+    await expect(page.getByText('1 of 3 files · 2.0 KB')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Start' })).toBeEnabled()
+  })
 })

@@ -35,7 +35,8 @@ import {
   groupByNetwork,
   networksInPlay,
   splitFormattedBytes,
-  toDisplayPath
+  toDisplayPath,
+  wantedBytes
 } from '../utils/format'
 
 /** Inline "·" separator between adjacent stats. `shrink` pins it at its natural width inside a
@@ -102,7 +103,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   const peakSpeedBytesPerSec = useAppStore((store) => store.peakSpeedBytesPerSec)
   const networkVisual = useNetworkVisuals()
   const isPaused = download.status === 'paused'
-  const percent = formatPercent(download.bytesDownloaded, download.totalBytes)
+  const percent = formatPercent(download.bytesDownloaded, wantedBytes(download))
   const knownSize = download.totalBytes > 0
   const [now, setNow] = useState(() => Date.now())
 
@@ -163,7 +164,9 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   const waiting = waitingFor(download)
 
   const totalRetries = rows.reduce((sum, row) => sum + row.retries, 0)
-  const remainingBytes = knownSize ? Math.max(0, download.totalBytes - download.bytesDownloaded) : 0
+  const remainingBytes = knownSize
+    ? Math.max(0, wantedBytes(download) - download.bytesDownloaded)
+    : 0
 
   const avgSpeedBytesPerSec = elapsedSeconds > 0 ? download.bytesDownloaded / elapsedSeconds : 0
 
@@ -282,7 +285,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             <div className="mt-1 flex items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>
                 {formatBytes(download.bytesDownloaded)}
-                {knownSize ? ` of ${formatBytes(download.totalBytes)}` : ''}
+                {knownSize ? ` of ${formatBytes(wantedBytes(download))}` : ''}
               </span>
               {knownSize && (
                 <>
@@ -362,7 +365,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                     ? (row.bytesDownloaded / totalDownloadedByNetworks) * 100
                     : 0
                 }
-                totalBytes={download.totalBytes}
+                totalBytes={wantedBytes(download)}
                 blocks={download.blocks}
                 onSwitch={(enabled) =>
                   void window.plexo.setDownloadNetwork(download.id, row.id, enabled)

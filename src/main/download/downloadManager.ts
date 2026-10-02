@@ -12,7 +12,8 @@ import type {
   DownloadUpdate,
   NetworkInterfaceInfo,
   NetworkStatus,
-  StartDownloadRequest
+  StartDownloadRequest,
+  TorrentInfo
 } from '../../shared/types'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
@@ -20,6 +21,7 @@ import { HttpTransfer, splittable } from './httpTransfer'
 import { ensureDirectory, reserveDestinationPath } from './paths'
 import { planBlocks, planDownload } from './plan'
 import { restoreBlocks, saveBlocks, type SavedBlocks } from './savedProgress'
+import { chosenFiles, wantedPieces } from './torrent/files'
 import { describeTorrent, probedTorrentFile } from './torrent/metadata'
 import { StagingFolder } from './torrent/stagingFolder'
 import { TorrentTransfer } from './torrent/torrentTransfer'
@@ -101,6 +103,35 @@ function newNetwork(iface: NetworkInterfaceInfo, enabled: boolean): DownloadNetw
     speedBytesPerSec: 0,
     retries: 0
   }
+}
+
+/** A block that needs nothing more: in, or skipped (see BlockStatus). */
+const isDone = (block: BlockState): boolean =>
+  block.status === 'completed' || block.status === 'skipped'
+
+/** Marks the pieces of `torrent` that none of the `chosen` files needs (null: all are) as
+ * skipped. Their bytes, all together. */
+function skipUnchosen(
+  blocks: BlockState[],
+  torrent: TorrentInfo,
+  chosen: Set<number> | null
+): number {
+  if (!chosen) return 0
+  const wanted = wantedPieces(torrent.files, torrent.pieceLength, chosen)
+  let skipped = 0
+  for (const block of blocks) {
+    if (wanted[block.index] || block.rangeEnd === null) continue
+    block.status = 'skipped'
+    skipped += block.rangeEnd - block.rangeStart + 1
+  }
+  return skipped
+}
+
+/** Where the files not `chosen` are, inside the staging folder. */
+function unchosenPaths(torrent: TorrentInfo, chosen: Set<number> | null): string[] {
+  return chosen
+    ? torrent.files.filter((_, index) => !chosen.has(index)).map((file) => file.path)
+    : []
 }
 
 function formatGigabytes(bytes: number): string {
@@ -236,11 +267,25 @@ export class DownloadManager {
             if (block.status === 'downloading') block.status = 'pending'
           }
 
-          // A torrent starts again from its saved .torrent; without it, it can't.
+          // A torrent starts again from its saved .torrent; without it, it can't. Its pieces no
+          // chosen file needs are skipped again.
           const torrentFile =
             state.kind === 'torrent' ? await readFile(this.torrentFilePath(id)) : undefined
-          const file = torrentFile
-            ? new StagingFolder(persisted.partialPath, state.totalBytes)
+          const torrent =
+            torrentFile &&
+            (await describeTorrent(torrentFile, persisted.requestPayload.url)).torrent!
+          const chosen = torrent
+            ? chosenFiles(persisted.requestPayload.selectedFiles, torrent.files.length)
+            : null
+          if (torrent) {
+            state.skippedBytes = skipUnchosen(blocks, torrent, chosen) || undefined
+          }
+          const file = torrent
+            ? new StagingFolder(
+                persisted.partialPath,
+                state.totalBytes,
+                unchosenPaths(torrent, chosen)
+              )
             : new DownloadFile(persisted.partialPath)
           if (state.status === 'paused') {
             const size = await file.size().catch(() => -1)
@@ -261,11 +306,7 @@ export class DownloadManager {
                     .catch(() => false)
                 : persisted.publicationIdentity?.dev === published.dev &&
                   persisted.publicationIdentity?.ino === published.ino)
-            if (
-              blocks.every((block) => block.status === 'completed') &&
-              publishedSize === expected &&
-              sameFile
-            ) {
+            if (blocks.every(isDone) && publishedSize === expected && sameFile) {
               state.status = 'completed'
               state.destinationPath = publishedPath
               state.fileName = basename(publishedPath)
@@ -395,8 +436,7 @@ export class DownloadManager {
     const totalBytes = torrent
       ? torrent.files.reduce((sum, entry) => sum + entry.length, 0)
       : requestPayload.totalBytes
-    await ensureDirectory(requestPayload.destinationDir)
-    await ensureDiskSpace(requestPayload.destinationDir, totalBytes)
+    const chosen = torrent ? chosenFiles(requestPayload.selectedFiles, torrent.files.length) : null
 
     // A torrent's blocks are its pieces.
     const blockSizeBytes = torrent
@@ -407,6 +447,14 @@ export class DownloadManager {
           networkCount: usable.length,
           maxBlockBytes: testKnobs.blockBytes // 8 MB outside tests
         }).blockSizeBytes
+    // The UI caps how many cells it renders separately (see BlockGrid), by bucketing these
+    // blocks rather than by shrinking their count here.
+    const blocks = planBlocks(totalBytes, blockSizeBytes)
+    const skippedBytes = torrent ? skipUnchosen(blocks, torrent, chosen) : 0
+
+    await ensureDirectory(requestPayload.destinationDir)
+    // A torrent's files are sparse: what isn't chosen takes no space.
+    await ensureDiskSpace(requestPayload.destinationDir, totalBytes - skippedBytes)
 
     // Claimed on disk, not just picked, so a second download of the same file
     // name can't pick it too and overwrite this one at publish time. Done
@@ -420,16 +468,17 @@ export class DownloadManager {
     const id = randomUUID()
     const file = torrent
       ? // What's published is the torrent's top entry: its file, or its folder.
-        await StagingFolder.create(destinationPath, torrent.files[0].path.split(sep)[0], totalBytes)
+        await StagingFolder.create(
+          destinationPath,
+          torrent.files[0].path.split(sep)[0],
+          totalBytes,
+          unchosenPaths(torrent, chosen)
+        )
       : new DownloadFile(`${destinationPath}.plexo`)
     if (torrentFile) {
       await ensureDirectory(this.downloadDir(id))
       await writeFile(this.torrentFilePath(id), torrentFile)
     }
-
-    // The UI caps how many cells it renders separately (see BlockGrid), by bucketing these
-    // blocks rather than by shrinking their count here.
-    const blocks = planBlocks(totalBytes, blockSizeBytes)
 
     // The computer's other networks are listed too, switched off, for the user to turn on.
     const networks = available.map((iface) => newNetwork(iface, usable.includes(iface)))
@@ -446,6 +495,7 @@ export class DownloadManager {
       fileName: basename(destinationPath),
       destinationPath,
       totalBytes,
+      skippedBytes: skippedBytes || undefined,
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       status: 'downloading',
@@ -554,7 +604,7 @@ export class DownloadManager {
       runtime.state.pausedAt = undefined
     }
     for (const block of runtime.blocks) {
-      if (block.status !== 'completed') {
+      if (block.status === 'downloading') {
         block.status = 'pending'
       }
     }
@@ -722,7 +772,7 @@ export class DownloadManager {
 
     while (
       runtime.state.status === 'downloading' &&
-      runtime.blocks.some((block) => block.status !== 'completed')
+      runtime.blocks.some((block) => !isDone(block))
     ) {
       await Promise.race([delay(TICK_MS, signal), ...runtime.transfer.running()])
       if ((runtime.state.status as DownloadStatus) !== 'downloading') break
@@ -748,7 +798,7 @@ export class DownloadManager {
 
     runtime.publishing = true
     try {
-      if (runtime.blocks.some((block) => block.status !== 'completed')) {
+      if (runtime.blocks.some((block) => !isDone(block))) {
         throw new Error('Download is incomplete — refusing to publish the file')
       }
       await this.persistNow(runtime)
@@ -766,7 +816,9 @@ export class DownloadManager {
       runtime.state.fileName = basename(publishedPath)
       runtime.state.status = 'completed'
       runtime.state.completedAt = Date.now()
-      runtime.state.bytesDownloaded = runtime.state.totalBytes || runtime.state.bytesDownloaded
+      runtime.state.bytesDownloaded =
+        runtime.state.totalBytes - (runtime.state.skippedBytes ?? 0) ||
+        runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discard().catch(() => {})
       this.notify('Download Complete', `${runtime.state.fileName} has finished downloading.`)

@@ -74,7 +74,8 @@ export interface ChunkState {
   hedge?: boolean
 }
 
-export type BlockStatus = 'pending' | 'downloading' | 'completed'
+/** `skipped`: a torrent's piece that none of the files chosen to download needs. */
+export type BlockStatus = 'pending' | 'downloading' | 'completed' | 'skipped'
 
 export interface BlockState {
   index: number
@@ -131,6 +132,9 @@ export interface DownloadState {
   destinationPath: string
   /** 0 means the size could not be determined ahead of time. */
   totalBytes: number
+  /** Of `totalBytes`, the bytes of the torrent's skipped pieces (see BlockStatus): what's left
+   * once they're taken away is what this download fetches. */
+  skippedBytes?: number
   bytesDownloaded: number
   speedBytesPerSec: number
   status: DownloadStatus
@@ -225,4 +229,6 @@ export interface StartDownloadRequest {
   streamsPerNetwork?: number
   /** A torrent's, as its probe found it: the download starts from the .torrent kept for it then. */
   infoHash?: string
+  /** For a torrent: the files to download, as indexes into its probe's `files`. Left out: all. */
+  selectedFiles?: number[]
 }

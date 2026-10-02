@@ -201,7 +201,11 @@ export function BlockGrid({
     if (hoveredCell) {
       const where =
         describeContributors(hoveredCell, visualByInterfaceId) ??
-        (hoveredCell.status === 'pending' ? 'queued' : '—')
+        (hoveredCell.status === 'pending'
+          ? 'queued'
+          : hoveredCell.status === 'skipped'
+            ? 'skipped: in no file chosen'
+            : '—')
       readout = `Chunk #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
     } else {
       readout = `${blocks.length} chunks · ${formatBytes(chunkBytes)} each`
@@ -277,6 +281,10 @@ export function BlockGrid({
               } else if (cell.status === 'completed') {
                 border = 'none'
                 opacity = 0.92
+              } else if (cell.status === 'skipped') {
+                // None of the files chosen needs it: there, but not this download's.
+                border = '0.5px dashed var(--border-strong)'
+                opacity = 0.3
               }
 
               const rawFillPercent = Math.min(1, Math.max(0, cell.fillRatio)) * 100

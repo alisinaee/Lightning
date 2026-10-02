@@ -31,6 +31,11 @@ export function formatEta(remainingBytes: number, bytesPerSec: number): string {
   return `${hrs}h ${remMins}m`
 }
 
+/** What a download fetches: all of it, bar a torrent's pieces no chosen file needs. */
+export function wantedBytes(download: { totalBytes: number; skippedBytes?: number }): number {
+  return download.totalBytes - (download.skippedBytes ?? 0)
+}
+
 export function formatPercent(bytesDownloaded: number, totalBytes: number): number {
   if (totalBytes <= 0) return 0
   return Math.min(100, Math.round((bytesDownloaded / totalBytes) * 100))

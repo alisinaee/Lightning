@@ -49,6 +49,8 @@ declare module 'webtorrent' {
     length: number
     /** Bytes sent to peers. */
     uploaded: number
+    /** In the torrent's order; a deselected file's pieces aren't fetched for it. */
+    files: { select(): void; deselect(): void }[]
     /** Which pieces are verified and on disk. */
     bitfield: { get(index: number): boolean }
     destroy(options?: { destroyStore?: boolean }, callback?: (error?: Error) => void): void

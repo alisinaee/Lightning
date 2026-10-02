@@ -163,14 +163,22 @@ export class TorrentTransfer implements Transfer {
   }
 
   private add(client: WebTorrent): void {
+    const chosen = this.runtime.requestPayload.selectedFiles
     const torrent = client.add(this.torrentFile, {
       path: this.folder,
       // Trusted as done, bar a hash check of a piece or two per file (more if one fails).
-      bitfield: bitfieldOf(this.runtime.blocks.map((block) => block.status === 'completed'))
+      bitfield: bitfieldOf(this.runtime.blocks.map((block) => block.status === 'completed')),
+      // Only the chosen files, once webtorrent is ready to be told which (below).
+      deselect: chosen !== undefined
     })
     torrent.on('wire', (wire: Wire, address: string) => this.onWire(wire, address))
     torrent.on('verified', (index: number) => this.onVerified(index))
-    torrent.once('ready', () => this.followEngine(torrent))
+    torrent.once('ready', () => {
+      torrent.files.forEach((file, index) => {
+        if (chosen?.includes(index)) file.select()
+      })
+      this.followEngine(torrent)
+    })
     torrent.on('error', (error: unknown) => this.host.failDownload(message(error)))
   }
 
@@ -300,7 +308,9 @@ export class TorrentTransfer implements Transfer {
     const block = this.runtime.blocks[index]
     const received = this.unverified.get(index) ?? {}
     this.unverified.delete(index)
-    if (!block || block.status === 'completed' || block.rangeEnd === null) return
+    // A skipped piece fetched anyway isn't this download's: nothing chosen needs it.
+    if (!block || block.status === 'completed' || block.status === 'skipped') return
+    if (block.rangeEnd === null) return
     const { state } = this.runtime
     const length = block.rangeEnd - block.rangeStart + 1
     // Found on disk rather than received: whoever held it last, else the first network in use.

@@ -5,7 +5,14 @@ import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
-import { dirnameOf, formatBytes, formatDuration, formatSpeed, toDisplayPath } from '../utils/format'
+import {
+  dirnameOf,
+  formatBytes,
+  formatDuration,
+  formatSpeed,
+  toDisplayPath,
+  wantedBytes
+} from '../utils/format'
 
 const sectionHeaderClass =
   'font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
@@ -22,7 +29,7 @@ export function CompleteScreen({
   const speedHistoryByInterface = useAppStore((store) => store.speedHistoryByInterface)
   const networkVisual = useNetworkVisuals()
 
-  const finalSize = download.totalBytes || download.bytesDownloaded
+  const finalSize = wantedBytes(download) || download.bytesDownloaded
   const totalPausedMs = download.totalPausedMs ?? 0
   // completedAt is always set by the time a download reaches 'completed' — the
   // fallback here is just to keep this pure (no Date.now() during render).
