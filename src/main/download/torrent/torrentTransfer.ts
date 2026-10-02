@@ -5,8 +5,10 @@ import type { ChunkState, DownloadNetwork } from '../../../shared/types'
 import { connectRoute } from '../../network/deviceBinding'
 import { routesFor, type NetworkRoute } from '../../network/routes'
 import {
+  calculateCurrentSpeed,
   pushSpeedSample,
   recomputeAggregates,
+  type SpeedSample,
   type Transfer,
   type TransferHost,
   type TransferTarget
@@ -60,6 +62,8 @@ export class TorrentTransfer implements Transfer {
   private reach = new Map<string, { dials: number; answeredAt: number }>()
   /** Bytes of each piece not verified yet, by network. */
   private unverified = new Map<number, Record<string, number>>()
+  /** By network: what it has sent to peers, sampled for its upload speed. */
+  private uploadSamples = new Map<string, SpeedSample[]>()
 
   constructor(
     private readonly runtime: TransferTarget,
@@ -94,6 +98,8 @@ export class TorrentTransfer implements Transfer {
         this.host.scheduleUpdate()
       }
     }
+    // Uploads come in bursts; between them the speeds fall back to 0 here.
+    this.updateUploadSpeeds(now)
     this.host.reconcile()
   }
 
@@ -158,8 +164,35 @@ export class TorrentTransfer implements Transfer {
     } finally {
       for (const peer of this.peers.values()) this.removePeer(peer)
       this.peers.clear()
+      this.uploadSamples.clear()
+      this.updateUploadSpeeds(Date.now())
       this.ended = null
     }
+  }
+
+  /** A peer took `bytes` of a piece from this download, over `network`. */
+  private onUpload(network: DownloadNetwork, bytes: number): void {
+    const { state } = this.runtime
+    network.bytesUploaded = (network.bytesUploaded ?? 0) + bytes
+    state.bytesUploaded = (state.bytesUploaded ?? 0) + bytes
+    let samples = this.uploadSamples.get(network.id)
+    if (!samples) this.uploadSamples.set(network.id, (samples = []))
+    pushSpeedSample(samples, network.bytesUploaded, Date.now())
+    this.updateUploadSpeeds(Date.now())
+  }
+
+  /** Each network's upload speed, and the download's, as of `now`: one that has stopped sending
+   * reads 0 once its samples are older than the speed window. */
+  private updateUploadSpeeds(now: number): void {
+    const { state } = this.runtime
+    let total = 0
+    for (const network of state.networks) {
+      const speed = calculateCurrentSpeed(this.uploadSamples.get(network.id), now)
+      network.uploadSpeedBytesPerSec = speed
+      total += speed
+    }
+    if (total !== state.uploadSpeedBytesPerSec) this.host.scheduleUpdate()
+    state.uploadSpeedBytesPerSec = total
   }
 
   private add(client: WebTorrent): void {
@@ -288,6 +321,7 @@ export class TorrentTransfer implements Transfer {
       chunk.speedBytesPerSec = pushSpeedSample(samples, peer.received, now)
       this.host.scheduleUpdate()
     })
+    wire.on('upload', (bytes: number) => this.onUpload(network, bytes))
     wire.once('close', () => {
       if (this.peers.delete(wire)) this.removePeer(peer)
     })

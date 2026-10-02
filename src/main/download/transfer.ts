@@ -119,6 +119,11 @@ export function clearSpeeds(state: DownloadState): void {
   state.speedBytesPerSec = 0
   for (const chunk of state.chunks) chunk.speedBytesPerSec = 0
   for (const network of state.networks) network.speedBytesPerSec = 0
+  // A torrent's uploads, which stop with it.
+  if (state.uploadSpeedBytesPerSec !== undefined) {
+    state.uploadSpeedBytesPerSec = 0
+    for (const network of state.networks) network.uploadSpeedBytesPerSec = 0
+  }
 }
 
 /** Waits, but returns early if the signal aborts (pause/cancel shouldn't wait out a retry backoff). */

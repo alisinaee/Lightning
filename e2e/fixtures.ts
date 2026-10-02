@@ -329,6 +329,13 @@ export function checkEvents(sessions: DownloadState[][]): void {
             `${label}: peer ${chunk.id} is on a network of this download`
           ).toContain(chunk.interfaceId)
         }
+        const uploaded = state.networks.reduce(
+          (sum, network) => sum + (network.bytesUploaded ?? 0),
+          0
+        )
+        expect(uploaded, `${label}: the networks' uploads add up to the download's`).toBe(
+          state.bytesUploaded ?? 0
+        )
       } else if (state.status === 'downloading') {
         // A stream holds a block exactly while it is fetching it. A block has at most one stream
         // fetching it for real and two racing it as hedges, and is in flight whenever the first

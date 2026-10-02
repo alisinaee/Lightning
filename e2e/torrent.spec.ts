@@ -194,8 +194,14 @@ test.describe('uploading', () => {
     })
 
     await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
-    await plexo.waitForStatus('completed', 60_000)
+    const done = await plexo.waitForStatus('completed', 60_000)
     expect(connected, 'Plexo connected to the other client').toBe(true)
     expect(fromPlexo, 'what the other client received from Plexo').toBeGreaterThan(0)
+    // What Plexo shows it sent: at least what arrived (a little may still be in flight at the end).
+    const sentOverB = done.networks.find((network) => network.id === 'b')?.bytesUploaded ?? 0
+    expect(sentOverB).toBeGreaterThanOrEqual(fromPlexo)
+    expect(done.bytesUploaded).toBe(sentOverB)
+    // Nothing is moving once it's done.
+    expect(done.uploadSpeedBytesPerSec ?? 0).toBe(0)
   })
 })

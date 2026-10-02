@@ -300,6 +300,12 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   <span>
                     {download.chunks.length} {download.chunks.length === 1 ? 'peer' : 'peers'}
                   </span>
+                  <Dot />
+                  <span>
+                    <span className="sr-only">Uploading at </span>
+                    <span aria-hidden="true">↑ </span>
+                    {formatSpeed(download.uploadSpeedBytesPerSec ?? 0)}
+                  </span>
                 </>
               )}
               {!isPaused && knownSize && effectiveSpeed > 0 && (

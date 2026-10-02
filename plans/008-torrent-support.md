@@ -79,7 +79,9 @@ DownloadManager.start() ── request.infoHash ──► TorrentTransfer ─►
 7. **Upload while downloading, never after, over every network.** webtorrent's tit-for-tat runs as normal. At 100% the client is destroyed: no seeding.
    - **Revised after phase E:** every network uploads, USB-tethered ones included. Each network has an address of its own, and tit-for-tat gives each one's peers back what they send, which keeps every network at its best download speed. (The first version kept USB networks from uploading.)
    - **Speed and upload limits** will be a separate feature, for HTTP downloads too.
-   - **Upload isn't shown in the UI** for now.
+   - **Upload is shown:** `bytesUploaded` and `uploadSpeedBytesPerSec` on the download and on each network, counted from each wire's `upload` events.
+     - the downloading screen shows "↑ speed" beside the peer count, and under each network's download speed
+     - the complete screen shows "uploaded N"
 8. **Disk.**
    - The staging folder is `<destinationDir>/<name>.plexo/`, passed as webtorrent's `path`.
    - At completion, the torrent's top entry (the file, or the folder of a multi-file torrent) is renamed to `<destinationDir>/<name>` with `DownloadFile.publish`'s " (n)" rules, and the staging folder is removed.

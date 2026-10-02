@@ -169,9 +169,14 @@ export function CompleteScreen({
 
       <ScreenFooter>
         <div className="shrink-0 font-mono text-[11px] leading-[1.4] whitespace-nowrap text-muted-foreground">
-          {`written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'} · ${totalRetries} ${
-            totalRetries === 1 ? 'retry' : 'retries'
-          }`}
+          {[
+            `written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'}`,
+            // What its peers got from it while it downloaded.
+            isTorrent && `uploaded ${formatBytes(download.bytesUploaded ?? 0)}`,
+            `${totalRetries} ${totalRetries === 1 ? 'retry' : 'retries'}`
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </div>
         <div className="flex-1" />
         <Button type="button" variant="secondary" onClick={onNewDownload}>

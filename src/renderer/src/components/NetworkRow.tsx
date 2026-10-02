@@ -208,6 +208,14 @@ export function NetworkRow({
           style={{ color: isActive ? visual.text : 'var(--text-tertiary)' }}
         >
           {isActive ? formatSpeed(group.speedBytesPerSec) : '—'}
+          {peers && (
+            // A torrent's network also sends to its peers.
+            <div className="mt-1 text-[10px] font-medium text-muted-foreground">
+              <span className="sr-only">uploading at </span>
+              <span aria-hidden="true">↑ </span>
+              {formatSpeed(group.uploadSpeedBytesPerSec ?? 0)}
+            </div>
+          )}
         </div>
         <div
           role="cell"

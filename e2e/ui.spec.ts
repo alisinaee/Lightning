@@ -54,6 +54,9 @@ test.describe('a torrent through the UI', () => {
       await peers.click()
       await expect(page.getByText('Peer #1')).toBeVisible()
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
+      // Its upload, as a whole and per network.
+      await expect(page.getByText(/^Uploading at .+\/s$/)).toBeVisible()
+      await expect(page.getByText(/^uploading at .+\/s$/).first()).toBeVisible()
 
       // Done: two of its three files, with what fetched them.
       await expect(
@@ -61,7 +64,7 @@ test.describe('a torrent through the UI', () => {
       ).toBeVisible({ timeout: 60_000 })
       await expect(page.getByText(/^2 of 3 files · /)).toBeVisible()
       await expect(page.getByText('Peers', { exact: true })).toBeVisible()
-      await expect(page.getByText(/^written in \d+ pieces/)).toBeVisible()
+      await expect(page.getByText(/^written in \d+ pieces · uploaded /)).toBeVisible()
     } finally {
       await swarm.stop()
     }

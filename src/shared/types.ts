@@ -119,6 +119,9 @@ export interface DownloadNetwork {
   /** Bytes of the file it delivered. */
   bytesDownloaded: number
   speedBytesPerSec: number
+  /** A torrent's: what it has sent to peers, and how fast it is sending now. */
+  bytesUploaded?: number
+  uploadSpeedBytesPerSec?: number
   /** Requests over it that failed and were tried again. */
   retries: number
 }
@@ -139,6 +142,9 @@ export interface DownloadState {
   skippedBytes?: number
   bytesDownloaded: number
   speedBytesPerSec: number
+  /** A torrent's: what all its networks have sent to peers, and how fast they are sending now. */
+  bytesUploaded?: number
+  uploadSpeedBytesPerSec?: number
   status: DownloadStatus
   /** Every network on this computer, and any the download used that has since gone, in the
    * order it first saw them. */
