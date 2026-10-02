@@ -124,6 +124,8 @@ export interface DownloadNetwork {
 
 export interface DownloadState {
   id: string
+  /** Set for a torrent: its streams are peers, and its blocks are the torrent's pieces. */
+  kind?: 'torrent'
   url: string
   fileName: string
   destinationPath: string
@@ -221,4 +223,6 @@ export interface StartDownloadRequest {
   lastModified: string | null
   /** Streams per network the user picked; left out, the count is decided automatically. */
   streamsPerNetwork?: number
+  /** A torrent's, as its probe found it: the download starts from the .torrent kept for it then. */
+  infoHash?: string
 }

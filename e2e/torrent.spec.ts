@@ -1,0 +1,168 @@
+import type { Torrent, Wire } from 'webtorrent'
+import { expect, interfacesEnv, LAN_ADDRESS, test, treeSha, type PlexoApp } from './fixtures'
+import { seededBytes, sha256 } from './origin'
+import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
+
+// Downloading torrents: every byte right, every peer on a network, and the networks' controls,
+// pause and relaunch working as they do for HTTP. The swarm is local (see torrentSwarm.ts); the
+// checks fixture verifies each finished download's bytes and that nothing else was left behind.
+
+const KB = 1024
+const MB = 1024 * KB
+const PIECE = 64 * KB
+
+let swarm: Swarm
+test.beforeEach(async () => {
+  swarm = await new Swarm().start()
+})
+test.afterEach(async () => {
+  await swarm.stop()
+})
+
+test.describe('torrent downloads', () => {
+  test('a single-file torrent', async ({ plexo }) => {
+    const data = seededBytes(2 * MB, 11)
+    const torrent = await swarm.seed([named(data, 'movie.mkv')], { pieceLength: PIECE })
+
+    await plexo.start(await torrentFileOnDisk(torrent), sha256(data))
+    const done = await plexo.waitForStatus('completed', 30_000)
+    expect(done.kind).toBe('torrent')
+    expect(done.fileName).toBe('movie.mkv')
+    expect(done.totalBlocks).toBe((2 * MB) / PIECE)
+  })
+
+  test('a torrent of several files, published as its folder', async ({ plexo }) => {
+    const files = [
+      named(seededBytes(300 * KB, 21), 'a.bin'),
+      named(seededBytes(700 * KB + 3, 22), 'b.bin'),
+      named(seededBytes(5, 23), 'tiny.txt')
+    ]
+    const torrent = await swarm.seed(files, { folder: 'Album', pieceLength: PIECE })
+
+    const expected = treeSha(
+      files.map((data) => ({ path: (data as { name?: string }).name!, data }))
+    )
+    await plexo.start(await torrentFileOnDisk(torrent), expected)
+    const done = await plexo.waitForStatus('completed', 30_000)
+    expect(done.fileName).toBe('Album')
+  })
+
+  test('pause, quit, relaunch and resume: the pieces already done aren’t fetched again', async ({
+    plexo
+  }) => {
+    const data = seededBytes(6 * MB, 31)
+    const file = named(data, 'big.iso')
+    // Slow enough to stop partway: three seeders at 300 KB/s each.
+    let torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit: 300 * KB })
+    for (let seeder = 1; seeder < 3; seeder++) {
+      torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit: 300 * KB })
+    }
+
+    const id = await plexo.start(await torrentFileOnDisk(torrent), sha256(data))
+    await plexo.waitUntil((state) => state.bytesDownloaded >= 2 * MB, 30_000)
+    await plexo.relaunch()
+    const paused = await plexo.waitForStatus('paused')
+    expect(paused.bytesDownloaded).toBeGreaterThanOrEqual(2 * MB)
+
+    const sentBefore = swarm.uploaded()
+    await plexo.api.resumeDownload(id)
+    await plexo.waitForStatus('completed', 60_000)
+    // What was missing, plus at most a few pieces each peer had half-sent when it stopped.
+    expect(swarm.uploaded() - sentBefore).toBeLessThanOrEqual(
+      data.length - paused.bytesDownloaded + 6 * PIECE
+    )
+  })
+})
+
+test.describe('torrents over two networks', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for a second network')
+
+  /** Three seeders of `data`, at `uploadLimit` each. */
+  async function seedThree(data: Buffer, name: string, uploadLimit?: number): Promise<Torrent> {
+    const file = named(data, name)
+    let torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit })
+    for (let seeder = 1; seeder < 3; seeder++) {
+      torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit })
+    }
+    return torrent
+  }
+
+  test('both networks carry peers and deliver pieces', async ({ plexo }) => {
+    const data = seededBytes(4 * MB, 41)
+    const torrent = await seedThree(data, 'both.bin', 1 * MB)
+
+    await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
+    const done = await plexo.waitForStatus('completed', 30_000)
+    for (const id of ['a', 'b']) {
+      const network = done.networks.find((entry) => entry.id === id)!
+      expect(network.bytesDownloaded, `network ${id} delivered pieces`).toBeGreaterThan(0)
+    }
+    const seen = new Set(plexo.sessions.flat().flatMap((state) => state.chunks))
+    expect(new Set([...seen].map((peer) => peer.interfaceId))).toEqual(new Set(['a', 'b']))
+  })
+
+  test('switching a network off moves its peers to the other', async ({ plexo }) => {
+    const data = seededBytes(6 * MB, 42)
+    const torrent = await seedThree(data, 'switch.bin', 300 * KB)
+
+    const id = await plexo.start(await torrentFileOnDisk(torrent), sha256(data), {
+      networks: ['a', 'b']
+    })
+    await plexo.waitUntil(
+      (state) => state.networks.every((network) => network.bytesDownloaded > 0),
+      30_000
+    )
+    await plexo.api.setDownloadNetwork(id, 'b', false)
+    await plexo.waitUntil((state) => !state.chunks.some((peer) => peer.interfaceId === 'b'))
+    const done = await plexo.waitForStatus('completed', 60_000)
+    expect(done.networks.find((network) => network.id === 'b')?.enabled).toBe(false)
+  })
+})
+
+test.describe('a USB-tethered network', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address to stand in for the tethered network')
+
+  /** Downloads a torrent over network `b` alone, with another client fetching it too. Returns
+   * what that client received from Plexo, and whether Plexo connected to it at all. */
+  async function uploadedToOthers(
+    plexo: PlexoApp
+  ): Promise<{ fromPlexo: number; connected: boolean }> {
+    const data = seededBytes(4 * MB, 51)
+    const file = named(data, 'shared.bin')
+    const torrent = await swarm.seed([file], { pieceLength: PIECE, uploadLimit: 400 * KB })
+    const other = await swarm.leech(torrent)
+    let fromPlexo = 0
+    let connected = false
+    other.on('wire', (wire: Wire, address: string) => {
+      // Plexo dials over network b, from the LAN address. A dual-stack listener reports it
+      // IPv4-mapped: ::ffff:<address>:<port>.
+      if (!address.replace(/^::ffff:/, '').startsWith(`${LAN_ADDRESS}:`)) return
+      connected = true
+      wire.on('download', (bytes: number) => (fromPlexo += bytes))
+    })
+
+    await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
+    await plexo.waitForStatus('completed', 60_000)
+    return { fromPlexo, connected }
+  }
+
+  test.describe('as USB', () => {
+    test.use({ appEnv: { PLEXO_E2E_INTERFACES: `b=${LAN_ADDRESS}==usb` } })
+    test('nothing is uploaded over it', async ({ plexo }) => {
+      const { fromPlexo, connected } = await uploadedToOthers(plexo)
+      expect(connected, 'Plexo connected to the other client').toBe(true)
+      expect(fromPlexo).toBe(0)
+    })
+  })
+
+  test.describe('the same network as Ethernet', () => {
+    test.use({ appEnv: { PLEXO_E2E_INTERFACES: interfacesEnv({ b: LAN_ADDRESS ?? '' }) } })
+    test('uploads as usual: what the USB test rules out does happen otherwise', async ({
+      plexo
+    }) => {
+      const { fromPlexo, connected } = await uploadedToOthers(plexo)
+      expect(connected).toBe(true)
+      expect(fromPlexo).toBeGreaterThan(0)
+    })
+  })
+})

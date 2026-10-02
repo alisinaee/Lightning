@@ -133,9 +133,7 @@ test.describe('getting a torrent in', () => {
     })
   })
 
-  test('the start screen shows the torrent, and waits for the next update to start it', async ({
-    plexo
-  }) => {
+  test('the start screen shows the torrent, ready to start', async ({ plexo }) => {
     const { client, torrent } = await seed([named(seededBytes(200_000, 7), 'clip.mov')])
     clients.push(client)
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
@@ -144,6 +142,8 @@ test.describe('getting a torrent in', () => {
     await expect(plexo.page.getByText('Torrent · 1 file')).toBeVisible({ timeout: 15_000 })
     await expect(plexo.page.getByText(/Peers can see this computer’s address/)).toBeVisible()
     await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toHaveValue('clip.mov')
-    await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeEnabled()
+    // A torrent's connections are its peers: there's no stream count to pick.
+    await expect(plexo.page.getByText('STREAMS')).toBeHidden()
   })
 })

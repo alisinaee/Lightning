@@ -126,8 +126,6 @@ export function IdleScreen(): React.JSX.Element {
   const startLabel = starting ? 'Starting…' : probe.status === 'probing' ? 'Checking…' : 'Start'
   const canStart =
     probe.status === 'ready' &&
-    // Torrents can be looked at, not yet downloaded (plans/008-torrent-support.md, phase C).
-    !torrent &&
     selectedInterfaceIds.length > 0 &&
     Boolean(destinationDir) &&
     !starting
@@ -227,7 +225,8 @@ export function IdleScreen(): React.JSX.Element {
         interfaceIds: selectedInterfaceIds,
         etag: probe.result.etag,
         lastModified: probe.result.lastModified,
-        streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
+        streamsPerNetwork: streamsChoice === 'auto' || torrent ? undefined : streamsChoice,
+        infoHash: torrent?.infoHash
       })
     } catch (error) {
       setStartError(describeError(error))
@@ -303,7 +302,7 @@ export function IdleScreen(): React.JSX.Element {
         {torrent && (
           <InfoAlert
             title={`Torrent · ${fileCount(torrent.files.length)}`}
-            message="Peers can see this computer’s address on each network in use. Downloading torrents arrives in the next update."
+            message="Peers can see this computer’s address on each network in use."
           />
         )}
 

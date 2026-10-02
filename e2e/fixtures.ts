@@ -1,9 +1,9 @@
 import type {} from '../src/preload/globals'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
   _electron as electron,
@@ -212,7 +212,8 @@ export class PlexoApp {
       interfaceIds: multiChunk ? networks : networks.slice(0, 1),
       etag: probe.etag,
       lastModified: probe.lastModified,
-      streamsPerNetwork: options.streamsPerNetwork
+      streamsPerNetwork: options.streamsPerNetwork,
+      infoHash: probe.torrent?.infoHash
     })
     this.tracked.set(id, { expectedSha, destBefore, destinationDir })
     return id
@@ -315,7 +316,16 @@ export function checkEvents(sessions: DownloadState[][]): void {
           }
         }
       }
-      if (state.status === 'downloading') {
+      if (state.kind === 'torrent') {
+        // A torrent's streams are its peers: several may each send part of one piece, so the
+        // rules below (one stream per block) don't apply. Each peer is on one known network.
+        for (const chunk of state.chunks) {
+          expect(
+            state.networks.map((network) => network.id),
+            `${label}: peer ${chunk.id} is on a network of this download`
+          ).toContain(chunk.interfaceId)
+        }
+      } else if (state.status === 'downloading') {
         // A stream holds a block exactly while it is fetching it. A block has at most one stream
         // fetching it for real and two racing it as hedges, and is in flight whenever the first
         // is there. What the stream rows show is only as true as this.
@@ -356,6 +366,31 @@ export function checkEvents(sessions: DownloadState[][]): void {
   }
 }
 
+/** A folder's files as one hash: each file's path (relative, with `/`) and the SHA-256 of its
+ * bytes, in path order. What a multi-file torrent's download is checked against. */
+export function treeSha(files: { path: string; data: Buffer }[]): string {
+  const lines = files
+    .map((file) => `${file.path}\0${sha256(file.data)}\n`)
+    .sort()
+    .join('')
+  return sha256(Buffer.from(lines))
+}
+
+/** sha256 of a file, or treeSha of a folder. */
+export async function shaOfPath(path: string): Promise<string> {
+  if (!(await stat(path)).isDirectory()) return sha256(await readFile(path))
+  const entries = await readdir(path, { recursive: true, withFileTypes: true })
+  const files = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const full = join(entry.parentPath, entry.name)
+        return { path: relative(path, full).split(sep).join('/'), data: await readFile(full) }
+      })
+  )
+  return treeSha(files)
+}
+
 async function openFilesUnder(pid: number, roots: string[]): Promise<string[]> {
   try {
     const { stdout } = await promisify(execFile)('lsof', ['-Fn', '-p', String(pid)])
@@ -384,8 +419,7 @@ export async function checkFinalState(app: PlexoApp): Promise<void> {
   if (state.status === 'error') await app.api.removeDownload(state.id)
 
   if (state.status === 'completed') {
-    const bytes = await readFile(state.destinationPath)
-    expect(sha256(bytes), 'completed file matches the source byte for byte').toBe(
+    expect(await shaOfPath(state.destinationPath), 'completed download matches its source').toBe(
       tracked.expectedSha
     )
   } else {

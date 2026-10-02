@@ -66,12 +66,16 @@ DownloadManager.start() ── request.infoHash ──► TorrentTransfer ─►
    - Choose the one with the fewest live peer connections; on a tie, the first in the list.
    - With no network able to route the peer, return a socket that fails at once, the same way `connectRoute` reports a vanished interface.
    - Set `client.maxConns` to `30 × usable networks` in `reconcile()`; webtorrent reads it on every `_drain`. Add the comment `// ponytail: fewest-connections-first; weight by measured speed per network if one is seen starving`.
-4. **Incoming peers** arrive on webtorrent's listening port, routed by the OS. Each is credited to the network whose address matches `socket.localAddress`, and it's dropped if that network is off.
+4. **Incoming peers are dropped** (revised in phase C). They arrive on webtorrent's listening port, routed by the OS, and webtorrent's `wire` event doesn't expose the socket's local address, so nothing can tell which network one used. Only peers Plexo dialled itself, each through its own network, are kept.
 5. **Pieces are blocks, and peers are streams.**
    - `BlockState` is a piece, with `blockSizeBytes = pieceLength` and a shorter last piece.
    - `ChunkState` is a peer connection, with `interfaceId` set to its network.
    - Bytes from each wire's `piece` events are held per piece and per network. On the torrent's `verified(index)` event, the piece's length is credited to `bytesByInterface`, split in proportion to what each network delivered, and the block is marked `completed`. Only verified pieces ever count.
-6. **Pause destroys the download's client** (the files stay). **Resume**, including after a relaunch, creates a new client and adds the saved `metadata.torrent` with `bitfield` set to the completed blocks and `skipVerify: true`, so nothing is re-hashed. webtorrent's own `pause()` is not used, because it only stops new connections.
+6. **Pause destroys the download's client** (the files stay). **Resume**, including after a relaunch, creates a new client and adds the saved `metadata.torrent` with `bitfield` set to the completed blocks, **without** `skipVerify` (revised in phase C).
+   - `skipVerify` marks _every_ piece done.
+   - Without it, webtorrent trusts the bitfield but hash-checks up to two pieces per file, and re-checks a whole file if one fails. That's cheap, and safe after a relaunch.
+   - On `ready`, any piece Plexo had as done that webtorrent didn't confirm goes back to pending, so nothing is published early.
+   - webtorrent's own `pause()` is not used, because it only stops new connections.
 7. **Upload while downloading, never after.** webtorrent's tit-for-tat runs as normal. At 100% the client is destroyed: no seeding. **Wires on a `usb`-kind network never upload**: on each such wire, `wire.unchoke` is replaced with a no-op before webtorrent can call it.
 8. **Disk.**
    - The staging folder is `<destinationDir>/<name>.plexo/`, passed as webtorrent's `path`.
@@ -178,7 +182,21 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
    **Verify**: the focused specs, the full suite, the static checks, and the package check.
 
-## Phase C: the torrent transfer
+## Phase C: the torrent transfer — DONE
+
+> **Built** on branch `torrent-phase-c`. Differences from the steps below:
+>
+> - **Decisions 4 and 6 changed** as noted there: incoming peers are dropped, and resume runs without `skipVerify`.
+> - **The staging folder is `StagingFolder`, a `DownloadFile` subclass** (`torrent/stagingFolder.ts`). Its `path` is the torrent's top entry, so the manager's publish, sync, discard and restore code works unchanged.
+> - **Torrents are marked by `DownloadState.kind: 'torrent'`**, which restore reads, rather than a separate manifest `transfer` field. The `.torrent` is saved as `metadata.torrent` beside the manifest.
+> - **A piece shows `downloading` once its first bytes arrive.** Its bytes count only on `verified`, split across networks by `creditPiece()`.
+> - **The test swarm uses a local tracker** (`e2e/torrentSwarm.ts`) rather than `x.pe`. The USB test has an Ethernet control run, showing the same setup does upload when the network isn't USB.
+> - **`checkEvents`** keeps its HTTP stream rules (one stream per block) for HTTP downloads only; for torrents it checks that every peer is on a known network. **`checkFinalState`** hashes a published folder with `treeSha`.
+>
+> **Verified**:
+>
+> - typecheck, lint and format pass
+> - the full e2e suite passes; 7 download scenarios run in `torrent.spec.ts`
 
 9. **`torrent/peers.ts`:** `pickNetwork()` (Decision 3) and `networkForLocalAddress()` (Decision 4), both pure, with unit tests in `e2e/torrentPeers.spec.ts`.
 10. **`torrent/torrentTransfer.ts`** (`class TorrentTransfer implements Transfer`):

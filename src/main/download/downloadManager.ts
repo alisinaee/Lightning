@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { app, Notification, powerSaveBlocker } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
@@ -20,12 +20,16 @@ import { HttpTransfer, splittable } from './httpTransfer'
 import { ensureDirectory, reserveDestinationPath } from './paths'
 import { planBlocks, planDownload } from './plan'
 import { restoreBlocks, saveBlocks, type SavedBlocks } from './savedProgress'
+import { describeTorrent, probedTorrentFile } from './torrent/metadata'
+import { StagingFolder } from './torrent/stagingFolder'
+import { TorrentTransfer } from './torrent/torrentTransfer'
 import {
   clearSpeeds,
   delay,
   recomputeAggregates,
   updateSpeeds,
   type Transfer,
+  type TransferHost,
   type TransferTarget
 } from './transfer'
 import type { NetworkMonitor } from '../network/interfaces'
@@ -143,12 +147,19 @@ export class DownloadManager {
     return join(this.downloadDir(id), 'manifest.json')
   }
 
-  /** A runtime for `state`, with nothing running. */
+  /** Where a torrent download keeps its .torrent, beside its manifest. */
+  private torrentFilePath(id: string): string {
+    return join(this.downloadDir(id), 'metadata.torrent')
+  }
+
+  /** A runtime for `state`, with nothing running. A torrent's (`torrentFile` given) is fetched by
+   * a TorrentTransfer into its StagingFolder; anything else over HTTP. */
   private newRuntime(
     state: DownloadState,
     requestPayload: StartDownloadRequest,
     file: DownloadFile,
-    blocks: BlockState[]
+    blocks: BlockState[],
+    torrentFile?: Uint8Array
   ): DownloadRuntime {
     const target = {
       state,
@@ -165,15 +176,19 @@ export class DownloadManager {
       sentUpdates: 0,
       sentBlocks: []
     }
+    const host: TransferHost = {
+      networks: this.networks,
+      reconcile: () => this.reconcile(runtime),
+      failDownload: (message, discard) => this.failDownload(runtime, message, discard),
+      failNetwork: (network, message) => this.failNetwork(runtime, network, message),
+      scheduleUpdate: () => this.scheduleUpdate(runtime)
+    }
     // The transfer holds this same object: what the manager changes on it, the transfer sees.
     const runtime: DownloadRuntime = Object.assign(target, {
-      transfer: new HttpTransfer(target, {
-        networks: this.networks,
-        reconcile: () => this.reconcile(runtime),
-        failDownload: (message, discard) => this.failDownload(runtime, message, discard),
-        failNetwork: (network, message) => this.failNetwork(runtime, network, message),
-        scheduleUpdate: () => this.scheduleUpdate(runtime)
-      })
+      transfer:
+        torrentFile && file instanceof StagingFolder
+          ? new TorrentTransfer(target, host, torrentFile, file.folder)
+          : new HttpTransfer(target, host)
     })
     return runtime
   }
@@ -221,12 +236,20 @@ export class DownloadManager {
             if (block.status === 'downloading') block.status = 'pending'
           }
 
-          const file = new DownloadFile(persisted.partialPath)
+          // A torrent starts again from its saved .torrent; without it, it can't.
+          const torrentFile =
+            state.kind === 'torrent' ? await readFile(this.torrentFilePath(id)) : undefined
+          const file = torrentFile
+            ? new StagingFolder(persisted.partialPath, state.totalBytes)
+            : new DownloadFile(persisted.partialPath)
           if (state.status === 'paused') {
             const size = await file.size().catch(() => -1)
             const publishedPath = persisted.publicationPath ?? state.destinationPath
             const published = await stat(publishedPath).catch(() => null)
-            const publishedSize = published?.size ?? -1
+            // A torrent's folder of files: its identity below is what tells it's this download's.
+            const publishedSize = published?.isDirectory()
+              ? state.totalBytes
+              : (published?.size ?? -1)
             const expected = state.totalBytes || state.bytesDownloaded
             const sameFile =
               !!published &&
@@ -270,7 +293,13 @@ export class DownloadManager {
             }
           }
 
-          const runtime = this.newRuntime(state, persisted.requestPayload, file, blocks)
+          const runtime = this.newRuntime(
+            state,
+            persisted.requestPayload,
+            file,
+            blocks,
+            torrentFile
+          )
           runtime.publicationPath = persisted.publicationPath
           runtime.publicationIdentity = persisted.publicationIdentity
           recomputeAggregates(runtime)
@@ -344,23 +373,40 @@ export class DownloadManager {
     if (selected.length === 0) {
       throw new Error('Select at least one network interface')
     }
-    const target = new URL(requestPayload.url)
-    // A selected network that can't reach the host's address family starts switched off.
-    const usable = compatibleInterfaces(
-      selected,
-      await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
-    )
-    if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
+    // A torrent starts from the .torrent its probe kept, its paths checked again here.
+    const torrentFile = requestPayload.infoHash && probedTorrentFile(requestPayload.infoHash)
+    if (requestPayload.infoHash && !torrentFile) {
+      throw new Error('Look at this torrent again, then start it')
+    }
+    const torrent = torrentFile && (await describeTorrent(torrentFile, requestPayload.url)).torrent!
 
+    let usable = selected
+    // A torrent's peers come in either address family; an HTTP host has its own. A selected
+    // network that can't reach the host's family starts switched off.
+    if (!torrent) {
+      const target = new URL(requestPayload.url)
+      usable = compatibleInterfaces(
+        selected,
+        await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
+      )
+      if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
+    }
+
+    const totalBytes = torrent
+      ? torrent.files.reduce((sum, entry) => sum + entry.length, 0)
+      : requestPayload.totalBytes
     await ensureDirectory(requestPayload.destinationDir)
-    await ensureDiskSpace(requestPayload.destinationDir, requestPayload.totalBytes)
+    await ensureDiskSpace(requestPayload.destinationDir, totalBytes)
 
-    const plan = planDownload({
-      totalBytes: requestPayload.totalBytes,
-      splittable: requestPayload.supportsRanges,
-      networkCount: usable.length,
-      maxBlockBytes: testKnobs.blockBytes // 8 MB outside tests
-    })
+    // A torrent's blocks are its pieces.
+    const blockSizeBytes = torrent
+      ? torrent.pieceLength
+      : planDownload({
+          totalBytes,
+          splittable: requestPayload.supportsRanges,
+          networkCount: usable.length,
+          maxBlockBytes: testKnobs.blockBytes // 8 MB outside tests
+        }).blockSizeBytes
 
     // Claimed on disk, not just picked, so a second download of the same file
     // name can't pick it too and overwrite this one at publish time. Done
@@ -372,11 +418,18 @@ export class DownloadManager {
     )
 
     const id = randomUUID()
-    const file = new DownloadFile(`${destinationPath}.plexo`)
+    const file = torrent
+      ? // What's published is the torrent's top entry: its file, or its folder.
+        await StagingFolder.create(destinationPath, torrent.files[0].path.split(sep)[0], totalBytes)
+      : new DownloadFile(`${destinationPath}.plexo`)
+    if (torrentFile) {
+      await ensureDirectory(this.downloadDir(id))
+      await writeFile(this.torrentFilePath(id), torrentFile)
+    }
 
     // The UI caps how many cells it renders separately (see BlockGrid), by bucketing these
     // blocks rather than by shrinking their count here.
-    const blocks = planBlocks(requestPayload.totalBytes, plan.blockSizeBytes)
+    const blocks = planBlocks(totalBytes, blockSizeBytes)
 
     // The computer's other networks are listed too, switched off, for the user to turn on.
     const networks = available.map((iface) => newNetwork(iface, usable.includes(iface)))
@@ -388,10 +441,11 @@ export class DownloadManager {
 
     const state: DownloadState = {
       id,
+      kind: torrent ? 'torrent' : undefined,
       url: requestPayload.url,
       fileName: basename(destinationPath),
       destinationPath,
-      totalBytes: requestPayload.totalBytes,
+      totalBytes,
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       status: 'downloading',
@@ -400,11 +454,11 @@ export class DownloadManager {
       peakStreams: 0,
       blocks,
       totalBlocks: blocks.length,
-      blockSizeBytes: plan.blockSizeBytes,
+      blockSizeBytes,
       startedAt: Date.now()
     }
 
-    const runtime = this.newRuntime(state, requestPayload, file, blocks)
+    const runtime = this.newRuntime(state, requestPayload, file, blocks, torrentFile || undefined)
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
     this.pushUpdate(runtime)

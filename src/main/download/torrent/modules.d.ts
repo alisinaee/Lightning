@@ -13,6 +13,8 @@ declare module 'webtorrent' {
     webSeeds?: boolean
     tracker?: boolean | object
     maxConns?: number
+    /** Bytes per second this client uploads at most. */
+    uploadLimit?: number
     /** Added by Plexo's patch (patches/webtorrent+3.0.21.patch): opens every outgoing TCP peer
      * connection. */
     connect?: (options: { host: string; port: number }) => Socket
@@ -32,12 +34,23 @@ declare module 'webtorrent' {
     announce?: string[]
   }
 
+  /** One peer connection (bittorrent-protocol). Emits 'piece' (index, offset, buffer) for each
+   * block it receives, and 'close'. */
+  export interface Wire extends EventEmitter {
+    destroy(): void
+    unchoke(): void
+  }
+
   export interface Torrent extends EventEmitter {
     infoHash: string
     magnetURI: string
     torrentFile: Uint8Array
     name: string
     length: number
+    /** Bytes sent to peers. */
+    uploaded: number
+    /** Which pieces are verified and on disk. */
+    bitfield: { get(index: number): boolean }
     destroy(options?: { destroyStore?: boolean }, callback?: (error?: Error) => void): void
     addPeer(address: string): boolean
   }
@@ -45,6 +58,7 @@ declare module 'webtorrent' {
   export default class WebTorrent extends EventEmitter {
     constructor(options?: ClientOptions)
     maxConns: number
+    destroyed: boolean
     torrents: Torrent[]
     add(torrentId: string | Uint8Array, options?: AddOptions): Torrent
     seed(

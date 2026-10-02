@@ -57,9 +57,13 @@ export function testInterfaces(): NetworkInterfaceInfo[] | null {
     .map((entry) => {
       const [id, address, subnet, kind] = entry.split('=')
       const inferredKind =
-        kind === 'wifi' || id.toLowerCase().includes('wi-fi') || id.toLowerCase().includes('wifi')
-          ? ('wifi' as const)
-          : ('ethernet' as const)
+        kind === 'usb'
+          ? ('usb' as const)
+          : kind === 'wifi' ||
+              id.toLowerCase().includes('wi-fi') ||
+              id.toLowerCase().includes('wifi')
+            ? ('wifi' as const)
+            : ('ethernet' as const)
       return {
         id,
         device: id,
