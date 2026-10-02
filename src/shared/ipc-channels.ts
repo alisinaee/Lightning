@@ -19,5 +19,7 @@ export const IpcChannels = {
   removeDownload: 'download:remove',
   downloadUpdated: 'download:updated',
   networksChanged: 'network:changed',
+  linkReceived: 'app:link-received',
+  takePendingLink: 'app:take-pending-link',
   checkForUpdate: 'update:check'
 } as const

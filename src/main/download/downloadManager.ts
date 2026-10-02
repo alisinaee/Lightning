@@ -394,7 +394,7 @@ export class DownloadManager {
   /** Plexo shows one download at a time (see useAppStore's currentDownload) — starting a second
    * one while one is already running or paused would silently race it for disk I/O and
    * scramble the renderer's single-download view as updates from both interleave. */
-  private hasActiveDownload(): boolean {
+  hasActiveDownload(): boolean {
     for (const runtime of this.runtimes.values()) {
       if (runtime.state.status === 'downloading' || runtime.state.status === 'paused') {
         return true

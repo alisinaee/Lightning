@@ -6,6 +6,7 @@ import { UpdateDialog } from './components/UpdateDialog'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useNetworkEvents } from './hooks/useNetworks'
+import { useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
 import { DownloadingScreen } from './screens/DownloadingScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
@@ -65,6 +66,7 @@ function renderDownload(
 
 function App(): React.JSX.Element {
   useDownloadEvents()
+  useOpenedLinks()
   useNetworkEvents()
 
   const interfaces = useAppStore((store) => store.interfaces)

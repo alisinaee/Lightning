@@ -87,7 +87,9 @@ DownloadManager.start() ── request.infoHash ──► TorrentTransfer ─►
    - on Windows, any segment is a reserved device name (`CON`, `NUL`, `COM1`…)
 10. **v2-only torrents are refused** at probe time (no `pieces` in the info dictionary): "This torrent uses BitTorrent v2 only, which Plexo doesn't support yet."
 11. **One download at a time stays.** A torrent counts as the one download.
-12. **Plexo never makes itself the default magnet handler.** Phase E declares `magnet:` and `.torrent` in packaging and never calls `app.setAsDefaultProtocolClient`.
+12. **Plexo never makes itself the default magnet handler.** Phase E declares `magnet:` and `.torrent` in packaging and never calls `app.setAsDefaultProtocolClient`. Revised in phase E:
+    - **macOS** (`Info.plist`, `LSHandlerRank: Alternate`) and **Linux** (`.desktop` MIME types) declare both, which only makes Plexo one of the choices.
+    - **Windows declares neither**, because the NSIS installer would register Plexo as _the_ handler. There, a `.torrent` opens with Plexo through "Open with".
 13. **Privacy.** When a torrent is ready to start, IdleScreen's footer says once: "Peers can see this computer's address on each network in use."
 
 ## Current state and conventions
@@ -254,7 +256,23 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
 
     The HTTP wording stays unchanged. Extend `e2e/ui.spec.ts` to cover both.
 
-## Phase E: open magnet links and `.torrent` files from the OS
+## Phase E: open magnet links and `.torrent` files from the OS — DONE
+
+> **Built** on branch `torrent-phase-e`, as follows:
+>
+> - **`src/main/openLinks.ts`.**
+>   - `acceptedLink()` takes only `magnet:?` links and existing `.torrent` files.
+>   - `linkFromArgs()` reads a command line.
+>   - `offerLink()` keeps the link until the window takes it (`takePendingLink`, pulled on mount and on each `linkReceived` push), so a cold start doesn't lose it, and brings the window forward.
+> - **`src/main/index.ts`.**
+>   - `requestSingleInstanceLock()`: a second launch exits with code 0 and its link reaches the first through `second-instance`. The lock is per userData folder, so the parallel e2e launches are unaffected.
+>   - `open-url` and `open-file` (macOS) are registered before `ready`.
+>   - The first launch's own command line (Windows, Linux) is read at startup.
+> - **The link only fills the start screen's link field.** It's probed as usual, and the user presses Start.
+> - **Busy (revised from the steps below):** the link isn't dropped while a download runs. It waits in the link field for the start screen, and a notification says so.
+> - **Packaging:** as revised in Decision 12.
+> - **Tests** (`e2e/openLinks.spec.ts`): a `.torrent` on the command line; a real second launch of the Electron binary handing its magnet link over and exiting; `open-url` and `open-file` events; links that aren't accepted being ignored.
+> - **Still manual, on a packaged build on each OS:** clicking a magnet link in a browser, and double-clicking a `.torrent`.
 
 15. **Single instance:** call `app.requestSingleInstanceLock()`. On `second-instance`, restore and focus the window.
 16. **Links from the OS:**

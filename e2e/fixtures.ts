@@ -19,7 +19,7 @@ import { Origin, sha256, type OriginOptions } from './origin'
 
 export { expect }
 
-const PROJECT_ROOT = resolve(__dirname, '..')
+export const PROJECT_ROOT = resolve(__dirname, '..')
 
 /** Small blocks so a ~1 MB test file still splits into many of them. */
 export const BLOCK = 64 * 1024
@@ -86,13 +86,14 @@ export class PlexoApp {
     private extraEnv: Record<string, string> = {}
   ) {}
 
-  async launch(extraEnv: Record<string, string> = {}): Promise<this> {
+  /** `args` follow the app on its command line, as a link the OS hands over would. */
+  async launch(extraEnv: Record<string, string> = {}, args: string[] = []): Promise<this> {
     Object.assign(this.extraEnv, extraEnv)
     let retries = 5
     while (true) {
       try {
         this.electronApp = await electron.launch({
-          args: [PROJECT_ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
+          args: [PROJECT_ROOT, ...args, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
           env: {
             ...(process.env as Record<string, string>),
             PLEXO_USER_DATA: this.dirs.userData,

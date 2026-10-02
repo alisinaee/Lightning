@@ -3,6 +3,7 @@ import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
+import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import { testKnobs } from './testKnobs'
 import type { DownloadManager } from './download/downloadManager'
@@ -15,9 +16,42 @@ app.setName('Plexo')
 // Each e2e test runs against its own throwaway userData folder (downloads, manifests, settings).
 if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
 
+// One Plexo at a time (per userData folder, so parallel e2e runs each have their own): a second
+// launch — a magnet link clicked, a .torrent opened — hands its link to the first and exits.
+if (!app.requestSingleInstanceLock()) app.exit(0)
+
 let mainWindow: BrowserWindow | null = null
 let downloadManager: DownloadManager | null = null
 let quitAfterSuspending = false
+
+/** A link the OS handed over goes to the window's link field (see openLinks.ts). */
+function offer(candidate: string): void {
+  const link = acceptedLink(candidate)
+  if (!link) return
+  offerLink(link, mainWindow, {
+    busy: downloadManager?.hasActiveDownload() ?? false,
+    notify: !testKnobs.userDataDir
+  })
+}
+
+app.on('second-instance', (_event, argv) => {
+  const link = linkFromArgs(argv)
+  if (link) return offer(link)
+  if (mainWindow?.isMinimized()) mainWindow.restore()
+  mainWindow?.focus()
+})
+// macOS hands links over as events, and may do so before the app is ready.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  offer(url)
+})
+app.on('open-file', (event, path) => {
+  event.preventDefault()
+  offer(path)
+})
+// Windows and Linux put the first launch's link on its command line.
+const launchLink = linkFromArgs(process.argv)
+if (launchLink) offer(launchLink)
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({

@@ -45,6 +45,14 @@ const plexoApi = {
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
   removeDownload: (downloadId: string) => invoke('removeDownload', downloadId),
   checkForUpdate: () => invoke('checkForUpdate'),
+  takePendingLink: () => invoke('takePendingLink'),
+
+  /** The OS handed Plexo a link (a magnet link, a .torrent): takePendingLink() has it. */
+  onLinkReceived: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.linkReceived, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.linkReceived, listener)
+  },
 
   onDownloadUpdated: (callback: (update: DownloadUpdate) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, update: DownloadUpdate): void => callback(update)

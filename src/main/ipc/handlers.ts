@@ -17,6 +17,7 @@ import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
 import { probeUrl } from '../download/probe'
 import { deviceBindingSupported } from '../network/deviceBinding'
+import { takePendingLink } from '../openLinks'
 import { measureLatencies } from '../network/latency'
 import { NetworkMonitor } from '../network/interfaces'
 import { loadSettings, saveSettings } from '../settings'
@@ -156,6 +157,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
+
+  handle('takePendingLink', async () => takePendingLink())
 
   handle('readClipboardText', async () => clipboard.readText())
 
