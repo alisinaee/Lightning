@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { AppSettings } from '../../shared/types'
+import { DEFAULT_SLOW_MODE_SPEED, type AppSettings } from '../../shared/types'
 import { readJson, updateJson } from '../jsonFile'
 
 // Speed and data limits, for every download together: what the user sets in Speed & data limits.
@@ -65,7 +65,10 @@ export class Limits {
 
   /** Takes up the limits in `settings`. Slow mode, when on, stands in for the total limit. */
   configure(settings: AppSettings): void {
-    const total = settings.slowMode ? settings.slowModeSpeed : settings.speedLimit
+    // A slow mode speed never changed isn't saved: it's the default the window shows.
+    const total = settings.slowMode
+      ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
+      : settings.speedLimit
     this.total = adjust(this.total, total)
     const preferences = settings.networkPreferences ?? {}
     for (const id of new Set([...this.perNetwork.keys(), ...Object.keys(preferences)])) {

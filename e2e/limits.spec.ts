@@ -19,6 +19,20 @@ test.describe('speed and data limits', () => {
     expect(Date.now() - started).toBeGreaterThan(2500)
   })
 
+  test('slow mode holds downloads to its speed, the default one included', async ({
+    plexo,
+    serve
+  }) => {
+    const origin = await serve({ size: 96 * BLOCK })
+    // Switched on as the status bar does, its speed never changed: 2 MB/s.
+    await plexo.api.updateSettings({ slowMode: true })
+    const started = Date.now()
+    await plexo.start(origin.url(), origin.sha256)
+    await plexo.waitForHttpStatus('completed', 30_000)
+    // 6 MB at 2 MB/s: three seconds, less the second's worth a bucket may hold.
+    expect(Date.now() - started).toBeGreaterThan(1800)
+  })
+
   test('a network that uses up its data for the month stops, and goes on once it is raised', async ({
     plexo,
     serve
