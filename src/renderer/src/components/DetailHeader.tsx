@@ -2,7 +2,6 @@ import type { DownloadState, FinishedDownload } from '@shared/types'
 import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { ScreenFooter } from './ScreenFooter'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,9 +16,10 @@ import {
 import { Button, buttonVariants } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 
-/** The bottom of a download's own screen: the way back to the list on the left; Delete… and
- * what the download can do next (`children`, the main action last) on the right. */
-export function DetailFooter({
+/** The top of a download's own screen, laid out as the list's header is: the way back to the
+ * list on the left; Delete… and what the download can do next (`children`, the main action
+ * last) on the right. */
+export function DetailHeader({
   download,
   children
 }: {
@@ -29,19 +29,19 @@ export function DetailFooter({
   const setView = useAppStore((store) => store.setView)
 
   return (
-    <ScreenFooter className="gap-2">
+    <div className="flex shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5 py-3.5">
       <button
         type="button"
         onClick={() => setView({ name: 'list' })}
-        className="-ml-1.5 flex items-center gap-1 rounded-md px-1.5 py-1 text-[13px] text-[var(--text-secondary)] hover:text-foreground"
+        className="-ml-2 flex items-center gap-1 rounded-md px-1.5 py-1 font-sans text-[15px] leading-none font-medium text-[var(--text-secondary)] hover:text-foreground"
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft className="size-4.5" />
         Downloads
       </button>
       <div className="flex-1" />
       <DeleteButton download={download} />
       {children}
-    </ScreenFooter>
+    </div>
   )
 }
 

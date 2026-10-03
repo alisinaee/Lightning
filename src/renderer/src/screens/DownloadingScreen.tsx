@@ -7,7 +7,7 @@ import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
 import { NetworkRow } from '../components/NetworkRow'
-import { DetailFooter } from '../components/DetailFooter'
+import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
 import { TruncatedText } from '../components/TruncatedText'
@@ -206,7 +206,17 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Hero band — always visible at top */}
+      <DetailHeader download={download}>
+        <Button
+          type="button"
+          variant={isPaused && !isQueued ? 'default' : 'secondary'}
+          onClick={handlePauseResume}
+          disabled={resuming}
+        >
+          {pauseResumeLabel}
+        </Button>
+      </DetailHeader>
+      {/* Hero band — always visible under the header */}
       <HeroBand>
         <div className="flex items-center gap-[14px]">
           <CombineDiagram
@@ -462,17 +472,6 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
           </div>
         </div>
       </div>
-
-      <DetailFooter download={download}>
-        <Button
-          type="button"
-          variant={isPaused && !isQueued ? 'default' : 'secondary'}
-          onClick={handlePauseResume}
-          disabled={resuming}
-        >
-          {pauseResumeLabel}
-        </Button>
-      </DetailFooter>
     </div>
   )
 }

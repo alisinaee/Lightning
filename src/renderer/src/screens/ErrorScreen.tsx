@@ -2,7 +2,7 @@ import type { DownloadState } from '@shared/types'
 import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { FixLinkDialog } from '../components/FixLinkDialog'
-import { DetailFooter } from '../components/DetailFooter'
+import { DetailHeader } from '../components/DetailHeader'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
 import {
@@ -56,6 +56,28 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
 
   return (
     <div className="flex h-full flex-col bg-background">
+      <DetailHeader download={download}>
+        {expired ? (
+          <Button type="button" onClick={() => setFixing(true)}>
+            Fix link
+          </Button>
+        ) : resumable ? (
+          <Button
+            type="button"
+            disabled={resuming}
+            onClick={() => {
+              setResuming(true)
+              void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
+            }}
+          >
+            {resuming ? 'Resuming…' : 'Resume'}
+          </Button>
+        ) : (
+          <Button type="button" onClick={handleDownloadAgain}>
+            Download again
+          </Button>
+        )}
+      </DetailHeader>
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-6">
         <div className="flex w-full max-w-[440px] flex-col items-center gap-[18px] rounded-[14px] border-[0.5px] border-[var(--border-strong)] bg-card p-[28px_24px] text-center shadow-[0_16px_40px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.2)]">
           {/* Status Icon */}
@@ -166,28 +188,6 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
         </div>
       </div>
 
-      <DetailFooter download={download}>
-        {expired ? (
-          <Button type="button" onClick={() => setFixing(true)}>
-            Fix link
-          </Button>
-        ) : resumable ? (
-          <Button
-            type="button"
-            disabled={resuming}
-            onClick={() => {
-              setResuming(true)
-              void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
-            }}
-          >
-            {resuming ? 'Resuming…' : 'Resume'}
-          </Button>
-        ) : (
-          <Button type="button" onClick={handleDownloadAgain}>
-            Download again
-          </Button>
-        )}
-      </DetailFooter>
       <FixLinkDialog download={fixing ? download : null} onClose={() => setFixing(false)} />
     </div>
   )

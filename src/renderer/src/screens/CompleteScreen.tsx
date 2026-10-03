@@ -1,6 +1,6 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { HeroBand } from '../components/HeroBand'
-import { DetailFooter } from '../components/DetailFooter'
+import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -59,6 +59,11 @@ export function CompleteScreen({
 
   return (
     <div className="flex h-full flex-col bg-background">
+      <DetailHeader download={download}>
+        <Button type="button" onClick={handleReveal} disabled={missing}>
+          {window.plexo.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
+        </Button>
+      </DetailHeader>
       <div role="status" className="sr-only">
         Download complete: {download.fileName}
       </div>
@@ -185,12 +190,6 @@ export function CompleteScreen({
             .join(' · ')}
         </div>
       </div>
-
-      <DetailFooter download={download}>
-        <Button type="button" onClick={handleReveal} disabled={missing}>
-          {window.plexo.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
-        </Button>
-      </DetailFooter>
     </div>
   )
 }
