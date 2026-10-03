@@ -145,8 +145,12 @@ test.describe('getting a torrent in', () => {
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
     await plexo.page.getByRole('textbox', { name: 'LINK' }).fill(magnet)
-    await expect(plexo.page.getByText('Torrent · 1 file')).toBeVisible({ timeout: 15_000 })
-    await expect(plexo.page.getByText(/Peers can see this computer’s address/)).toBeVisible()
+    // Its files, to choose from: one here, so no tick for all of them.
+    const files = plexo.page.getByRole('group', { name: 'Files' })
+    await expect(files.getByRole('checkbox', { name: /clip\.mov/ })).toBeChecked({
+      timeout: 15_000
+    })
+    await expect(files.getByRole('checkbox', { name: 'All files' })).toHaveCount(0)
     await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toHaveValue('clip.mov')
     await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeEnabled()
     // A torrent's connections are its peers: there's no stream count to pick.

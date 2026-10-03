@@ -29,7 +29,7 @@ test.describe('links handed over by the OS', () => {
     await plexo.launch({}, [path])
 
     await expect(linkField(plexo)).toHaveValue(path)
-    await expect(plexo.page.getByText('Torrent · 1 file')).toBeVisible({ timeout: 15_000 })
+    await expect(plexo.page.getByRole('group', { name: 'Files' })).toBeVisible({ timeout: 15_000 })
     // Shown, not started.
     expect(await plexo.current()).toBeNull()
   })

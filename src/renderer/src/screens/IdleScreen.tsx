@@ -60,7 +60,7 @@ function InfoAlert({ title, message }: { title?: string; message: string }): Rea
   )
 }
 
-/** A torrent's files, each ticked to be downloaded; a tick for all of them above. */
+/** A torrent's files, each ticked to be downloaded; with several, a tick for all of them above. */
 function TorrentFileList({
   files,
   skipped,
@@ -73,15 +73,21 @@ function TorrentFileList({
   // Every path starts with the torrent's own folder: the files are listed within it.
   const inFolder = (path: string): string => path.split(/[\\/]/).slice(1).join('/') || path
   return (
-    <div className="max-h-36 overflow-y-auto rounded-[9px] border border-border px-3 py-1.5">
-      <label className="flex items-center gap-2 py-0.5 text-[12px] font-medium">
-        <Checkbox
-          checked={skipped.length === 0}
-          indeterminate={skipped.length > 0 && skipped.length < files.length}
-          onCheckedChange={(checked) => onChange(checked ? [] : files.map((_, index) => index))}
-        />
-        All files
-      </label>
+    <div
+      role="group"
+      aria-label="Files"
+      className="max-h-36 overflow-y-auto rounded-[9px] border border-border px-3 py-1.5"
+    >
+      {files.length > 1 && (
+        <label className="flex items-center gap-2 py-0.5 text-[12px] font-medium">
+          <Checkbox
+            checked={skipped.length === 0}
+            indeterminate={skipped.length > 0 && skipped.length < files.length}
+            onCheckedChange={(checked) => onChange(checked ? [] : files.map((_, index) => index))}
+          />
+          All files
+        </label>
+      )}
       {files.map((file, index) => (
         <label key={index} className="flex items-center gap-2 py-0.5 font-mono text-[11.5px]">
           <Checkbox
@@ -163,7 +169,6 @@ export function IdleScreen(): React.JSX.Element {
   const sizeToFetch = torrent
     ? chosenFiles.reduce((sum, index) => sum + torrent.files[index].length, 0)
     : (ready?.totalBytes ?? null)
-  const findingPeers = probe.status === 'probing' && /^magnet:/i.test(url.trim())
   const multiChunkAllowed = ready !== null && ready.supportsRanges && ready.totalBytes !== null
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
   // One request has to carry the whole file: either the server can't serve parts of it, or it
@@ -359,18 +364,7 @@ export function IdleScreen(): React.JSX.Element {
 
         {probe.status === 'error' && <ErrorAlert message={probe.message} />}
 
-        {findingPeers && (
-          <InfoAlert message="Finding peers that have this torrent, to read what’s in it…" />
-        )}
-
         {torrent && (
-          <InfoAlert
-            title={`Torrent · ${describeFileCount(torrent.files.length, torrent.files.length)}`}
-            message="Peers can see this computer’s address on each network in use."
-          />
-        )}
-
-        {torrent && torrent.files.length > 1 && (
           <TorrentFileList
             files={torrent.files}
             skipped={skippedFiles}
