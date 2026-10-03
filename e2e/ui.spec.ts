@@ -55,13 +55,18 @@ test.describe('a torrent through the UI', () => {
       const peerRow = page.getByRole('row').filter({ hasText: 'Peer #1' }).first()
       await expect(peerRow).toBeVisible()
       await expect(peerRow).toContainText(/RECEIVING|CONNECTED/)
-      await expect(peerRow).not.toContainText('Peer connection')
-      await expect(peerRow.getByRole('cell')).toHaveCount(5)
+      await expect(peerRow).toContainText('Peer connection')
+      await expect(peerRow.getByRole('cell')).toHaveCount(6)
       await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
       const networks = page.getByRole('table', { name: 'Networks' })
       await expect(networks.getByRole('columnheader', { name: 'Verified' })).toHaveCount(0)
-      await expect(networks.getByRole('progressbar')).toHaveCount(0)
-      await expect(page.getByRole('progressbar', { name: 'Download progress' })).toBeVisible()
+      await expect(
+        networks.getByRole('columnheader', { name: 'Progress', exact: true })
+      ).toBeVisible()
+      await expect(networks.getByRole('progressbar').first()).toBeVisible()
+      await expect(
+        page.getByRole('progressbar', { name: 'Download progress', exact: true })
+      ).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
       // Its upload, as a whole; peer/network rows show directional transfer telemetry.
