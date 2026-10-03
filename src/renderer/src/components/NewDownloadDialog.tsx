@@ -16,6 +16,7 @@ import {
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 type ProbeState =
   | { status: 'idle' }
@@ -134,7 +135,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       .readClipboardText()
       .then((text) => {
         const link = acceptedLink(text)
-        if (link && !useAppStore.getState().draftUrl) setUrl(link)
+        const { draftUrl, startedUrl } = useAppStore.getState()
+        if (link && link !== startedUrl && !draftUrl) setUrl(link)
       })
       .catch(() => {})
   }, [setUrl])
@@ -275,7 +277,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           : { ...common, kind: 'http' }
       )
       // Started: the link is spent, so the next download starts from an empty one.
-      setUrl('')
+      useAppStore.setState({ startedUrl: url.trim(), draftUrl: '' })
       onDone()
     } catch (error) {
       setStartError(describeError(error))
@@ -317,17 +319,24 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               className="min-w-0 flex-1 border-none bg-transparent font-mono text-[13px] text-foreground outline-none"
             />
             {url && (
-              <button
-                type="button"
-                onClick={() => {
-                  setUrl('')
-                  linkInput.current?.focus()
-                }}
-                aria-label="Clear link"
-                className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-              >
-                <X aria-hidden className="size-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUrl('')
+                        linkInput.current?.focus()
+                      }}
+                      aria-label="Clear link"
+                      className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    >
+                      <X aria-hidden className="size-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent>Clear link</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <Button type="button" variant="secondary" onClick={handleOpenTorrent} className="h-9">

@@ -10,6 +10,7 @@ import { NetworkRow } from '../components/NetworkRow'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
+import { TorrentBadge } from '../components/TorrentBadge'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -35,8 +36,8 @@ import {
 
 /** Inline "·" separator between adjacent stats. `shrink` pins it at its natural width inside a
  * flex row that might otherwise squeeze it (footer rows), matching each call site's prior style. */
-function Dot({ shrink }: { shrink?: boolean }): React.JSX.Element {
-  return <span className={`opacity-35 ${shrink ? 'shrink-0' : ''}`}>·</span>
+function Dot(): React.JSX.Element {
+  return <span className="opacity-35">·</span>
 }
 
 function InlineStat({ label, value }: { label: string; value: string }): React.JSX.Element {
@@ -302,12 +303,15 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
               fileExtensionBadge(download.fileName)
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <TruncatedText
-              text={download.fileName}
-              className="font-sans text-[15px] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground"
-            />
-            <div className="mt-1 flex items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <TruncatedText
+                text={download.fileName}
+                className="font-sans text-[15px] leading-[1.3] font-semibold tracking-[-0.01em] text-foreground"
+              />
+              {isTorrent && <TorrentBadge />}
+            </div>
+            <div className="flex min-w-0 items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>
                 {formatBytes(download.bytesDownloaded)}
                 {knownSize ? ` of ${formatBytes(wantedBytes(download))}` : ''}
@@ -367,26 +371,29 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   {statusBadge.label}
                 </ColorBadge>
               )}
-            </div>
-            <div className="mt-1 flex min-w-0 items-center gap-[7px] font-mono text-[11px] leading-[1.4] text-muted-foreground">
+              {totalRetries > 0 && (
+                <>
+                  <Dot />
+                  <span className="text-[var(--color-usb)]">
+                    {totalRetries} {totalRetries === 1 ? 'retry' : 'retries'}
+                  </span>
+                </>
+              )}
+              {/* Last and to the right: the one part that gives way when the line runs short. */}
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <span className="truncate">
-                      Saving to {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
+                    <span className="ml-auto flex min-w-0 items-center gap-1.5 pl-3 text-[11px] text-muted-foreground">
+                      <Folder aria-hidden className="size-3 shrink-0" />
+                      <span className="sr-only">Saving to</span>
+                      <span className="truncate">
+                        {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
+                      </span>
                     </span>
                   }
                 />
                 <TooltipContent>Saving to: {download.destinationPath}</TooltipContent>
               </Tooltip>
-              {totalRetries > 0 && (
-                <>
-                  <Dot shrink />
-                  <span className="shrink-0 text-[var(--color-usb)]">
-                    {totalRetries} {totalRetries === 1 ? 'retry' : 'retries'}
-                  </span>
-                </>
-              )}
             </div>
           </div>
         </div>

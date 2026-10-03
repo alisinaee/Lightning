@@ -1,3 +1,5 @@
+import { TITLE_BAR_HEIGHT } from '../theme'
+
 const isMac = window.plexo.platform === 'darwin'
 
 /** The window's title bar, the same on every OS: its name, centered, on a strip the window is
@@ -6,9 +8,10 @@ const isMac = window.plexo.platform === 'darwin'
 export function TitleBar(): React.JSX.Element {
   return (
     <div
+      style={{ height: TITLE_BAR_HEIGHT }}
       className={`flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card [-webkit-app-region:drag] ${
         // Clear of the controls on either side, so the name stays centered between them.
-        isMac ? 'h-8 px-[94px]' : 'h-11 px-[140px]'
+        isMac ? 'px-[94px]' : 'px-[140px]'
       }`}
     >
       <div className="truncate font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">

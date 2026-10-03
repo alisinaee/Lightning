@@ -329,14 +329,44 @@ test('new download and limits dialogs stay open after outside clicks and close w
   await newDownload.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(newDownload).toBeHidden()
 
-  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
+  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const limits = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
   await expect(limits.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
   await expect(limits).toBeVisible()
-  await limits.getByRole('button', { name: 'Done', exact: true }).click()
+  // Cancel leaves everything as it was.
+  await limits.getByRole('switch').click()
+  await expect(limits.getByRole('switch')).toBeChecked()
+  await limits.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(limits).toBeHidden()
+  await expect(page.getByRole('switch', { name: 'Slow mode' })).not.toBeChecked()
+})
+
+test('a link just started is not offered again from the clipboard', async ({
+  plexo,
+  serve,
+  dirs
+}) => {
+  const origin = await serve({ size: BLOCK })
+  await stubNativeUi(plexo, dirs.dest)
+  const page = plexo.page
+  // Stubbed rather than written, so the run leaves the real clipboard alone.
+  await plexo.evaluateMain((electron, text) => {
+    electron.clipboard.readText = (() => text) as never
+  }, origin.url())
+  const link = await plexo.newDownload()
+  await expect(link).toHaveValue(origin.url())
+  await page.getByRole('button', { name: 'Change…' }).click()
+  await plexo.expectNextDownload(origin.sha256)
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await expect(link).toBeHidden()
+
+  await plexo.newDownload()
+  // Answered after the dialog's own read, so that one has been applied (or skipped) by now.
+  await page.evaluate(() => window.plexo.readClipboardText())
+  await expect(link).toHaveValue('')
+  await plexo.waitForStatus('completed')
 })
 
 test('compact limits controls convert units without changing the limit and show monthly resets', async ({
@@ -344,9 +374,10 @@ test('compact limits controls convert units without changing the limit and show 
   dirs
 }) => {
   const page = plexo.page
+  // Nothing saved yet means no file yet.
   const settings = async (): Promise<Record<string, unknown>> =>
-    JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
-  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
+    JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8').catch(() => '{}'))
+  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
   const total = dialog.getByRole('radiogroup', { name: 'Total speed', exact: true })
@@ -355,14 +386,13 @@ test('compact limits controls convert units without changing the limit and show 
   await total.getByRole('radio', { name: 'Limit to', exact: true }).check()
   await total.getByRole('button', { name: 'KB/s', exact: true }).click()
   await total.getByRole('textbox').fill('512')
-  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
   await total.getByRole('button', { name: 'MB/s', exact: true }).click()
   await expect(total.getByRole('textbox')).toHaveValue('0.5')
-  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
   await total.getByRole('radio', { name: 'No limit', exact: true }).check()
   await expect(total.getByRole('textbox')).toBeDisabled()
   await total.getByRole('radio', { name: 'Limit to', exact: true }).check()
-  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
+  await expect(total.getByRole('textbox')).toHaveValue('512')
+  expect((await settings()).speedLimit, 'nothing is saved before Save').toBeUndefined()
   await page.screenshot({ path: '/tmp/plexo-limits-general.png' })
 
   await dialog.locator('nav button').nth(1).click()
@@ -385,6 +415,10 @@ test('compact limits controls convert units without changing the limit and show 
   await data.getByRole('button', { name: 'Week', exact: true }).click()
   await expect(dialog.getByText('Weeks start Monday.', { exact: false })).toBeVisible()
   await expect(dialog.getByText('10.0 GB this week', { exact: false })).toBeVisible()
+  await page.screenshot({ path: '/tmp/plexo-limits-network.png' })
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
   await expect
     .poll(async () => {
       const saved = (await settings()).networkPreferences as Record<
@@ -394,9 +428,6 @@ test('compact limits controls convert units without changing the limit and show 
       return Object.values(saved).some((entry) => entry.dataLimitPeriod === 'week')
     })
     .toBe(true)
-  await page.screenshot({ path: '/tmp/plexo-limits-network.png' })
-  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
-  await expect(dialog).toBeHidden()
 })
 
 test('network reset controls confirm scope, keep limits when resetting usage, and keep usage when removing limits', async ({
@@ -415,14 +446,15 @@ test('network reset controls confirm scope, keep limits when resetting usage, an
   })
   await plexo.page.reload()
   const page = plexo.page
-  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
-  await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Speed & data limits' })
+  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
   const iface = (await plexo.api.listInterfaces()).findIndex((entry) => entry.id === id)
-  await dialog
-    .locator('nav button')
-    .nth(iface + 1)
+  // A network's row in the menu opens the dialog on that network.
+  await page
+    .getByRole('button', { name: / limits$/ })
+    .nth(iface)
     .click()
+  const dialog = page.getByRole('dialog', { name: 'Speed & data limits' })
+  await expect(dialog.locator('nav button').nth(iface + 1)).toHaveAttribute('aria-current', 'page')
   await dialog.getByRole('button', { name: 'Remove limits…', exact: true }).click()
   let confirmation = page.getByRole('alertdialog')
   await expect(confirmation.getByText(/recorded data usage stays unchanged/)).toBeVisible()
@@ -444,7 +476,7 @@ test('network reset controls confirm scope, keep limits when resetting usage, an
     .getByRole('button', { name: 'Remove limits', exact: true })
     .click()
   await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeDisabled()
-  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await plexo.relaunch()
   expect((await plexo.api.networkUsage())[id]).toBe(0)
 })

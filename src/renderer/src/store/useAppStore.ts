@@ -55,6 +55,8 @@ interface AppStore {
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
   draftUrl: string
+  /** The link last started: still on the clipboard afterwards, so not offered again. */
+  startedUrl: string
   /** Persisted — the last folder picked, falling back to downloadsDir. */
   destinationDir: string
 
@@ -119,6 +121,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   slowModeSpeed: initial.slowModeSpeed,
 
   draftUrl: '',
+  startedUrl: '',
   destinationDir: initial.destinationDir ?? initial.downloadsDir,
 
   loadInterfaces: async () => {

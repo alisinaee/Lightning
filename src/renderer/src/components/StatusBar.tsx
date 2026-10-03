@@ -45,11 +45,18 @@ export function StatusBar(): React.JSX.Element {
 
   return (
     <ScreenFooter className="gap-4 font-mono text-[11.5px] text-muted-foreground">
-      <span className="tabular-nums">
-        ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
-        {limit !== undefined && ` · limit ${formatSpeed(limit)}`}
-      </span>
-      <span>{waiting === 0 ? 'Queue is empty' : `${waiting} waiting in the queue`}</span>
+      {/* At rest it says nothing: a zero speed or an empty queue only reads as broken. */}
+      {(speed > 0 || limit !== undefined) && (
+        <span className="tabular-nums">
+          {speed > 0 && (
+            <>
+              ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
+            </>
+          )}
+          {limit !== undefined && `${speed > 0 ? ' · ' : ''}limit ${formatSpeed(limit)}`}
+        </span>
+      )}
+      {waiting > 0 && <span>{waiting} waiting in the queue</span>}
       <div className="flex-1" />
       <label className="flex items-center gap-2">
         Slow mode

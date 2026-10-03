@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { formatBytes, type NetworkGroup } from '../utils/format'
 
 // The grid is a byte-space map of the file: one square per chunk, running left-to-right,
@@ -286,21 +287,28 @@ export function BlockGrid({
 
         <div className="relative">
           {nearestActive !== null && (
-            <button
-              type="button"
-              onClick={goToActive}
-              aria-label={`Show the ${unit.toLowerCase()}s in progress`}
-              className={cn(
-                'absolute right-4 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:text-foreground dark:shadow-[0_2px_8px_rgba(0,0,0,0.55)] focus-visible:outline-2 focus-visible:outline-ring',
-                nearestActive < firstInView ? '-top-1' : '-bottom-1'
-              )}
-            >
-              {nearestActive < firstInView ? (
-                <ArrowUp aria-hidden className="size-3.5" />
-              ) : (
-                <ArrowDown aria-hidden className="size-3.5" />
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={goToActive}
+                    aria-label={`Show the ${unit.toLowerCase()}s in progress`}
+                    className={cn(
+                      'absolute right-4 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:text-foreground dark:shadow-[0_2px_8px_rgba(0,0,0,0.55)] focus-visible:outline-2 focus-visible:outline-ring',
+                      nearestActive < firstInView ? '-top-1' : '-bottom-1'
+                    )}
+                  >
+                    {nearestActive < firstInView ? (
+                      <ArrowUp aria-hidden className="size-3.5" />
+                    ) : (
+                      <ArrowDown aria-hidden className="size-3.5" />
+                    )}
+                  </button>
+                }
+              />
+              <TooltipContent>{`Show the ${unit.toLowerCase()}s in progress`}</TooltipContent>
+            </Tooltip>
           )}
           <div
             ref={scrollerRef}

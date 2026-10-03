@@ -173,3 +173,6 @@ export function resolveNetworkVisual(
     name
   }
 }
+
+/** In px. Drawn inside the window, so popups have to keep clear of it themselves. */
+export const TITLE_BAR_HEIGHT = window.plexo.platform === 'darwin' ? 32 : 44

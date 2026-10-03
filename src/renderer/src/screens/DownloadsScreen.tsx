@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronRight, Plus, X } from 'lucide-react'
+import { ChevronRight, Pause, Play, Plus, RotateCw, X, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
@@ -7,6 +7,7 @@ import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
+import { TorrentBadge } from '../components/TorrentBadge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +20,7 @@ import {
 } from '../components/ui/alert-dialog'
 import { Button, buttonVariants } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore, type DownloadFilter } from '../store/useAppStore'
 import {
@@ -100,6 +102,7 @@ export function DownloadsScreen(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [limitsOpen, setLimitsOpen] = useState(false)
+  const [limitsPage, setLimitsPage] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -210,11 +213,19 @@ export function DownloadsScreen(): React.JSX.Element {
               setSelected(new Set())
             }}
           />
-          <div className="font-mono text-[11.5px] leading-none text-muted-foreground">
-            {summaryOf(downloads)}
-          </div>
+          {/* One group already says it in its header. */}
+          {allGroups.length > 1 && (
+            <div className="font-mono text-[11.5px] leading-none text-muted-foreground">
+              {summaryOf(downloads)}
+            </div>
+          )}
           <div className="flex-1" />
-          <NetworksMenu onOpenLimits={() => setLimitsOpen(true)} />
+          <NetworksMenu
+            onOpenLimits={(page) => {
+              setLimitsPage(page)
+              setLimitsOpen(true)
+            }}
+          />
           <Button type="button" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             New download
@@ -227,16 +238,23 @@ export function DownloadsScreen(): React.JSX.Element {
           aria-busy={busy}
           className="flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
         >
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Deselect all"
-            disabled={busy}
-            onClick={() => setSelected(new Set())}
-          >
-            <X />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Deselect all"
+                  disabled={busy}
+                  onClick={() => setSelected(new Set())}
+                >
+                  <X />
+                </Button>
+              }
+            />
+            <TooltipContent>Deselect all</TooltipContent>
+          </Tooltip>
           <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">
             {chosen.length} selected
           </span>
@@ -355,8 +373,12 @@ export function DownloadsScreen(): React.JSX.Element {
           const some = !all && ids.some((id) => selected.has(id))
           return (
             <section key={group.label} aria-label={group.label}>
-              <div className="flex items-center gap-3 border-b-[0.5px] border-border pt-5 pb-3">
+              <div className="group/group-header flex items-center gap-3 border-b-[0.5px] border-border pt-5 pb-3">
                 <Checkbox
+                  className={cn(
+                    chosen.length === 0 &&
+                      'opacity-0 group-focus-within/group-header:opacity-100 group-hover/group-header:opacity-100'
+                  )}
                   aria-label={
                     group.label === 'Needs attention'
                       ? 'Select all downloads needing attention'
@@ -372,14 +394,20 @@ export function DownloadsScreen(): React.JSX.Element {
                 </h2>
                 <div className="flex-1" />
                 {group.label === 'Finished' && history.length > 0 && (
-                  <button
-                    type="button"
-                    className="text-[12.5px] text-[var(--text-secondary)] hover:text-foreground"
-                    title="Downloaded files stay on your computer"
-                    onClick={() => void window.plexo.clearHistory()}
-                  >
-                    Clear finished list
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="text-[12.5px] text-[var(--text-secondary)] hover:text-foreground"
+                          onClick={() => void window.plexo.clearHistory()}
+                        >
+                          Clear finished list
+                        </button>
+                      }
+                    />
+                    <TooltipContent>Downloaded files stay on your computer</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
               {group.items.map((item) => (
@@ -388,6 +416,7 @@ export function DownloadsScreen(): React.JSX.Element {
                   item={item}
                   now={now}
                   selected={selected.has(item.id)}
+                  selecting={chosen.length > 0}
                   onSelect={(on) => toggle([item.id], on)}
                   onOpen={() => setView({ name: 'download', id: item.id })}
                   onFix={() => !isFinished(item) && setFixing(item)}
@@ -403,7 +432,12 @@ export function DownloadsScreen(): React.JSX.Element {
       </div>
 
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />
-      <LimitsDialog open={limitsOpen} onOpenChange={setLimitsOpen} />
+      <LimitsDialog
+        open={limitsOpen}
+        onOpenChange={setLimitsOpen}
+        page={limitsPage}
+        onPageChange={setLimitsPage}
+      />
 
       <AlertDialog
         open={confirmation !== null}
@@ -509,6 +543,7 @@ function DownloadRow({
   item,
   now,
   selected,
+  selecting,
   onSelect,
   onOpen,
   onFix,
@@ -517,6 +552,8 @@ function DownloadRow({
   item: Item
   now: number
   selected: boolean
+  /** Something is selected: every checkbox shows, not just the hovered row's. */
+  selecting: boolean
   onSelect: (on: boolean) => void
   onOpen: () => void
   onFix: () => void
@@ -530,15 +567,18 @@ function DownloadRow({
 
   let detail: string
   let tone = 'text-muted-foreground'
-  let action: { label: string; run: () => void; danger?: boolean } | null = null
+  let action: { label: string; run: () => void; icon?: LucideIcon } | null = null
   if (isFinished(item) || item.status === 'completed') {
     detail = [
       formatBytes(wanted || item.bytesDownloaded),
-      sourceOf(item),
+      // A torrent's badge already says where it came from.
+      item.kind === 'http' && sourceOf(item.url),
       isFinished(item) && item.missing
         ? 'moved or deleted'
         : formatWhen(item.completedAt ?? now, now)
-    ].join(' · ')
+    ]
+      .filter(Boolean)
+      .join(' · ')
   } else {
     const download = item
     const sizes =
@@ -557,21 +597,38 @@ function DownloadRow({
         ]
           .filter(Boolean)
           .join(' · ')
-        action = { label: 'Pause', run: () => void window.plexo.pauseDownload(download.id) }
+        action = {
+          label: 'Pause',
+          icon: Pause,
+          run: () => void window.plexo.pauseDownload(download.id)
+        }
         break
       case 'queued':
         detail = `Waiting for a turn · ${sizes}`
+        action = {
+          label: 'Pause',
+          icon: Pause,
+          run: () => void window.plexo.pauseDownload(download.id)
+        }
         break
       case 'paused':
         detail = wanted > 0 ? `Paused at ${percent}% · ${sizes}` : `Paused · ${sizes}`
-        action = { label: 'Resume', run: () => void window.plexo.resumeDownload(download.id) }
+        action = {
+          label: 'Resume',
+          icon: Play,
+          run: () => void window.plexo.resumeDownload(download.id)
+        }
         break
       default:
         detail = describeError(download.error ?? 'Something went wrong')
         tone = 'text-[var(--color-danger)]'
         if (linkExpired(download)) action = { label: 'Fix link', run: onFix }
         else if (download.resumable !== false) {
-          action = { label: 'Retry', run: () => void window.plexo.resumeDownload(download.id) }
+          action = {
+            label: 'Retry',
+            icon: RotateCw,
+            run: () => void window.plexo.resumeDownload(download.id)
+          }
         } else action = { label: 'Download again', run: onAgain }
     }
   }
@@ -607,6 +664,11 @@ function DownloadRow({
       )}
     >
       <Checkbox
+        className={cn(
+          !selecting &&
+            !selected &&
+            'opacity-0 group-focus-within/download-row:opacity-100 group-hover/download-row:opacity-100'
+        )}
         aria-label={`Select ${item.fileName}`}
         checked={selected}
         onCheckedChange={(on) => onSelect(on)}
@@ -620,11 +682,22 @@ function DownloadRow({
           {badge}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="truncate font-sans text-[14px] leading-tight font-medium">
-            {item.fileName}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-sans text-[14px] leading-tight font-medium">
+              {item.fileName}
+            </span>
+            {item.kind === 'torrent' && <TorrentBadge />}
           </div>
           {segments.length > 0 && (
-            <div className="flex h-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                'flex h-1 overflow-hidden rounded-full bg-muted',
+                // Not moving: the colors stay, faded, so it doesn't read as running.
+                !isFinished(item) &&
+                  (item.status === 'paused' || item.status === 'queued') &&
+                  'opacity-40'
+              )}
+            >
               {segments.map((segment) => (
                 <div
                   key={segment.id}
@@ -639,10 +712,30 @@ function DownloadRow({
           <div className={`truncate font-mono text-[11.5px] leading-none ${tone}`}>{detail}</div>
         </div>
       </button>
-      {action && (
-        <Button type="button" size="sm" variant="secondary" onClick={action.run}>
-          {action.label}
-        </Button>
+      {action?.icon ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={`${action.label} ${item.fileName}`}
+                onClick={action.run}
+                className="text-muted-foreground group-hover/download-row:text-foreground"
+              >
+                <action.icon />
+              </Button>
+            }
+          />
+          <TooltipContent>{action.label}</TooltipContent>
+        </Tooltip>
+      ) : (
+        action && (
+          <Button type="button" size="sm" variant="secondary" onClick={action.run}>
+            {action.label}
+          </Button>
+        )
       )}
       <button
         type="button"

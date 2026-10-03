@@ -22,6 +22,12 @@ import { Input } from './ui/input'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
+/** What the dialog edits: a copy taken when it opens, written back only on Save. */
+type Draft = Pick<
+  ReturnType<typeof useAppStore.getState>,
+  'speedLimit' | 'slowMode' | 'slowModeSpeed' | 'downloadsAtOnce' | 'networkPreferences'
+>
+
 const KB = 1024
 const MB = 1024 ** 2
 const GB = 1024 ** 3
@@ -190,15 +196,16 @@ function LimitChoice({
   )
 }
 
-function GeneralPage({ running }: { running: number }): React.JSX.Element {
-  const speedLimit = useAppStore((store) => store.speedLimit)
-  const setSpeedLimit = useAppStore((store) => store.setSpeedLimit)
-  const slowMode = useAppStore((store) => store.slowMode)
-  const setSlowMode = useAppStore((store) => store.setSlowMode)
-  const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
-  const setSlowModeSpeed = useAppStore((store) => store.setSlowModeSpeed)
-  const downloadsAtOnce = useAppStore((store) => store.downloadsAtOnce)
-  const setDownloadsAtOnce = useAppStore((store) => store.setDownloadsAtOnce)
+function GeneralPage({
+  running,
+  draft,
+  change
+}: {
+  running: number
+  draft: Draft
+  change: (patch: Partial<Draft>) => void
+}): React.JSX.Element {
+  const { speedLimit, slowMode, slowModeSpeed, downloadsAtOnce } = draft
 
   return (
     <>
@@ -218,7 +225,7 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
           fallback={20 * MB}
           unit="MB/s"
           unitBytes={MB}
-          onChange={setSpeedLimit}
+          onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
 
@@ -228,10 +235,14 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
           Replaces the total speed limit while enabled. Useful during calls or streaming.
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <SpeedInput bytes={slowModeSpeed} label="Slow mode speed" onChange={setSlowModeSpeed} />
+          <SpeedInput
+            bytes={slowModeSpeed}
+            label="Slow mode speed"
+            onChange={(slowModeSpeed) => change({ slowModeSpeed })}
+          />
           <label className="ml-auto flex items-center gap-2 text-[13px]">
             Enabled
-            <Switch checked={slowMode} onCheckedChange={setSlowMode} />
+            <Switch checked={slowMode} onCheckedChange={(slowMode) => change({ slowMode })} />
           </label>
         </div>
       </section>
@@ -247,7 +258,7 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
               size="icon-sm"
               aria-label="Decrease simultaneous downloads"
               disabled={downloadsAtOnce <= DOWNLOADS_AT_ONCE.min}
-              onClick={() => setDownloadsAtOnce(downloadsAtOnce - 1)}
+              onClick={() => change({ downloadsAtOnce: downloadsAtOnce - 1 })}
             >
               <Minus />
             </Button>
@@ -263,7 +274,7 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
               size="icon-sm"
               aria-label="Increase simultaneous downloads"
               disabled={downloadsAtOnce >= DOWNLOADS_AT_ONCE.max}
-              onClick={() => setDownloadsAtOnce(downloadsAtOnce + 1)}
+              onClick={() => change({ downloadsAtOnce: downloadsAtOnce + 1 })}
             >
               <Plus />
             </Button>
@@ -279,15 +290,17 @@ function NetworkPage({
   id,
   name,
   used,
-  onUsageReset
+  onUsageReset,
+  preference,
+  change
 }: {
   id: string
   name: string
   used: number
   onUsageReset: () => void
+  preference: NetworkPreference | undefined
+  change: (patch: NetworkPreference) => void
 }): React.JSX.Element {
-  const preference = useAppStore((store) => store.networkPreferences[id])
-  const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
   const dataLimit = preference?.dataLimit
   const period = preference?.dataLimitPeriod ?? 'month'
   const [reset, setReset] = useState<'usage' | 'limits' | null>(null)
@@ -300,7 +313,7 @@ function NetworkPage({
       if (reset === 'usage') {
         await window.plexo.resetNetworkUsage(id)
         onUsageReset()
-      } else setNetworkPreference(id, { speedLimit: undefined, dataLimit: undefined })
+      } else change({ speedLimit: undefined, dataLimit: undefined })
       setReset(null)
     } catch (cause) {
       setError(describeError(cause))
@@ -332,7 +345,7 @@ function NetworkPage({
           fallback={10 * MB}
           unit="MB/s"
           unitBytes={MB}
-          onChange={(speedLimit) => setNetworkPreference(id, { speedLimit })}
+          onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
 
@@ -347,7 +360,7 @@ function NetworkPage({
           fallback={5 * GB}
           unit="GB"
           unitBytes={GB}
-          onChange={(limit) => setNetworkPreference(id, { dataLimit: limit })}
+          onChange={(limit) => change({ dataLimit: limit })}
         >
           <span className="text-[12px] text-muted-foreground">per</span>
           <ToggleGroup
@@ -357,7 +370,7 @@ function NetworkPage({
             onValueChange={(values) => {
               const next = values[0]
               if (next === 'day' || next === 'week' || next === 'month') {
-                setNetworkPreference(id, { dataLimitPeriod: next })
+                change({ dataLimitPeriod: next })
               }
             }}
             size="sm"
@@ -480,26 +493,81 @@ function describeLimits(preference: NetworkPreference | undefined, used: number)
   return parts.length > 0 ? parts.join(' · ') : 'No limit'
 }
 
-/** Speed & data limits: every download's together, and each network's. Changes apply at once. */
+/** Speed & data limits: every download's together, and each network's. Nothing changes until
+ * Save; Cancel (or Escape) leaves everything as it was. Resetting data usage is the exception:
+ * it's an action, not a setting, so it happens once confirmed. */
 export function LimitsDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  page,
+  onPageChange
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The network shown, by interface id; null for General. */
+  page: string | null
+  onPageChange: (page: string | null) => void
+}): React.JSX.Element {
+  return (
+    <Dialog open={open} disablePointerDismissal onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[min(520px,calc(100%-2rem))] max-w-[680px] flex-col gap-0 p-0 sm:max-w-[680px]"
+      >
+        {/* Mounted only while open, so each opening starts a fresh draft. */}
+        <LimitsEditor page={page} onPageChange={onPageChange} onClose={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function LimitsEditor({
+  page,
+  onPageChange,
+  onClose
+}: {
+  page: string | null
+  onPageChange: (page: string | null) => void
+  onClose: () => void
 }): React.JSX.Element {
   const interfaces = useAppStore((store) => store.interfaces)
-  const preferences = useAppStore((store) => store.networkPreferences)
-  const speedLimit = useAppStore((store) => store.speedLimit)
-  const slowMode = useAppStore((store) => store.slowMode)
+  const [draft, setDraft] = useState<Draft>(() => {
+    const { speedLimit, slowMode, slowModeSpeed, downloadsAtOnce, networkPreferences } =
+      useAppStore.getState()
+    return { speedLimit, slowMode, slowModeSpeed, downloadsAtOnce, networkPreferences }
+  })
+  const change = (patch: Partial<Draft>): void =>
+    setDraft((previous) => ({ ...previous, ...patch }))
+  const changeNetwork = (id: string, patch: NetworkPreference): void =>
+    setDraft((previous) => ({
+      ...previous,
+      networkPreferences: {
+        ...previous.networkPreferences,
+        [id]: { ...previous.networkPreferences[id], ...patch }
+      }
+    }))
+  // Only what changed is written, so a running download isn't re-limited for nothing.
+  const save = (): void => {
+    const store = useAppStore.getState()
+    if (draft.speedLimit !== store.speedLimit) store.setSpeedLimit(draft.speedLimit)
+    if (draft.slowMode !== store.slowMode) store.setSlowMode(draft.slowMode)
+    if (draft.slowModeSpeed !== store.slowModeSpeed) store.setSlowModeSpeed(draft.slowModeSpeed)
+    if (draft.downloadsAtOnce !== store.downloadsAtOnce) {
+      store.setDownloadsAtOnce(draft.downloadsAtOnce)
+    }
+    for (const [id, preference] of Object.entries(draft.networkPreferences)) {
+      if (preference !== store.networkPreferences[id]) store.setNetworkPreference(id, preference)
+    }
+    onClose()
+  }
+  const { speedLimit, slowMode, networkPreferences: preferences } = draft
   const running = useAppStore(
     (store) =>
       Object.values(store.downloads).filter((download) => download.status === 'downloading').length
   )
   const networkVisual = useNetworkVisuals()
   const [usageRevision, setUsageRevision] = useState(0)
-  const usage = useNetworkUsage(open, usageRevision)
-  const [page, setPage] = useState<string | null>(null)
+  const usage = useNetworkUsage(true, usageRevision)
   const shown = interfaces.find((iface) => iface.id === page)
 
   const navItem = (
@@ -513,8 +581,8 @@ export function LimitsDialog({
       key={key ?? 'general'}
       type="button"
       aria-current={page === key ? 'page' : undefined}
-      onClick={() => setPage(key)}
-      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-secondary"
+      onClick={() => onPageChange(key)}
+      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-primary/10"
     >
       <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: dot }} />
       <span className="flex min-w-0 flex-col gap-1">
@@ -529,60 +597,56 @@ export function LimitsDialog({
   )
 
   return (
-    <Dialog open={open} disablePointerDismissal onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[min(520px,calc(100%-2rem))] max-w-[680px] flex-col gap-0 p-0 sm:max-w-[680px]"
-      >
-        <div className="flex items-center border-b-[0.5px] border-border px-4 py-3">
-          <DialogTitle className="text-[16px] font-semibold">Speed &amp; data limits</DialogTitle>
+    <>
+      <div className="flex items-center border-b-[0.5px] border-border px-4 py-3">
+        <DialogTitle className="text-[16px] font-semibold">Speed &amp; data limits</DialogTitle>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <nav className="flex w-[190px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r-[0.5px] border-border p-2">
+          <div className={navLabelClass}>General</div>
+          {navItem(
+            null,
+            'var(--text-secondary)',
+            'All downloads',
+            slowMode ? 'Slow mode on' : speedLimit ? formatSpeed(speedLimit) : 'No limit'
+          )}
+          <div className={navLabelClass}>Networks</div>
+          {interfaces.map((iface) => {
+            const visual = networkVisual(iface.id, iface.kind, iface.displayName)
+            const detail = describeLimits(preferences[iface.id], usage[iface.id] ?? 0)
+            return navItem(
+              iface.id,
+              visual.solid,
+              visual.name,
+              detail,
+              detail === 'Data limit reached'
+            )
+          })}
+        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {shown ? (
+            <NetworkPage
+              key={shown.id}
+              id={shown.id}
+              name={networkVisual(shown.id, shown.kind, shown.displayName).name}
+              used={usage[shown.id] ?? 0}
+              onUsageReset={() => setUsageRevision((value) => value + 1)}
+              preference={preferences[shown.id]}
+              change={(patch) => changeNetwork(shown.id, patch)}
+            />
+          ) : (
+            <GeneralPage running={running} draft={draft} change={change} />
+          )}
         </div>
-        <div className="flex min-h-0 flex-1">
-          <nav className="flex w-[190px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r-[0.5px] border-border p-2">
-            <div className={navLabelClass}>General</div>
-            {navItem(
-              null,
-              'var(--text-secondary)',
-              'All downloads',
-              slowMode ? 'Slow mode on' : speedLimit ? formatSpeed(speedLimit) : 'No limit'
-            )}
-            <div className={navLabelClass}>Networks</div>
-            {interfaces.map((iface) => {
-              const visual = networkVisual(iface.id, iface.kind, iface.displayName)
-              const detail = describeLimits(preferences[iface.id], usage[iface.id] ?? 0)
-              return navItem(
-                iface.id,
-                visual.solid,
-                visual.name,
-                detail,
-                detail === 'Data limit reached'
-              )
-            })}
-          </nav>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            {shown ? (
-              <NetworkPage
-                key={shown.id}
-                id={shown.id}
-                name={networkVisual(shown.id, shown.kind, shown.displayName).name}
-                used={usage[shown.id] ?? 0}
-                onUsageReset={() => setUsageRevision((value) => value + 1)}
-              />
-            ) : (
-              <GeneralPage running={running} />
-            )}
-          </div>
-        </div>
-        <div className="flex items-center border-t-[0.5px] border-border px-4 py-2">
-          <div className="font-mono text-[11.5px] text-muted-foreground">
-            Changes apply right away
-          </div>
-          <div className="flex-1" />
-          <Button type="button" onClick={() => onOpenChange(false)}>
-            Done
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-4 py-2">
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={save}>
+          Save
+        </Button>
+      </div>
+    </>
   )
 }

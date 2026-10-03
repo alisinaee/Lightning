@@ -100,13 +100,12 @@ export function acceptedLink(text: string): string | null {
   return null
 }
 
-/** Where a download comes from, in a word: its link's host, or that it's a torrent. */
-export function sourceOf(download: { kind: 'http' | 'torrent'; url: string }): string {
-  if (download.kind === 'torrent') return 'torrent'
+/** Where a link's download comes from, in a word: its host. */
+export function sourceOf(url: string): string {
   try {
-    return new URL(download.url).host
+    return new URL(url).host
   } catch {
-    return download.url
+    return url
   }
 }
 

@@ -12,7 +12,12 @@ import { Switch } from './ui/switch'
 
 /** The networks new downloads combine, switched on or off here; each download can still change
  * its own. Also how fast each is going right now, and how much of its data limit is left. */
-export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): React.JSX.Element {
+export function NetworksMenu({
+  onOpenLimits
+}: {
+  /** Opens Speed & data limits on that network's page, or General for null. */
+  onOpenLimits: (page: string | null) => void
+}): React.JSX.Element {
   const interfaces = useAppStore((store) => store.interfaces)
   const preferences = useAppStore((store) => store.networkPreferences)
   const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
@@ -56,9 +61,11 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
         ) : (
           <>
             {on.length} {on.length === 1 ? 'network' : 'networks'}
-            <span className="font-mono text-[11.5px] text-muted-foreground">
-              {total > 0 ? formatSpeed(total) : 'Idle'}
-            </span>
+            {total > 0 && (
+              <span className="font-mono text-[11.5px] text-muted-foreground">
+                {formatSpeed(total)}
+              </span>
+            )}
           </>
         )}
         <ChevronDown className="size-3.5 text-muted-foreground" />
@@ -81,7 +88,9 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
           return (
             <div
               key={iface.id}
-              className="flex flex-col gap-2 border-b-[0.5px] border-border px-4 py-3"
+              // The whole row opens this network's limits (the chevron's button stretches over it);
+              // the switch and the pencil sit above it and do their own thing.
+              className="group relative flex flex-col gap-2 border-b-[0.5px] border-border px-4 py-3 hover:bg-muted"
             >
               <div className="flex items-center gap-3">
                 <span
@@ -91,11 +100,13 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex min-w-0 items-center gap-1">
                     <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
-                    <NetworkEditPopover
-                      interfaceId={iface.id}
-                      interfaceKind={iface.kind}
-                      osName={iface.displayName}
-                    />
+                    <span className="relative z-10 flex">
+                      <NetworkEditPopover
+                        interfaceId={iface.id}
+                        interfaceKind={iface.kind}
+                        osName={iface.displayName}
+                      />
+                    </span>
                   </div>
                   <div
                     className={`font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
@@ -113,6 +124,7 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                   </div>
                 </div>
                 <Switch
+                  className="relative z-10"
                   aria-label={`Use ${visual.name} for new downloads`}
                   checked={!preference?.off}
                   onCheckedChange={(checked) =>
@@ -122,10 +134,10 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                 <button
                   type="button"
                   aria-label={`${visual.name} limits`}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground outline-none group-hover:text-foreground after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
                   onClick={() => {
                     setOpen(false)
-                    onOpenLimits()
+                    onOpenLimits(iface.id)
                   }}
                 >
                   <ChevronRight className="size-4" />
@@ -146,7 +158,7 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
           className="px-4 py-3 text-[13px] font-medium text-primary hover:underline"
           onClick={() => {
             setOpen(false)
-            onOpenLimits()
+            onOpenLimits(null)
           }}
         >
           Speed &amp; data limits…
