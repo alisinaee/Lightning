@@ -288,7 +288,9 @@ function PeerRows({
             >
               <TwoWay
                 down={receiving ? formatSpeed(peer.speedBytesPerSec) : '—'}
-                up={formatSpeed(peer.uploadSpeedBytesPerSec)}
+                up={
+                  peer.uploadSpeedBytesPerSec > 0 ? formatSpeed(peer.uploadSpeedBytesPerSec) : '—'
+                }
                 showUp={sent}
                 labels={['Receiving at', 'Sending at']}
               />
@@ -420,7 +422,12 @@ export function NetworkRow({
         >
           <TwoWay
             down={isActive ? formatSpeed(group.speedBytesPerSec) : '—'}
-            up={formatSpeed(group.transfer === 'torrent' ? group.uploadSpeedBytesPerSec : 0)}
+            // Like down: a dash while nothing is going out. Each direction is idle on its own.
+            up={
+              group.transfer === 'torrent' && group.uploadSpeedBytesPerSec > 0
+                ? formatSpeed(group.uploadSpeedBytesPerSec)
+                : '—'
+            }
             // Always for a torrent, so it's plain each network uploads too.
             showUp={group.transfer === 'torrent'}
             labels={['Downloading at', 'Uploading at']}
