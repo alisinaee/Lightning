@@ -52,11 +52,17 @@ test.describe('a torrent through the UI', () => {
       const peers = page.getByRole('button', { name: /^\d+ peers?/ }).first()
       await expect(peers).toBeVisible()
       await peers.click()
-      await expect(page.getByText('Peer #1')).toBeVisible()
+      const peerRow = page.getByRole('row').filter({ hasText: 'Peer #1' }).first()
+      await expect(peerRow).toBeVisible()
+      await expect(peerRow).toContainText(/RECEIVING|CONNECTED/)
+      await expect(peerRow).toContainText('Peer connection')
+      await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
+      await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
-      // Its upload, as a whole and per network.
-      await expect(page.getByText(/^Uploading at .+\/s$/)).toBeVisible()
-      await expect(page.getByText(/^uploading at .+\/s$/).first()).toBeVisible()
+      // Its upload, as a whole; peer/network rows show directional transfer telemetry.
+      await expect(page.getByText(/^Uploading at .+\/s$/).first()).toBeVisible()
+      await expect(peerRow).toContainText('↑')
+      await expect(peerRow).toContainText('↓')
 
       // Done: two of its three files, with what fetched them.
       await expect(

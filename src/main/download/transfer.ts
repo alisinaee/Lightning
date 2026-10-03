@@ -1,8 +1,13 @@
 import type {
-  BlockState,
   DownloadNetwork,
   DownloadState,
-  StartDownloadRequest
+  DownloadUnitState,
+  HttpBlockState,
+  HttpDownloadState,
+  StartHttpDownloadRequest,
+  StartTorrentDownloadRequest,
+  TorrentDownloadState,
+  TorrentPieceState
 } from '../../shared/types'
 import type { NetworkMonitor } from '../network/interfaces'
 import type { DownloadFile } from './downloadFile'
@@ -32,16 +37,28 @@ export interface Transfer {
 }
 
 /** The parts of a download a transfer works on. The manager owns them; this is the same object. */
-export interface TransferTarget {
-  state: DownloadState
-  requestPayload: StartDownloadRequest
-  blocks: BlockState[]
+interface TransferTargetBase {
   file: DownloadFile
   /** Aborted once the current run is over — stopped (a pause, a cancel, an error) or every
    * block in — so nothing starts streams for it and no stream waits on. */
   stop: AbortController
-  speedSamplesByChunk: Map<number, SpeedSample[]>
 }
+
+export interface HttpTransferTarget extends TransferTargetBase {
+  state: HttpDownloadState
+  requestPayload: StartHttpDownloadRequest
+  blocks: HttpBlockState[]
+  speedSamplesByStream: Map<number, SpeedSample[]>
+}
+
+export interface TorrentTransferTarget extends TransferTargetBase {
+  state: TorrentDownloadState
+  requestPayload: StartTorrentDownloadRequest
+  pieces: TorrentPieceState[]
+  speedSamplesByPeer: Map<number, SpeedSample[]>
+}
+
+export type TransferTarget = HttpTransferTarget | TorrentTransferTarget
 
 /** What a transfer asks of the manager. */
 export interface TransferHost {
@@ -95,34 +112,49 @@ export function calculateCurrentSpeed(samples: SpeedSample[] | undefined, time: 
 
 /** Brings every stream's speed up to date, and each network's and the download's with them. */
 export function updateSpeeds(runtime: TransferTarget, now = Date.now()): void {
+  if ('speedSamplesByStream' in runtime) {
+    updateConnectionSpeeds(runtime.state, runtime.state.streams, runtime.speedSamplesByStream, now)
+  } else {
+    updateConnectionSpeeds(runtime.state, runtime.state.peers, runtime.speedSamplesByPeer, now)
+  }
+}
+
+function updateConnectionSpeeds(
+  state: DownloadState,
+  connections: Array<{ id: number; interfaceId: string; status: string; speedBytesPerSec: number }>,
+  samplesByConnection: Map<number, SpeedSample[]>,
+  now: number
+): void {
   let total = 0
   const byNetwork = new Map<string, number>()
-  for (const chunk of runtime.state.chunks) {
-    if (chunk.status === 'downloading') {
-      const samples = runtime.speedSamplesByChunk.get(chunk.id)
-      chunk.speedBytesPerSec = calculateCurrentSpeed(samples, now)
+  for (const connection of connections) {
+    const moving = connection.status === 'downloading' || connection.status === 'receiving'
+    if (moving) {
+      const samples = samplesByConnection.get(connection.id)
+      connection.speedBytesPerSec = calculateCurrentSpeed(samples, now)
     }
-    total += chunk.speedBytesPerSec
+    total += connection.speedBytesPerSec
     byNetwork.set(
-      chunk.interfaceId,
-      (byNetwork.get(chunk.interfaceId) ?? 0) + chunk.speedBytesPerSec
+      connection.interfaceId,
+      (byNetwork.get(connection.interfaceId) ?? 0) + connection.speedBytesPerSec
     )
   }
-  for (const network of runtime.state.networks) {
+  for (const network of state.networks) {
     network.speedBytesPerSec = byNetwork.get(network.id) ?? 0
   }
-  runtime.state.speedBytesPerSec = total
+  state.speedBytesPerSec = total
 }
 
 /** Nothing is moving: a paused or stopped download reads 0 everywhere. */
 export function clearSpeeds(state: DownloadState): void {
   state.speedBytesPerSec = 0
-  for (const chunk of state.chunks) chunk.speedBytesPerSec = 0
+  const connections = state.kind === 'http' ? state.streams : state.peers
+  for (const connection of connections) connection.speedBytesPerSec = 0
   for (const network of state.networks) network.speedBytesPerSec = 0
-  // A torrent's uploads, which stop with it.
-  if (state.uploadSpeedBytesPerSec !== undefined) {
+  if (state.kind === 'torrent') {
     state.uploadSpeedBytesPerSec = 0
     for (const network of state.networks) network.uploadSpeedBytesPerSec = 0
+    for (const peer of state.peers) peer.uploadSpeedBytesPerSec = 0
   }
 }
 
@@ -145,19 +177,21 @@ export function delay(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/** Re-derives the byte counts from the blocks: the download's, and each network's. */
-export function recomputeAggregates(runtime: TransferTarget): void {
+/** Re-derives verified byte counts from HTTP blocks or torrent pieces. */
+export function recomputeAggregates(
+  state: DownloadState,
+  units: readonly DownloadUnitState[]
+): void {
   let total = 0
   const byNetwork = new Map<string, number>()
-  for (const block of runtime.blocks) {
+  for (const block of units) {
     total += block.bytesDownloaded
     for (const [id, bytes] of Object.entries(block.bytesByInterface)) {
       byNetwork.set(id, (byNetwork.get(id) ?? 0) + bytes)
     }
   }
-  runtime.state.bytesDownloaded = total
-  for (const network of runtime.state.networks) {
+  state.bytesDownloaded = total
+  for (const network of state.networks) {
     network.bytesDownloaded = byNetwork.get(network.id) ?? 0
   }
-  updateSpeeds(runtime)
 }

@@ -39,6 +39,7 @@ export async function describeTorrent(torrentFile: Uint8Array, link: string): Pr
   const files = safeTorrentPaths(parsed.files ?? [])
   remember(parsed.infoHash, torrentFile)
   return {
+    kind: 'torrent',
     requestedUrl: link,
     finalUrl: link,
     supportsRanges: true,

@@ -14,10 +14,28 @@ import {
 } from '@playwright/test'
 import type { IpcContract } from '../src/shared/ipc-contract'
 import { applyDownloadUpdate } from '../src/shared/downloadUpdate'
-import type { DownloadState, DownloadStatus, DownloadUpdate } from '../src/shared/types'
+import type {
+  DownloadState,
+  DownloadStatus,
+  DownloadUpdate,
+  HttpDownloadState,
+  TorrentDownloadState
+} from '../src/shared/types'
 import { Origin, sha256, type OriginOptions } from './origin'
 
 export { expect }
+
+export function expectHttp(state: DownloadState): HttpDownloadState {
+  expect(state.kind).toBe('http')
+  if (state.kind !== 'http') throw new Error('Expected an HTTP download')
+  return state
+}
+
+export function expectTorrent(state: DownloadState): TorrentDownloadState {
+  expect(state.kind).toBe('torrent')
+  if (state.kind !== 'torrent') throw new Error('Expected a torrent download')
+  return state
+}
 
 export const PROJECT_ROOT = resolve(__dirname, '..')
 
@@ -206,7 +224,7 @@ export class PlexoApp {
     const destinationDir = options.destinationDir ?? this.dirs.dest
     const destBefore = existsSync(destinationDir) ? await readdir(destinationDir) : []
 
-    const id = await this.api.startDownload({
+    const common = {
       url: probe.finalUrl,
       destinationDir,
       suggestedFileName: options.fileName ?? probe.suggestedFileName,
@@ -214,11 +232,18 @@ export class PlexoApp {
       supportsRanges: multiChunk,
       interfaceIds: multiChunk ? networks : networks.slice(0, 1),
       etag: probe.etag,
-      lastModified: probe.lastModified,
-      streamsPerNetwork: options.streamsPerNetwork,
-      infoHash: probe.torrent?.infoHash,
-      selectedFiles: options.selectedFiles
-    })
+      lastModified: probe.lastModified
+    }
+    const id = await this.api.startDownload(
+      probe.kind === 'torrent'
+        ? {
+            ...common,
+            kind: 'torrent',
+            infoHash: probe.torrent.infoHash,
+            selectedFiles: options.selectedFiles
+          }
+        : { ...common, kind: 'http', streamsPerNetwork: options.streamsPerNetwork }
+    )
     this.tracked.set(id, { expectedSha, destBefore, destinationDir })
     return id
   }
@@ -248,6 +273,30 @@ export class PlexoApp {
     return this.waitUntil((state) => wanted.includes(state.status), timeout)
   }
 
+  async waitForHttpStatus(
+    status: DownloadStatus | DownloadStatus[],
+    timeout = 20_000
+  ): Promise<HttpDownloadState> {
+    return expectHttp(await this.waitForStatus(status, timeout))
+  }
+
+  async waitForTorrentStatus(
+    status: DownloadStatus | DownloadStatus[],
+    timeout = 20_000
+  ): Promise<TorrentDownloadState> {
+    return expectTorrent(await this.waitForStatus(status, timeout))
+  }
+
+  async currentHttp(): Promise<HttpDownloadState | null> {
+    const state = await this.current()
+    return state ? expectHttp(state) : null
+  }
+
+  async currentTorrent(): Promise<TorrentDownloadState | null> {
+    const state = await this.current()
+    return state ? expectTorrent(state) : null
+  }
+
   /** Waits until the download state matches `predicate`. A timeout says what the state was
    * instead, so a hang shows the last progress and state. */
   async waitUntil(
@@ -264,11 +313,15 @@ export class PlexoApp {
     const networks = state?.networks.map(
       (network) => `${network.id}:${network.status}${network.error ? ` (${network.error})` : ''}`
     )
-    const chunks = state?.chunks.map((chunk) => `${chunk.interfaceId}:${chunk.status}`)
+    const connections = state
+      ? (state.kind === 'http' ? state.streams : state.peers).map(
+          (connection) => `${connection.interfaceId}:${connection.status}`
+        )
+      : undefined
     throw new Error(
       `Timed out after ${timeout} ms waiting on the download. Last seen: ${
         state
-          ? `status=${state.status}${state.error ? `, error="${state.error}"` : ''}, bytes=${state.bytesDownloaded}/${state.totalBytes}, networks=[${networks?.join(', ')}], chunks=[${chunks?.join(', ')}]`
+          ? `status=${state.status}${state.error ? `, error="${state.error}"` : ''}, bytes=${state.bytesDownloaded}/${state.totalBytes}, networks=[${networks?.join(', ')}], connections=[${connections?.join(', ')}]`
           : 'no current download'
       }`
     )
@@ -297,44 +350,51 @@ export function checkEvents(sessions: DownloadState[][]): void {
           state.totalBytes
         )
       }
+      const units = state.kind === 'http' ? state.blocks : state.pieces
       expect(
-        state.blocks?.every((block, index) => block?.index === index),
-        `${label}: every block is there, in order`
+        units.every((unit, index) => unit.index === index),
+        `${label}: every work unit is there, in order`
       ).toBe(true)
-      expect(state.blocks?.length, `${label}: as many blocks as planned`).toBe(state.totalBlocks)
-      for (const block of state.blocks ?? []) {
-        const attributed = Object.values(block.bytesByInterface).reduce((a, b) => a + b, 0)
-        expect(attributed, `${label}: block ${block.index} attribution sums to its bytes`).toBe(
-          block.bytesDownloaded
+      expect(units.length, `${label}: as many work units as planned`).toBe(
+        state.kind === 'http' ? state.totalBlocks : state.totalPieces
+      )
+      for (const unit of units) {
+        const attributed = Object.values(unit.bytesByInterface).reduce((a, b) => a + b, 0)
+        expect(attributed, `${label}: unit ${unit.index} attribution sums to its bytes`).toBe(
+          unit.bytesDownloaded
         )
-        if (block.rangeEnd !== null) {
-          const size = block.rangeEnd - block.rangeStart + 1
+        if (unit.rangeEnd !== null) {
+          const size = unit.rangeEnd - unit.rangeStart + 1
           expect(
-            block.bytesDownloaded,
-            `${label}: block ${block.index} within its size`
+            unit.bytesDownloaded,
+            `${label}: unit ${unit.index} within its size`
           ).toBeLessThanOrEqual(size)
-          if (block.status === 'completed') {
-            expect(block.bytesDownloaded, `${label}: completed block ${block.index} is full`).toBe(
+          if (unit.status === 'completed') {
+            expect(unit.bytesDownloaded, `${label}: completed unit ${unit.index} is full`).toBe(
               size
             )
           }
         }
+        if (unit.kind === 'torrent') {
+          expect(unit.provisionalBytes).toBeGreaterThanOrEqual(0)
+          expect(unit.provisionalBytes).toBeLessThanOrEqual(
+            unit.rangeEnd === null ? 0 : unit.rangeEnd - unit.rangeStart + 1
+          )
+        }
       }
       if (state.kind === 'torrent') {
-        // A torrent's streams are its peers: several may each send part of one piece, so the
-        // rules below (one stream per block) don't apply. Each peer is on one known network.
-        for (const chunk of state.chunks) {
+        // Peers are connections, not piece owners. Each belongs to one known network and exposes
+        // only transfer telemetry; verified progress belongs to pieces above.
+        for (const peer of state.peers) {
           expect(
             state.networks.map((network) => network.id),
-            `${label}: peer ${chunk.id} is on a network of this download`
-          ).toContain(chunk.interfaceId)
+            `${label}: peer ${peer.id} is on a network of this download`
+          ).toContain(peer.interfaceId)
+          expect(['connected', 'receiving']).toContain(peer.status)
         }
-        const uploaded = state.networks.reduce(
-          (sum, network) => sum + (network.bytesUploaded ?? 0),
-          0
-        )
+        const uploaded = state.networks.reduce((sum, network) => sum + network.bytesUploaded, 0)
         expect(uploaded, `${label}: the networks' uploads add up to the download's`).toBe(
-          state.bytesUploaded ?? 0
+          state.bytesUploaded
         )
       } else if (state.status === 'downloading') {
         // A stream holds a block exactly while it is fetching it. A block has at most one stream
@@ -342,17 +402,17 @@ export function checkEvents(sessions: DownloadState[][]): void {
         // is there. What the stream rows show is only as true as this.
         const primaries = new Map<number, number>()
         const hedges = new Map<number, number>()
-        for (const chunk of state.chunks) {
-          const holding = chunk.currentBlockIndex !== undefined
-          expect(holding, `${label}: stream ${chunk.id} (${chunk.status}) holds a block`).toBe(
-            chunk.status === 'downloading'
+        for (const stream of state.streams) {
+          const holding = stream.currentBlockIndex !== undefined
+          expect(holding, `${label}: stream ${stream.id} (${stream.status}) holds a block`).toBe(
+            stream.status === 'downloading'
           )
-          if (chunk.currentBlockIndex === undefined) {
-            expect(chunk.hedge, `${label}: idle stream ${chunk.id} is not racing`).toBeFalsy()
+          if (stream.currentBlockIndex === undefined) {
+            expect(stream.hedge, `${label}: idle stream ${stream.id} is not racing`).toBeFalsy()
             continue
           }
-          const tally = chunk.hedge ? hedges : primaries
-          tally.set(chunk.currentBlockIndex, (tally.get(chunk.currentBlockIndex) ?? 0) + 1)
+          const tally = stream.hedge ? hedges : primaries
+          tally.set(stream.currentBlockIndex, (tally.get(stream.currentBlockIndex) ?? 0) + 1)
         }
         for (const [index, count] of primaries) {
           expect(count, `${label}: block ${index} has one stream fetching it`).toBe(1)
@@ -361,7 +421,7 @@ export function checkEvents(sessions: DownloadState[][]): void {
           expect(count, `${label}: block ${index} has at most two hedges`).toBeLessThanOrEqual(2)
         }
         for (const index of primaries.keys()) {
-          expect(state.blocks?.[index]?.status, `${label}: held block ${index} is in flight`).toBe(
+          expect(state.blocks[index]?.status, `${label}: held block ${index} is in flight`).toBe(
             'downloading'
           )
         }

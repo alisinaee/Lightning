@@ -20,13 +20,13 @@ test.describe('restart @smoke', () => {
     origin.release()
     await plexo.launch()
 
-    const restored = await plexo.current()
+    const restored = await plexo.currentHttp()
     expect(restored?.id).toBe(id)
     expect(restored?.status).toBe('paused')
     expect(restored?.bytesDownloaded).toBeGreaterThan(0)
 
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed')
+    await plexo.waitForHttpStatus('completed')
   })
 })
 
@@ -46,12 +46,12 @@ test.describe('crash (SIGKILL) and recover @smoke', () => {
       origin.release()
       await plexo.launch()
 
-      const restored = await plexo.current()
+      const restored = await plexo.currentHttp()
       expect(restored?.id).toBe(id)
       expect(restored?.status).toBe('paused')
 
       await plexo.api.resumeDownload(id)
-      await plexo.waitForStatus('completed')
+      await plexo.waitForHttpStatus('completed')
     })
   }
 })
@@ -67,7 +67,7 @@ test.describe('persisted state on disk @smoke', () => {
     const id = await plexo.start(origin.url(), origin.sha256)
     await reached
     await plexo.api.pauseDownload(id)
-    await plexo.waitForStatus('paused')
+    await plexo.waitForHttpStatus('paused')
     origin.release()
     return { id, origin }
   }
@@ -77,12 +77,12 @@ test.describe('persisted state on disk @smoke', () => {
     await plexo.quit()
     await writeFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'not json {')
     await plexo.launch()
-    expect(await plexo.current()).toBeNull()
+    expect(await plexo.currentHttp()).toBeNull()
 
     // And a new download still works.
     const origin = await serve({ size: 4 * BLOCK, seed: 99 })
     await plexo.start(origin.url(), origin.sha256)
-    await plexo.waitForStatus('completed')
+    await plexo.waitForHttpStatus('completed')
   })
 
   test('two saved downloads: only the newest is restored, the other is removed', async ({
@@ -104,11 +104,11 @@ test.describe('persisted state on disk @smoke', () => {
     await writeFile(manifestPath, JSON.stringify(manifest))
 
     await plexo.launch()
-    expect((await plexo.current())?.id).toBe(id)
+    expect((await plexo.currentHttp())?.id).toBe(id)
     await expect.poll(() => existsSync(join(root, olderId))).toBe(false)
 
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed')
+    await plexo.waitForHttpStatus('completed')
   })
 
   test('staging file deleted while the app was closed → reports lost progress', async ({
@@ -116,12 +116,12 @@ test.describe('persisted state on disk @smoke', () => {
     serve
   }) => {
     await pausedDownload(plexo, serve)
-    const partial = `${(await plexo.current())!.destinationPath}.plexo`
+    const partial = `${(await plexo.currentHttp())!.destinationPath}.plexo`
     await plexo.quit()
     await rm(partial)
     await plexo.launch()
-    expect((await plexo.current())?.status).toBe('error')
-    expect((await plexo.current())?.error).toMatch(/partial download file is missing/)
+    expect((await plexo.currentHttp())?.status).toBe('error')
+    expect((await plexo.currentHttp())?.error).toMatch(/partial download file is missing/)
   })
 
   test('a download saved by the previous version resumes where it was', async ({
@@ -130,7 +130,7 @@ test.describe('persisted state on disk @smoke', () => {
     dirs
   }) => {
     const { id, origin } = await pausedDownload(plexo, serve)
-    const paused = (await plexo.current())!
+    const paused = (await plexo.currentHttp())!
     await plexo.quit()
 
     // What version 4 wrote: every block whole, inside the state.
@@ -147,10 +147,10 @@ test.describe('persisted state on disk @smoke', () => {
     )
 
     await plexo.launch()
-    expect((await plexo.current())?.bytesDownloaded).toBe(paused.bytesDownloaded)
+    expect((await plexo.currentHttp())?.bytesDownloaded).toBe(paused.bytesDownloaded)
     const before = origin.chunkRequests().length
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed')
+    await plexo.waitForHttpStatus('completed')
     const refetched = origin
       .chunkRequests()
       .slice(before)
@@ -165,7 +165,7 @@ test.describe('persisted state on disk @smoke', () => {
     // What a power cut can do: the manifest says a block is done, but its data never all
     // reached the disk.
     const { id } = await pausedDownload(plexo, serve)
-    const state = (await plexo.current())!
+    const state = (await plexo.currentHttp())!
     const done = state.blocks!.find((block) => block.status === 'completed')!
     await plexo.quit()
     const staging = `${state.destinationPath}.plexo`
@@ -173,6 +173,6 @@ test.describe('persisted state on disk @smoke', () => {
 
     await plexo.launch()
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed')
+    await plexo.waitForHttpStatus('completed')
   })
 })

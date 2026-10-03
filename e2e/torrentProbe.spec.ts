@@ -61,10 +61,12 @@ test.describe('getting a torrent in', () => {
     servers.push(server)
 
     const probe = await plexo.api.probeUrl(url)
-    expect(probe.torrent?.infoHash).toBe(torrent.infoHash)
+    expect(probe.kind).toBe('torrent')
+    if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
+    expect(probe.torrent.infoHash).toBe(torrent.infoHash)
     expect(probe.suggestedFileName).toBe('movie.mkv')
     expect(probe.totalBytes).toBe(300_000)
-    expect(probe.torrent?.files).toEqual([{ path: 'movie.mkv', length: 300_000 }])
+    expect(probe.torrent.files).toEqual([{ path: 'movie.mkv', length: 300_000 }])
   })
 
   test('a .torrent file on this computer, with a folder of files', async ({ plexo }) => {
@@ -77,9 +79,11 @@ test.describe('getting a torrent in', () => {
     await writeFile(path, torrent.torrentFile)
 
     const probe = await plexo.api.probeUrl(path)
+    expect(probe.kind).toBe('torrent')
+    if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.suggestedFileName).toBe('Album')
     expect(probe.totalBytes).toBe(3000)
-    expect(probe.torrent?.files.map((file) => file.path.replace(/\\/g, '/')).sort()).toEqual([
+    expect(probe.torrent.files.map((file) => file.path.replace(/\\/g, '/')).sort()).toEqual([
       'Album/a.bin',
       'Album/b.bin'
     ])
@@ -91,7 +95,9 @@ test.describe('getting a torrent in', () => {
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
     const probe = await plexo.api.probeUrl(magnet)
-    expect(probe.torrent?.infoHash).toBe(torrent.infoHash)
+    expect(probe.kind).toBe('torrent')
+    if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
+    expect(probe.torrent.infoHash).toBe(torrent.infoHash)
     expect(probe.suggestedFileName).toBe('show.mp4')
     expect(probe.totalBytes).toBe(500_000)
   })

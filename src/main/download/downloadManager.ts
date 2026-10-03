@@ -5,22 +5,29 @@ import type { BrowserWindow } from 'electron'
 import { app, Notification, powerSaveBlocker } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
 import type {
-  BlockState,
   DownloadNetwork,
   DownloadState,
   DownloadStatus,
+  DownloadUnitState,
   DownloadUpdate,
+  HttpBlockState,
+  HttpDownloadNetwork,
+  HttpDownloadState,
   NetworkInterfaceInfo,
   NetworkStatus,
   StartDownloadRequest,
+  StartHttpDownloadRequest,
+  StartTorrentDownloadRequest,
+  TorrentDownloadNetwork,
+  TorrentDownloadState,
   TorrentInfo
 } from '../../shared/types'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { HttpTransfer, splittable } from './httpTransfer'
 import { ensureDirectory, reserveDestinationPath } from './paths'
-import { planBlocks, planDownload } from './plan'
-import { restoreBlocks, saveBlocks, type SavedBlocks } from './savedProgress'
+import { planBlocks, planDownload, planPieces } from './plan'
+import { restoreBlocks, restorePieces, saveBlocks, type SavedBlocks } from './savedProgress'
 import { chosenFiles, wantedPieces } from './torrent/files'
 import { describeTorrent, probedTorrentFile } from './torrent/metadata'
 import { StagingFolder } from './torrent/stagingFolder'
@@ -32,7 +39,9 @@ import {
   updateSpeeds,
   type Transfer,
   type TransferHost,
-  type TransferTarget
+  type HttpTransferTarget,
+  type SpeedSample,
+  type TorrentTransferTarget
 } from './transfer'
 import type { NetworkMonitor } from '../network/interfaces'
 import {
@@ -42,22 +51,21 @@ import {
   targetHost
 } from '../network/routes'
 
-interface DownloadRuntime extends TransferTarget {
+interface RuntimeFields {
   publicationPath?: string
   publicationIdentity?: { dev: number; ino: number }
-  /** Fetches the bytes (see transfer.ts). */
-  transfer: Transfer
   runPromise?: Promise<void>
   publishing: boolean
   pushScheduled: boolean
-  totalBlocks: number
   persistenceTimer?: NodeJS.Timeout
   persistenceChain: Promise<void>
   removed: boolean
   /** Updates sent to the window so far (see DownloadUpdate). */
   sentUpdates: number
   /** Each block as the window was last sent it, by index — what tells a changed block apart. */
-  sentBlocks: Pick<BlockState, 'status' | 'interfaceId' | 'bytesDownloaded'>[]
+  sentUnits: (Pick<DownloadUnitState, 'status' | 'interfaceId' | 'bytesDownloaded'> & {
+    provisionalBytes?: number
+  })[]
   /** The network most recently switched off: what a resume switches back on if it finds none on.
    * Not persisted: after a restart, the first network present is used instead. */
   lastSwitchedOff?: string
@@ -65,6 +73,18 @@ interface DownloadRuntime extends TransferTarget {
    * resumes it. */
   pausedForNoNetwork?: boolean
 }
+
+interface HttpDownloadRuntime extends RuntimeFields, HttpTransferTarget {
+  kind: 'http'
+  transfer: Transfer
+}
+
+interface TorrentDownloadRuntime extends RuntimeFields, TorrentTransferTarget {
+  kind: 'torrent'
+  transfer: Transfer
+}
+
+type DownloadRuntime = HttpDownloadRuntime | TorrentDownloadRuntime
 
 interface PersistedDownloadBase {
   savedAt: number
@@ -77,13 +97,52 @@ interface PersistedDownloadBase {
   activeInterfaces?: NetworkInterfaceInfo[]
 }
 
-type PersistedDownload = PersistedDownloadBase &
-  (
-    | ({ version: 5; state: Omit<DownloadState, 'blocks'> } & SavedBlocks)
-    /** Written before version 5, with every block saved whole; still read, so an update doesn't
-     * lose the progress of a download it finds paused. */
-    | { version: 4; state: DownloadState }
-  )
+type PersistedState =
+  Omit<HttpDownloadState, 'blocks' | 'streams'> | Omit<TorrentDownloadState, 'pieces' | 'peers'>
+
+type PersistedDownload = PersistedDownloadBase & {
+  version: 6
+  state: PersistedState
+} & SavedBlocks
+
+/** Versions 4 and 5 used the HTTP-shaped `chunks`/`blocks` model for torrents too. Keep that
+ * untyped data at the migration boundary; restored runtime state is always the v6 union. */
+interface LegacyBlockState extends Omit<HttpBlockState, 'kind' | 'status'> {
+  status: 'pending' | 'downloading' | 'completed' | 'skipped'
+}
+
+type LegacyDownloadState = Omit<
+  HttpDownloadState,
+  'kind' | 'networks' | 'streams' | 'blocks' | 'peakStreams' | 'totalBlocks' | 'blockSizeBytes'
+> & {
+  kind?: 'torrent'
+  networks?: (Omit<HttpDownloadNetwork, 'transfer'> & {
+    bytesUploaded?: number
+    uploadSpeedBytesPerSec?: number
+  })[]
+  chunks?: HttpDownloadState['streams']
+  blocks?: LegacyBlockState[]
+  peakStreams?: number
+  totalBlocks?: number
+  blockSizeBytes?: number
+  files?: { chosen: number; total: number }
+  skippedBytes?: number
+  bytesUploaded?: number
+  uploadSpeedBytesPerSec?: number
+}
+
+type LegacyStartRequest = Omit<StartHttpDownloadRequest, 'kind'> & {
+  infoHash?: string
+  selectedFiles?: number[]
+}
+
+type LegacyPersistedDownload = Omit<PersistedDownloadBase, 'requestPayload'> & {
+  version: 4 | 5
+  state: LegacyDownloadState
+  requestPayload: LegacyStartRequest
+  progress?: SavedBlocks['progress']
+  complete?: boolean
+}
 
 const UI_UPDATE_MS = 200
 /** How often a running download takes stock (see run). */
@@ -92,8 +151,9 @@ const TICK_MS = 500
 // checkpoints independent of UI updates; pause and publication still force an immediate sync.
 const CHECKPOINT_INTERVAL_MS = 15_000
 
-function newNetwork(iface: NetworkInterfaceInfo, enabled: boolean): DownloadNetwork {
+function newHttpNetwork(iface: NetworkInterfaceInfo, enabled: boolean): HttpDownloadNetwork {
   return {
+    transfer: 'http',
     id: iface.id,
     label: iface.displayName,
     kind: iface.kind,
@@ -105,14 +165,68 @@ function newNetwork(iface: NetworkInterfaceInfo, enabled: boolean): DownloadNetw
   }
 }
 
+function newTorrentNetwork(iface: NetworkInterfaceInfo, enabled: boolean): TorrentDownloadNetwork {
+  return {
+    ...newHttpNetwork(iface, enabled),
+    transfer: 'torrent',
+    bytesUploaded: 0,
+    uploadSpeedBytesPerSec: 0
+  }
+}
+
 /** A block that needs nothing more: in, or skipped (see BlockStatus). */
-const isDone = (block: BlockState): boolean =>
-  block.status === 'completed' || block.status === 'skipped'
+const isDone = (unit: DownloadUnitState): boolean =>
+  unit.status === 'completed' || unit.status === 'skipped'
+
+const unitsOf = (runtime: DownloadRuntime): DownloadUnitState[] =>
+  runtime.kind === 'http' ? runtime.blocks : runtime.pieces
+
+function commonState(
+  state: Pick<
+    HttpDownloadState,
+    | 'id'
+    | 'url'
+    | 'fileName'
+    | 'destinationPath'
+    | 'totalBytes'
+    | 'bytesDownloaded'
+    | 'speedBytesPerSec'
+    | 'status'
+    | 'error'
+    | 'resumable'
+    | 'startedAt'
+    | 'pausedAt'
+    | 'totalPausedMs'
+    | 'completedAt'
+    | 'seq'
+  >
+): Omit<
+  HttpDownloadState,
+  'kind' | 'networks' | 'streams' | 'peakStreams' | 'blocks' | 'totalBlocks' | 'blockSizeBytes'
+> {
+  return {
+    id: state.id,
+    url: state.url,
+    fileName: state.fileName,
+    destinationPath: state.destinationPath,
+    totalBytes: state.totalBytes,
+    bytesDownloaded: state.bytesDownloaded,
+    speedBytesPerSec: state.speedBytesPerSec,
+    status: state.status,
+    error: state.error,
+    resumable: state.resumable,
+    startedAt: state.startedAt,
+    pausedAt: state.pausedAt,
+    totalPausedMs: state.totalPausedMs,
+    completedAt: state.completedAt,
+    seq: state.seq
+  }
+}
 
 /** Marks the pieces of `torrent` that none of the `chosen` files needs (null: all are) as
  * skipped. Their bytes, all together. */
 function skipUnchosen(
-  blocks: BlockState[],
+  blocks: import('../../shared/types').TorrentPieceState[],
   torrent: TorrentInfo,
   chosen: Set<number> | null
 ): number {
@@ -183,29 +297,30 @@ export class DownloadManager {
     return join(this.downloadDir(id), 'metadata.torrent')
   }
 
-  /** A runtime for `state`, with nothing running. A torrent's (`torrentFile` given) is fetched by
-   * a TorrentTransfer into its StagingFolder; anything else over HTTP. */
-  private newRuntime(
-    state: DownloadState,
-    requestPayload: StartDownloadRequest,
+  private runtimeFields(): RuntimeFields {
+    return {
+      publishing: false,
+      pushScheduled: false,
+      persistenceChain: Promise.resolve(),
+      removed: false,
+      sentUpdates: 0,
+      sentUnits: []
+    }
+  }
+
+  private newHttpRuntime(
+    state: HttpDownloadState,
+    requestPayload: StartHttpDownloadRequest,
     file: DownloadFile,
-    blocks: BlockState[],
-    torrentFile?: Uint8Array
-  ): DownloadRuntime {
-    const target = {
+    blocks: HttpBlockState[]
+  ): HttpDownloadRuntime {
+    const target: HttpTransferTarget = {
       state,
       requestPayload,
       stop: new AbortController(),
       file,
-      publishing: false,
-      speedSamplesByChunk: new Map(),
-      pushScheduled: false,
       blocks,
-      totalBlocks: state.totalBlocks ?? blocks.length,
-      persistenceChain: Promise.resolve(),
-      removed: false,
-      sentUpdates: 0,
-      sentBlocks: []
+      speedSamplesByStream: new Map<number, SpeedSample[]>()
     }
     const host: TransferHost = {
       networks: this.networks,
@@ -214,12 +329,38 @@ export class DownloadManager {
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
       scheduleUpdate: () => this.scheduleUpdate(runtime)
     }
-    // The transfer holds this same object: what the manager changes on it, the transfer sees.
-    const runtime: DownloadRuntime = Object.assign(target, {
-      transfer:
-        torrentFile && file instanceof StagingFolder
-          ? new TorrentTransfer(target, host, torrentFile, file.folder)
-          : new HttpTransfer(target, host)
+    const runtime: HttpDownloadRuntime = Object.assign(target, this.runtimeFields(), {
+      kind: 'http' as const,
+      transfer: new HttpTransfer(target, host)
+    })
+    return runtime
+  }
+
+  private newTorrentRuntime(
+    state: TorrentDownloadState,
+    requestPayload: StartTorrentDownloadRequest,
+    file: StagingFolder,
+    pieces: TorrentDownloadState['pieces'],
+    torrentFile: Uint8Array
+  ): TorrentDownloadRuntime {
+    const target: TorrentTransferTarget = {
+      state,
+      requestPayload,
+      stop: new AbortController(),
+      file,
+      pieces,
+      speedSamplesByPeer: new Map<number, SpeedSample[]>()
+    }
+    const host: TransferHost = {
+      networks: this.networks,
+      reconcile: () => this.reconcile(runtime),
+      failDownload: (message, discard) => this.failDownload(runtime, message, discard),
+      failNetwork: (network, message) => this.failNetwork(runtime, network, message),
+      scheduleUpdate: () => this.scheduleUpdate(runtime)
+    }
+    const runtime: TorrentDownloadRuntime = Object.assign(target, this.runtimeFields(), {
+      kind: 'torrent' as const,
+      transfer: new TorrentTransfer(target, host, torrentFile, file.folder)
     })
     return runtime
   }
@@ -237,56 +378,168 @@ export class DownloadManager {
       entries.map(async (id) => {
         try {
           await rm(`${this.manifestPath(id)}.tmp`, { force: true })
-          const persisted = JSON.parse(
-            await readFile(this.manifestPath(id), 'utf-8')
-          ) as PersistedDownload
+          const persisted = JSON.parse(await readFile(this.manifestPath(id), 'utf-8')) as
+            PersistedDownload | LegacyPersistedDownload
           if (persisted.state.id !== id) return
-          const blocks =
-            persisted.version === 5
-              ? restoreBlocks(persisted.state, persisted)
-              : persisted.version === 4
-                ? persisted.state.blocks
-                : undefined
-          if (!blocks) return
-          const state: DownloadState = {
-            ...persisted.state,
-            // Saved before downloads listed their networks: the ones it ran on, all in use.
-            networks:
-              (persisted.state.networks as DownloadNetwork[] | undefined) ??
-              (persisted.activeInterfaces ?? []).map((iface) => newNetwork(iface, true)),
-            // Streams are only for a run; a resumed download starts its own.
-            chunks: [],
-            blocks
+          const isTorrent = persisted.state.kind === 'torrent'
+          const requestPayload: StartDownloadRequest =
+            persisted.version === 6
+              ? persisted.requestPayload
+              : isTorrent
+                ? {
+                    ...persisted.requestPayload,
+                    kind: 'torrent',
+                    infoHash: persisted.requestPayload.infoHash ?? ''
+                  }
+                : { ...persisted.requestPayload, kind: 'http' }
+          const torrentFile = isTorrent ? await readFile(this.torrentFilePath(id)) : undefined
+          const torrentProbe = torrentFile
+            ? await describeTorrent(torrentFile, requestPayload.url)
+            : undefined
+          const torrent = torrentProbe?.kind === 'torrent' ? torrentProbe.torrent : undefined
+
+          let state: DownloadState
+          let runtime: DownloadRuntime
+          if (isTorrent && torrent && requestPayload.kind === 'torrent') {
+            const old = persisted.state as
+              Omit<TorrentDownloadState, 'pieces' | 'peers'> | LegacyDownloadState
+            const saved: SavedBlocks = {
+              progress: persisted.progress ?? {},
+              complete: persisted.complete === true
+            }
+            const pieces =
+              persisted.version === 4
+                ? (old as LegacyDownloadState).blocks?.map((piece) => ({
+                    ...piece,
+                    kind: 'torrent' as const,
+                    provisionalBytes: 0
+                  }))
+                : restorePieces(
+                    {
+                      totalBytes: old.totalBytes,
+                      pieceLength:
+                        persisted.version === 6
+                          ? (old as Omit<TorrentDownloadState, 'pieces' | 'peers'>).pieceLength
+                          : torrent.pieceLength,
+                      totalPieces:
+                        persisted.version === 6
+                          ? (old as Omit<TorrentDownloadState, 'pieces' | 'peers'>).totalPieces
+                          : ((old as LegacyDownloadState).totalBlocks ??
+                            Math.ceil(old.totalBytes / torrent.pieceLength))
+                    },
+                    saved
+                  )
+            if (!pieces) return
+            const networks =
+              old.networks?.map((network) => ({
+                ...network,
+                transfer: 'torrent' as const,
+                bytesUploaded: network.bytesUploaded ?? 0,
+                uploadSpeedBytesPerSec: 0
+              })) ??
+              (persisted.activeInterfaces ?? []).map((iface) => newTorrentNetwork(iface, true))
+            state = {
+              ...commonState(old),
+              kind: 'torrent',
+              networks,
+              peers: [],
+              peakPeers:
+                persisted.version === 6
+                  ? (old as Omit<TorrentDownloadState, 'pieces' | 'peers'>).peakPeers
+                  : ((old as LegacyDownloadState).peakStreams ?? 0),
+              pieces,
+              totalPieces: pieces.length,
+              pieceLength: torrent.pieceLength,
+              files: old.files ?? { chosen: torrent.files.length, total: torrent.files.length },
+              skippedBytes: old.skippedBytes ?? 0,
+              bytesUploaded: old.bytesUploaded ?? 0,
+              uploadSpeedBytesPerSec: 0
+            }
+            runtime = this.newTorrentRuntime(
+              state,
+              requestPayload,
+              new StagingFolder(persisted.partialPath, state.totalBytes, []),
+              pieces,
+              torrentFile!
+            )
+          } else if (!isTorrent && requestPayload.kind === 'http') {
+            const old = persisted.state as
+              Omit<HttpDownloadState, 'blocks' | 'streams'> | LegacyDownloadState
+            const saved: SavedBlocks = {
+              progress: persisted.progress ?? {},
+              complete: persisted.complete === true
+            }
+            const blocks =
+              persisted.version === 4
+                ? (old as LegacyDownloadState).blocks
+                    ?.filter((block) => block.status !== 'skipped')
+                    .map((block) => ({
+                      ...block,
+                      kind: 'http' as const,
+                      status: block.status as HttpBlockState['status']
+                    }))
+                : restoreBlocks(
+                    {
+                      totalBytes: old.totalBytes,
+                      blockSizeBytes:
+                        (old as Omit<HttpDownloadState, 'blocks' | 'streams'>).blockSizeBytes ?? 0,
+                      totalBlocks:
+                        (old as Omit<HttpDownloadState, 'blocks' | 'streams'>).totalBlocks ?? 0
+                    },
+                    saved
+                  )
+            if (!blocks) return
+            const networks =
+              old.networks?.map((network) => ({ ...network, transfer: 'http' as const })) ??
+              (persisted.activeInterfaces ?? []).map((iface) => newHttpNetwork(iface, true))
+            state = {
+              ...commonState(old),
+              kind: 'http',
+              networks,
+              streams: [],
+              peakStreams: (old as Omit<HttpDownloadState, 'blocks' | 'streams'>).peakStreams ?? 0,
+              blocks,
+              totalBlocks: blocks.length,
+              blockSizeBytes:
+                (old as Omit<HttpDownloadState, 'blocks' | 'streams'>).blockSizeBytes ?? 0
+            }
+            runtime = this.newHttpRuntime(
+              state,
+              requestPayload,
+              new DownloadFile(persisted.partialPath),
+              blocks
+            )
+          } else {
+            return
           }
+          const units = unitsOf(runtime)
           if (state.status === 'downloading') {
             state.status = 'paused'
             state.pausedAt = persisted.savedAt || Date.now()
           }
           clearSpeeds(state)
-          for (const block of blocks) {
-            if (block.status === 'downloading') block.status = 'pending'
+          for (const unit of units) {
+            if (unit.status === 'downloading') unit.status = 'pending'
+            if (unit.kind === 'torrent') unit.provisionalBytes = 0
           }
 
-          // A torrent starts again from its saved .torrent; without it, it can't. Its pieces no
-          // chosen file needs are skipped again.
-          const torrentFile =
-            state.kind === 'torrent' ? await readFile(this.torrentFilePath(id)) : undefined
-          const torrent =
-            torrentFile &&
-            (await describeTorrent(torrentFile, persisted.requestPayload.url)).torrent!
           const chosen = torrent
-            ? chosenFiles(persisted.requestPayload.selectedFiles, torrent.files.length)
-            : null
-          if (torrent) {
-            state.skippedBytes = skipUnchosen(blocks, torrent, chosen) || undefined
-          }
-          const file = torrent
-            ? new StagingFolder(
-                persisted.partialPath,
-                state.totalBytes,
-                unchosenPaths(torrent, chosen)
+            ? chosenFiles(
+                requestPayload.kind === 'torrent' ? requestPayload.selectedFiles : undefined,
+                torrent.files.length
               )
-            : new DownloadFile(persisted.partialPath)
+            : null
+          if (torrent && state.kind === 'torrent') {
+            state.skippedBytes = skipUnchosen(state.pieces, torrent, chosen)
+          }
+          if (torrent && runtime.kind === 'torrent') {
+            runtime.file = new StagingFolder(
+              persisted.partialPath,
+              state.totalBytes,
+              unchosenPaths(torrent, chosen)
+            )
+          }
+          const file = runtime.file
           if (state.status === 'paused') {
             const size = await file.size().catch(() => -1)
             const publishedPath = persisted.publicationPath ?? state.destinationPath
@@ -306,7 +559,7 @@ export class DownloadManager {
                     .catch(() => false)
                 : persisted.publicationIdentity?.dev === published.dev &&
                   persisted.publicationIdentity?.ino === published.ino)
-            if (blocks.every(isDone) && publishedSize === expected && sameFile) {
+            if (units.every(isDone) && publishedSize === expected && sameFile) {
               state.status = 'completed'
               state.destinationPath = publishedPath
               state.fileName = basename(publishedPath)
@@ -319,31 +572,24 @@ export class DownloadManager {
                 'The partial download file is missing. Remove this download and start again.'
               state.resumable = false
             } else {
-              for (const block of blocks) {
-                const length = block.rangeEnd === null ? 0 : block.rangeEnd - block.rangeStart + 1
+              for (const unit of units) {
+                const length = unit.rangeEnd === null ? 0 : unit.rangeEnd - unit.rangeStart + 1
                 if (
-                  block.rangeStart + block.bytesDownloaded > size ||
-                  (block.status === 'completed' && block.bytesDownloaded !== length)
+                  unit.rangeStart + unit.bytesDownloaded > size ||
+                  (unit.status === 'completed' && unit.bytesDownloaded !== length)
                 ) {
-                  block.status = 'pending'
-                  block.bytesDownloaded = 0
-                  block.bytesByInterface = {}
+                  unit.status = 'pending'
+                  unit.bytesDownloaded = 0
+                  unit.bytesByInterface = {}
                 }
               }
-              state.bytesDownloaded = blocks.reduce((sum, block) => sum + block.bytesDownloaded, 0)
+              state.bytesDownloaded = units.reduce((sum, unit) => sum + unit.bytesDownloaded, 0)
             }
           }
 
-          const runtime = this.newRuntime(
-            state,
-            persisted.requestPayload,
-            file,
-            blocks,
-            torrentFile
-          )
           runtime.publicationPath = persisted.publicationPath
           runtime.publicationIdentity = persisted.publicationIdentity
-          recomputeAggregates(runtime)
+          recomputeAggregates(state, units)
           restored.push(runtime)
         } catch {
           // Ignore incomplete or corrupt manifests; other downloads can still be restored.
@@ -380,15 +626,19 @@ export class DownloadManager {
     }
   }
 
-  /** A snapshot of the current download: an update with every block in it. */
+  /** A snapshot of the current download: an update with every work unit in it. */
   async getCurrentDownload(): Promise<DownloadUpdate | null> {
     await this.initialization
     const latest = [...this.runtimes.values()].sort(
       (a, b) => b.state.startedAt - a.state.startedAt
     )[0]
     if (!latest) return null
-    const { blocks, ...state } = latest.state
-    return structuredClone({ seq: latest.sentUpdates, state, blocks: blocks ?? latest.blocks })
+    if (latest.kind === 'http') {
+      const { blocks, ...state } = latest.state
+      return structuredClone({ seq: latest.sentUpdates, state, blocks })
+    }
+    const { pieces, ...state } = latest.state
+    return structuredClone({ seq: latest.sentUpdates, state, pieces })
   }
 
   /** Plexo shows one download at a time (see useAppStore's currentDownload) — starting a second
@@ -414,104 +664,104 @@ export class DownloadManager {
     if (selected.length === 0) {
       throw new Error('Select at least one network interface')
     }
-    // A torrent starts from the .torrent its probe kept, its paths checked again here.
-    const torrentFile = requestPayload.infoHash && probedTorrentFile(requestPayload.infoHash)
-    if (requestPayload.infoHash && !torrentFile) {
-      throw new Error('Look at this torrent again, then start it')
-    }
-    const torrent = torrentFile && (await describeTorrent(torrentFile, requestPayload.url)).torrent!
-
-    let usable = selected
-    // A torrent's peers come in either address family; an HTTP host has its own. A selected
-    // network that can't reach the host's family starts switched off.
-    if (!torrent) {
+    await ensureDirectory(requestPayload.destinationDir)
+    const id = randomUUID()
+    let runtime: DownloadRuntime
+    if (requestPayload.kind === 'torrent') {
+      const torrentFile = probedTorrentFile(requestPayload.infoHash)
+      if (!torrentFile) throw new Error('Look at this torrent again, then start it')
+      const torrentProbe = await describeTorrent(torrentFile, requestPayload.url)
+      if (torrentProbe.kind !== 'torrent') throw new Error('Invalid torrent metadata')
+      const torrent = torrentProbe.torrent
+      const totalBytes = torrent.files.reduce((sum, entry) => sum + entry.length, 0)
+      const chosen = chosenFiles(requestPayload.selectedFiles, torrent.files.length)
+      const pieces = planPieces(totalBytes, torrent.pieceLength)
+      const skippedBytes = skipUnchosen(pieces, torrent, chosen)
+      await ensureDiskSpace(requestPayload.destinationDir, totalBytes - skippedBytes)
+      const destinationPath = await reserveDestinationPath(
+        requestPayload.destinationDir,
+        requestPayload.suggestedFileName
+      )
+      const file = await StagingFolder.create(
+        destinationPath,
+        torrent.files[0].path.split(sep)[0],
+        totalBytes,
+        unchosenPaths(torrent, chosen)
+      )
+      await ensureDirectory(this.downloadDir(id))
+      await writeFile(this.torrentFilePath(id), torrentFile)
+      const state: TorrentDownloadState = {
+        id,
+        kind: 'torrent',
+        files: { chosen: chosen?.size ?? torrent.files.length, total: torrent.files.length },
+        url: requestPayload.url,
+        fileName: basename(destinationPath),
+        destinationPath,
+        totalBytes,
+        skippedBytes,
+        bytesDownloaded: 0,
+        speedBytesPerSec: 0,
+        bytesUploaded: 0,
+        uploadSpeedBytesPerSec: 0,
+        status: 'downloading',
+        networks: available.map((iface) => newTorrentNetwork(iface, selected.includes(iface))),
+        peers: [],
+        peakPeers: 0,
+        pieces,
+        totalPieces: pieces.length,
+        pieceLength: torrent.pieceLength,
+        startedAt: Date.now()
+      }
+      runtime = this.newTorrentRuntime(state, requestPayload, file, pieces, torrentFile)
+    } else {
       const target = new URL(requestPayload.url)
-      usable = compatibleInterfaces(
+      const usable = compatibleInterfaces(
         selected,
         await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
       )
       if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
+      const blockSizeBytes = planDownload({
+        totalBytes: requestPayload.totalBytes,
+        splittable: requestPayload.supportsRanges,
+        networkCount: usable.length,
+        maxBlockBytes: testKnobs.blockBytes
+      }).blockSizeBytes
+      const blocks = planBlocks(requestPayload.totalBytes, blockSizeBytes)
+      await ensureDiskSpace(requestPayload.destinationDir, requestPayload.totalBytes)
+      const destinationPath = await reserveDestinationPath(
+        requestPayload.destinationDir,
+        requestPayload.suggestedFileName
+      )
+      const networks = available.map((iface) => newHttpNetwork(iface, usable.includes(iface)))
+      if (!splittable(requestPayload)) {
+        for (const network of networks) network.enabled &&= network.id === usable[0].id
+        for (const network of networks) network.status = network.enabled ? 'on' : 'off'
+      }
+      const state: HttpDownloadState = {
+        id,
+        kind: 'http',
+        url: requestPayload.url,
+        fileName: basename(destinationPath),
+        destinationPath,
+        totalBytes: requestPayload.totalBytes,
+        bytesDownloaded: 0,
+        speedBytesPerSec: 0,
+        status: 'downloading',
+        networks,
+        streams: [],
+        peakStreams: 0,
+        blocks,
+        totalBlocks: blocks.length,
+        blockSizeBytes,
+        startedAt: Date.now()
+      }
+      runtime = this.newHttpRuntime(
+        state,
+        requestPayload,
+        new DownloadFile(`${destinationPath}.plexo`),
+        blocks
+      )
     }
-
-    const totalBytes = torrent
-      ? torrent.files.reduce((sum, entry) => sum + entry.length, 0)
-      : requestPayload.totalBytes
-    const chosen = torrent ? chosenFiles(requestPayload.selectedFiles, torrent.files.length) : null
-
-    // A torrent's blocks are its pieces.
-    const blockSizeBytes = torrent
-      ? torrent.pieceLength
-      : planDownload({
-          totalBytes,
-          splittable: requestPayload.supportsRanges,
-          networkCount: usable.length,
-          maxBlockBytes: testKnobs.blockBytes // 8 MB outside tests
-        }).blockSizeBytes
-    // The UI caps how many cells it renders separately (see BlockGrid), by bucketing these
-    // blocks rather than by shrinking their count here.
-    const blocks = planBlocks(totalBytes, blockSizeBytes)
-    const skippedBytes = torrent ? skipUnchosen(blocks, torrent, chosen) : 0
-
-    await ensureDirectory(requestPayload.destinationDir)
-    // A torrent's files are sparse: what isn't chosen takes no space.
-    await ensureDiskSpace(requestPayload.destinationDir, totalBytes - skippedBytes)
-
-    // Claimed on disk, not just picked, so a second download of the same file
-    // name can't pick it too and overwrite this one at publish time. Done
-    // before anything else is created, so a destination we can't write to
-    // leaves nothing behind.
-    const destinationPath = await reserveDestinationPath(
-      requestPayload.destinationDir,
-      requestPayload.suggestedFileName
-    )
-
-    const id = randomUUID()
-    const file = torrent
-      ? // What's published is the torrent's top entry: its file, or its folder.
-        await StagingFolder.create(
-          destinationPath,
-          torrent.files[0].path.split(sep)[0],
-          totalBytes,
-          unchosenPaths(torrent, chosen)
-        )
-      : new DownloadFile(`${destinationPath}.plexo`)
-    if (torrentFile) {
-      await ensureDirectory(this.downloadDir(id))
-      await writeFile(this.torrentFilePath(id), torrentFile)
-    }
-
-    // The computer's other networks are listed too, switched off, for the user to turn on.
-    const networks = available.map((iface) => newNetwork(iface, usable.includes(iface)))
-    // Unsplittable: one network carries it (IdleScreen lets only one be picked).
-    if (!splittable(requestPayload)) {
-      for (const network of networks) network.enabled &&= network.id === usable[0].id
-      for (const network of networks) network.status = network.enabled ? 'on' : 'off'
-    }
-
-    const state: DownloadState = {
-      id,
-      kind: torrent ? 'torrent' : undefined,
-      files: torrent
-        ? { chosen: chosen?.size ?? torrent.files.length, total: torrent.files.length }
-        : undefined,
-      url: requestPayload.url,
-      fileName: basename(destinationPath),
-      destinationPath,
-      totalBytes,
-      skippedBytes: skippedBytes || undefined,
-      bytesDownloaded: 0,
-      speedBytesPerSec: 0,
-      status: 'downloading',
-      networks,
-      chunks: [],
-      peakStreams: 0,
-      blocks,
-      totalBlocks: blocks.length,
-      blockSizeBytes,
-      startedAt: Date.now()
-    }
-
-    const runtime = this.newRuntime(state, requestPayload, file, blocks, torrentFile || undefined)
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
     this.pushUpdate(runtime)
@@ -528,17 +778,20 @@ export class DownloadManager {
     runtime.state.status = 'paused'
     runtime.state.pausedAt = Date.now()
     clearSpeeds(runtime.state)
-    for (const chunk of runtime.state.chunks) {
-      if (chunk.status !== 'completed') {
-        chunk.status = 'paused'
+    if (runtime.kind === 'http') {
+      for (const stream of runtime.state.streams) {
+        if (stream.status !== 'completed') {
+          stream.status = 'paused'
+        }
+        stream.currentBlockIndex = undefined
+        stream.hedge = undefined
       }
-      chunk.currentBlockIndex = undefined
-      chunk.hedge = undefined
     }
-    for (const block of runtime.blocks) {
-      if (block.status === 'downloading') {
-        block.status = 'pending'
+    for (const unit of unitsOf(runtime)) {
+      if (unit.status === 'downloading') {
+        unit.status = 'pending'
       }
+      if (unit.kind === 'torrent') unit.provisionalBytes = 0
     }
     runtime.transfer.reset()
     this.stopRun(runtime)
@@ -606,17 +859,23 @@ export class DownloadManager {
         (runtime.state.totalPausedMs || 0) + (Date.now() - runtime.state.pausedAt)
       runtime.state.pausedAt = undefined
     }
-    for (const block of runtime.blocks) {
-      if (block.status === 'downloading') {
-        block.status = 'pending'
+    for (const unit of unitsOf(runtime)) {
+      if (unit.status === 'downloading') {
+        unit.status = 'pending'
       }
+      if (unit.kind === 'torrent') unit.provisionalBytes = 0
     }
-    for (const chunk of runtime.state.chunks) {
-      if (chunk.status !== 'completed') {
-        chunk.status = 'pending'
+    if (runtime.kind === 'http') {
+      for (const stream of runtime.state.streams) {
+        if (stream.status !== 'completed') {
+          stream.status = 'pending'
+        }
+        runtime.speedSamplesByStream.delete(stream.id)
+        stream.speedBytesPerSec = 0
       }
-      runtime.speedSamplesByChunk.delete(chunk.id)
-      chunk.speedBytesPerSec = 0
+    } else {
+      runtime.state.peers.length = 0
+      runtime.speedSamplesByPeer.clear()
     }
     runtime.transfer.reset()
     this.pushUpdate(runtime)
@@ -635,7 +894,7 @@ export class DownloadManager {
     if (!network || network.enabled === enabled) return
     const wasLast = !enabled && !networks.some((other) => other !== network && other.enabled)
     // A download that can't be split runs over one network: switching one on switches it over.
-    if (enabled && !splittable(runtime.requestPayload)) {
+    if (enabled && runtime.kind === 'http' && !splittable(runtime.requestPayload)) {
       for (const other of networks) other.enabled = false
     }
     network.enabled = enabled
@@ -729,7 +988,9 @@ export class DownloadManager {
 
     runtime.state.status = 'cancelled'
     clearSpeeds(runtime.state)
-    for (const chunk of runtime.state.chunks) chunk.status = 'cancelled'
+    if (runtime.kind === 'http') {
+      for (const stream of runtime.state.streams) stream.status = 'cancelled'
+    }
     this.stopRun(runtime)
     this.pushUpdate(runtime, false)
     await runtime.runPromise
@@ -775,7 +1036,7 @@ export class DownloadManager {
 
     while (
       runtime.state.status === 'downloading' &&
-      runtime.blocks.some((block) => !isDone(block))
+      unitsOf(runtime).some((unit) => !isDone(unit))
     ) {
       await Promise.race([delay(TICK_MS, signal), ...runtime.transfer.running()])
       if ((runtime.state.status as DownloadStatus) !== 'downloading') break
@@ -801,7 +1062,7 @@ export class DownloadManager {
 
     runtime.publishing = true
     try {
-      if (runtime.blocks.some((block) => !isDone(block))) {
+      if (unitsOf(runtime).some((unit) => !isDone(unit))) {
         throw new Error('Download is incomplete — refusing to publish the file')
       }
       await this.persistNow(runtime)
@@ -820,7 +1081,8 @@ export class DownloadManager {
       runtime.state.status = 'completed'
       runtime.state.completedAt = Date.now()
       runtime.state.bytesDownloaded =
-        runtime.state.totalBytes - (runtime.state.skippedBytes ?? 0) ||
+        runtime.state.totalBytes -
+          (runtime.state.kind === 'torrent' ? runtime.state.skippedBytes : 0) ||
         runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discard().catch(() => {})
@@ -877,16 +1139,28 @@ export class DownloadManager {
     // Until the monitor has looked, nothing is known to be gone.
     const known = present !== null
     if (known) {
-      state.networks = state.networks.filter(
-        (network) =>
-          network.enabled ||
-          network.bytesDownloaded > 0 ||
-          present.some((iface) => iface.id === network.id) ||
-          state.chunks.some((chunk) => chunk.interfaceId === network.id)
-      )
+      if (state.kind === 'http') {
+        state.networks = state.networks.filter(
+          (network) =>
+            network.enabled ||
+            network.bytesDownloaded > 0 ||
+            present.some((iface) => iface.id === network.id) ||
+            state.streams.some((stream) => stream.interfaceId === network.id)
+        )
+      } else {
+        state.networks = state.networks.filter(
+          (network) =>
+            network.enabled ||
+            network.bytesDownloaded > 0 ||
+            network.bytesUploaded > 0 ||
+            present.some((iface) => iface.id === network.id) ||
+            state.peers.some((peer) => peer.interfaceId === network.id)
+        )
+      }
       for (const iface of present) {
         if (!state.networks.some((network) => network.id === iface.id)) {
-          state.networks.push(newNetwork(iface, false))
+          if (state.kind === 'http') state.networks.push(newHttpNetwork(iface, false))
+          else state.networks.push(newTorrentNetwork(iface, false))
         }
       }
     }
@@ -961,29 +1235,42 @@ export class DownloadManager {
     window.webContents.send(IpcChannels.downloadUpdated, this.takeUpdate(runtime))
   }
 
-  /** What the window hasn't been sent yet: the download's state, and the blocks that moved. */
+  /** What the window hasn't been sent yet: the download's state, and the work units that moved. */
   private takeUpdate(runtime: DownloadRuntime): DownloadUpdate {
-    const { blocks: all, ...state } = runtime.state
-    const sent = runtime.sentBlocks
-    const blocks: BlockState[] = []
-    for (const block of all ?? runtime.blocks) {
-      const last = sent[block.index]
-      // bytesByInterface only ever changes along with bytesDownloaded (see blockProgress.ts).
+    if (runtime.kind === 'http') {
+      const changed = this.changedUnits(runtime, runtime.blocks)
+      const { blocks: omittedBlocks, ...state } = runtime.state
+      void omittedBlocks
+      return structuredClone({ seq: ++runtime.sentUpdates, state, blocks: changed })
+    }
+    const changed = this.changedUnits(runtime, runtime.pieces)
+    const { pieces: omittedPieces, ...state } = runtime.state
+    void omittedPieces
+    return structuredClone({ seq: ++runtime.sentUpdates, state, pieces: changed })
+  }
+
+  private changedUnits<T extends DownloadUnitState>(runtime: DownloadRuntime, units: T[]): T[] {
+    const sent = runtime.sentUnits
+    const changed: T[] = []
+    for (const unit of units) {
+      const last = sent[unit.index]
       if (
-        last?.status === block.status &&
-        last.interfaceId === block.interfaceId &&
-        last.bytesDownloaded === block.bytesDownloaded
+        last?.status === unit.status &&
+        last.interfaceId === unit.interfaceId &&
+        last.bytesDownloaded === unit.bytesDownloaded &&
+        last.provisionalBytes === (unit.kind === 'torrent' ? unit.provisionalBytes : undefined)
       ) {
         continue
       }
-      sent[block.index] = {
-        status: block.status,
-        interfaceId: block.interfaceId,
-        bytesDownloaded: block.bytesDownloaded
+      sent[unit.index] = {
+        status: unit.status,
+        interfaceId: unit.interfaceId,
+        bytesDownloaded: unit.bytesDownloaded,
+        provisionalBytes: unit.kind === 'torrent' ? unit.provisionalBytes : undefined
       }
-      blocks.push(block)
+      changed.push(unit)
     }
-    return structuredClone({ seq: ++runtime.sentUpdates, state, blocks })
+    return changed
   }
 
   private schedulePersistence(runtime: DownloadRuntime): void {
@@ -1008,12 +1295,23 @@ export class DownloadManager {
         const dir = this.downloadDir(runtime.state.id)
         const path = this.manifestPath(runtime.state.id)
         const temporaryPath = `${path}.tmp`
-        const { blocks, ...state } = runtime.state
+        let state: PersistedState
+        if (runtime.kind === 'http') {
+          const { blocks: omittedBlocks, streams: omittedStreams, ...rest } = runtime.state
+          void omittedBlocks
+          void omittedStreams
+          state = rest
+        } else {
+          const { pieces: omittedPieces, peers: omittedPeers, ...rest } = runtime.state
+          void omittedPieces
+          void omittedPeers
+          state = rest
+        }
         const persisted: PersistedDownload = {
-          version: 5,
+          version: 6,
           savedAt: Date.now(),
           state: structuredClone(state),
-          ...saveBlocks(blocks ?? runtime.blocks),
+          ...saveBlocks(unitsOf(runtime)),
           partialPath: runtime.file.path,
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,

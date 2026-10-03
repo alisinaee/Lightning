@@ -1,10 +1,10 @@
 import type {
-  BlockState,
-  ChunkState,
+  HttpBlockState,
+  HttpStreamState,
   DownloadNetwork,
   DownloadStatus,
   NetworkStatus,
-  StartDownloadRequest
+  StartHttpDownloadRequest
 } from '../../shared/types'
 import { testKnobs, testStreamsPerNetwork } from '../testKnobs'
 import { advanceBlock, retractBlock } from './blockProgress'
@@ -20,7 +20,7 @@ import {
   updateSpeeds,
   type Transfer,
   type TransferHost,
-  type TransferTarget
+  type HttpTransferTarget
 } from './transfer'
 import { ConnectionError, NoCompatibleRouteError, StreamConnection } from '../network/routes'
 
@@ -38,7 +38,7 @@ type AbortReason = 'refresh' | 'lost'
  */
 interface Attempt {
   kind: 'primary' | 'hedge'
-  block: BlockState
+  block: HttpBlockState
   streamId: number
   networkId: string
   /** Where the request begins, as an offset into the block. Null until it is known. */
@@ -87,7 +87,7 @@ interface ChunkRuntime {
   /** Speed of its last finished block, start to end — 0 until it finishes one. */
   lastBlockSpeed: number
   /** Everything it has received, bytes another attempt already had included: what its speed is
-   * measured from. (`ChunkState.bytesDownloaded` counts only bytes that were new.) */
+   * measured from. (`HttpStreamState.bytesDownloaded` counts only bytes that were new.) */
   receivedBytes: number
   /** Failed attempts in a row, for backoff. */
   failures: number
@@ -153,13 +153,13 @@ const SCHEDULER_POLICY: SchedulerPolicy = {
 
 /** Whether the file can be fetched in parts. Otherwise one request has to carry all of it: one
  * stream, on one network. */
-export function splittable(request: StartDownloadRequest): boolean {
+export function splittable(request: StartHttpDownloadRequest): boolean {
   return request.supportsRanges && request.totalBytes > 0
 }
 
 /** How many streams a download runs is only for it to work out when there can be more than one,
  * and unless a test fixes it. */
-function concurrencyFor(request: StartDownloadRequest): ConcurrencyController | null {
+function concurrencyFor(request: StartHttpDownloadRequest): ConcurrencyController | null {
   if (!splittable(request) || testStreamsPerNetwork() !== null) return null
   const picked = pickedStreams(request)
   return picked === undefined
@@ -168,7 +168,7 @@ function concurrencyFor(request: StartDownloadRequest): ConcurrencyController | 
 }
 
 /** The streams per network the user picked for this download, if they didn't leave it on Auto. */
-export function pickedStreams(request: StartDownloadRequest): number | undefined {
+export function pickedStreams(request: StartHttpDownloadRequest): number | undefined {
   const picked = request.streamsPerNetwork
   return Number.isInteger(picked) && picked! >= 1 && picked! <= MAX_STREAMS_PER_NETWORK
     ? picked
@@ -186,7 +186,7 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-function newStream(id: number, networkId: string): ChunkState {
+function newStream(id: number, networkId: string): HttpStreamState {
   return {
     id,
     interfaceId: networkId,
@@ -198,7 +198,7 @@ function newStream(id: number, networkId: string): ChunkState {
   }
 }
 
-function requestedVersion(request: StartDownloadRequest): FileVersion {
+function requestedVersion(request: StartHttpDownloadRequest): FileVersion {
   return { etag: request.etag, lastModified: request.lastModified, totalBytes: request.totalBytes }
 }
 
@@ -245,7 +245,7 @@ export class HttpTransfer implements Transfer {
   private concurrency: ConcurrencyController | null
 
   constructor(
-    private readonly runtime: TransferTarget,
+    private readonly runtime: HttpTransferTarget,
     private readonly host: TransferHost
   ) {
     this.acceptedVersions = [requestedVersion(runtime.requestPayload)]
@@ -283,7 +283,7 @@ export class HttpTransfer implements Transfer {
       : 1
 
     const now = Date.now()
-    const toStart: ChunkState[] = []
+    const toStart: HttpStreamState[] = []
     for (const network of state.networks) {
       const live = this.liveStreams(network.id)
       const target = !running.includes(network)
@@ -351,7 +351,7 @@ export class HttpTransfer implements Transfer {
    * is taken up again on a new one: a refresh, so nothing is lost and no retry is counted.
    */
   wake(pick: (networkId: string) => boolean, reconnect: (networkId: string) => boolean): void {
-    for (const chunk of this.runtime.state.chunks) {
+    for (const chunk of this.runtime.state.streams) {
       const self = this.chunkRuntimes.get(chunk.id)
       if (!self || self.retiring || !pick(chunk.interfaceId)) continue
       self.failures = 0
@@ -376,8 +376,8 @@ export class HttpTransfer implements Transfer {
   }
 
   /** A network's streams that aren't on their way out. */
-  private liveStreams(networkId: string): ChunkState[] {
-    return this.runtime.state.chunks.filter(
+  private liveStreams(networkId: string): HttpStreamState[] {
+    return this.runtime.state.streams.filter(
       (chunk) => chunk.interfaceId === networkId && !this.chunkRuntimes.get(chunk.id)?.retiring
     )
   }
@@ -388,7 +388,7 @@ export class HttpTransfer implements Transfer {
     return traffic
   }
 
-  private startStreams(chunks: ChunkState[]): void {
+  private startStreams(chunks: HttpStreamState[]): void {
     for (const chunk of chunks) {
       this.workers.set(
         chunk.id,
@@ -432,7 +432,7 @@ export class HttpTransfer implements Transfer {
     if (!this.runtime.requestPayload.supportsRanges) return
 
     let unreachable = false
-    for (const chunk of this.runtime.state.chunks) {
+    for (const chunk of this.runtime.state.streams) {
       const self = this.chunkRuntimes.get(chunk.id)
       const attempt = self?.attempt
       if (!self || !attempt || attempt.abortReason) continue
@@ -480,12 +480,12 @@ export class HttpTransfer implements Transfer {
     )
   }
 
-  private isCrawling(chunk: ChunkState, self: ChunkRuntime, now: number): boolean {
+  private isCrawling(chunk: HttpStreamState, self: ChunkRuntime, now: number): boolean {
     const warm = (connection: ChunkRuntime): boolean => now - connection.warmSince >= SLOW_WARMUP_MS
     if (!warm(self)) return false
 
     const reference: number[] = []
-    for (const other of this.runtime.state.chunks) {
+    for (const other of this.runtime.state.streams) {
       if (other.interfaceId !== chunk.interfaceId) continue
       const peer = this.chunkRuntimes.get(other.id)
       if (!peer) continue
@@ -528,14 +528,14 @@ export class HttpTransfer implements Transfer {
   }
 
   /** The stream holds no block: it says so, rather than keeping the last one's numbers on show. */
-  private goIdle(chunk: ChunkState): void {
+  private goIdle(chunk: HttpStreamState): void {
     chunk.status = 'pending'
     chunk.currentBlockIndex = undefined
     chunk.hedge = undefined
     chunk.speedBytesPerSec = 0
   }
 
-  private beginAttempt(chunk: ChunkState, self: ChunkRuntime, work: Work): Attempt {
+  private beginAttempt(chunk: HttpStreamState, self: ChunkRuntime, work: Work): Attempt {
     const { block } = work
     const attempt: Attempt = {
       kind: work.kind,
@@ -588,7 +588,7 @@ export class HttpTransfer implements Transfer {
 
   /** Sends the request and reports how it ended. Never throws. */
   private async executeAttempt(
-    chunk: ChunkState,
+    chunk: HttpStreamState,
     self: ChunkRuntime,
     attempt: Attempt
   ): Promise<AttemptOutcome> {
@@ -600,7 +600,9 @@ export class HttpTransfer implements Transfer {
         attempt.startOffset = this.runtime.requestPayload.supportsRanges ? block.bytesDownloaded : 0
         // What another attempt has already secured stays counted.
         const keep = Math.max(attempt.startOffset, this.otherAttemptsPosition(attempt))
-        if (retractBlock(block, keep, attempt.previousWriter) > 0) recomputeAggregates(this.runtime)
+        if (retractBlock(block, keep, attempt.previousWriter) > 0) {
+          recomputeAggregates(this.runtime.state, this.runtime.blocks)
+        }
       } else {
         attempt.startOffset = block.bytesDownloaded
       }
@@ -649,7 +651,7 @@ export class HttpTransfer implements Transfer {
     }
   }
 
-  private onNetworkProgress(chunk: ChunkState, self: ChunkRuntime, deltaBytes: number): void {
+  private onNetworkProgress(chunk: HttpStreamState, self: ChunkRuntime, deltaBytes: number): void {
     const now = Date.now()
     self.receivedBytes += deltaBytes
     self.served = true
@@ -662,17 +664,17 @@ export class HttpTransfer implements Transfer {
       network.status = 'on'
       self.failures = 0
     }
-    let samples = this.runtime.speedSamplesByChunk.get(chunk.id)
+    let samples = this.runtime.speedSamplesByStream.get(chunk.id)
     if (!samples) {
       samples = []
-      this.runtime.speedSamplesByChunk.set(chunk.id, samples)
+      this.runtime.speedSamplesByStream.set(chunk.id, samples)
     }
     chunk.speedBytesPerSec = pushSpeedSample(samples, self.receivedBytes, now)
     updateSpeeds(this.runtime, now)
     this.host.scheduleUpdate()
   }
 
-  private onAttemptProgress(chunk: ChunkState, attempt: Attempt): void {
+  private onAttemptProgress(chunk: HttpStreamState, attempt: Attempt): void {
     // Only what gets the block further than it already was counts as progress: a racing attempt
     // re-fetches bytes the other already has.
     const gained = advanceBlock(attempt.block, attempt.networkId, this.attemptPosition(attempt))
@@ -689,7 +691,7 @@ export class HttpTransfer implements Transfer {
 
   /** Applies what became of an attempt to the download. 'stop' ends the stream. */
   private async finishAttempt(
-    chunk: ChunkState,
+    chunk: HttpStreamState,
     self: ChunkRuntime,
     attempt: Attempt,
     outcome: AttemptOutcome
@@ -718,7 +720,11 @@ export class HttpTransfer implements Transfer {
     }
   }
 
-  private finishCompleted(chunk: ChunkState, self: ChunkRuntime, attempt: Attempt): 'continue' {
+  private finishCompleted(
+    chunk: HttpStreamState,
+    self: ChunkRuntime,
+    attempt: Attempt
+  ): 'continue' {
     const { block } = attempt
 
     // Another attempt already finished this block: these bytes are surplus.
@@ -744,13 +750,13 @@ export class HttpTransfer implements Transfer {
     self.strikes = 0
     // Whoever is still racing for the block has lost.
     for (const rival of this.attempts.get(block.index) ?? []) this.abortAttempt(rival, 'lost')
-    recomputeAggregates(this.runtime)
+    recomputeAggregates(this.runtime.state, this.runtime.blocks)
     this.host.scheduleUpdate()
     return 'continue'
   }
 
   /** The stream was stopped while its request was in flight. */
-  private finishStopped(chunk: ChunkState, self: ChunkRuntime, attempt: Attempt): 'stop' {
+  private finishStopped(chunk: HttpStreamState, self: ChunkRuntime, attempt: Attempt): 'stop' {
     // Whatever stopped it — a pause, a cancel, retirement — the block goes back as any other
     // attempt's would, and one another attempt has finished stays finished.
     this.letGo(chunk, self, attempt, false)
@@ -759,7 +765,7 @@ export class HttpTransfer implements Transfer {
   }
 
   private async finishAborted(
-    chunk: ChunkState,
+    chunk: HttpStreamState,
     self: ChunkRuntime,
     attempt: Attempt,
     reason: AbortReason
@@ -780,7 +786,7 @@ export class HttpTransfer implements Transfer {
   }
 
   private async finishFailed(
-    chunk: ChunkState,
+    chunk: HttpStreamState,
     self: ChunkRuntime,
     attempt: Attempt,
     error: unknown
@@ -903,7 +909,7 @@ export class HttpTransfer implements Transfer {
    * When the attempt delivered nothing, its network is remembered (see scheduler.ts).
    */
   private letGo(
-    chunk: ChunkState,
+    chunk: HttpStreamState,
     self: ChunkRuntime,
     attempt: Attempt,
     deliveredNothing: boolean
@@ -938,13 +944,13 @@ export class HttpTransfer implements Transfer {
   }
 
   /** New streams on `networkId`, put on the download's list for the caller to start. */
-  private addStreams(networkId: string, count: number): ChunkState[] {
-    let id = Math.max(-1, ...this.runtime.state.chunks.map((chunk) => chunk.id))
+  private addStreams(networkId: string, count: number): HttpStreamState[] {
+    let id = Math.max(-1, ...this.runtime.state.streams.map((chunk) => chunk.id))
     const added = Array.from({ length: count }, () => newStream(++id, networkId))
-    this.runtime.state.chunks.push(...added)
+    this.runtime.state.streams.push(...added)
     this.runtime.state.peakStreams = Math.max(
       this.runtime.state.peakStreams ?? 0,
-      this.runtime.state.chunks.length
+      this.runtime.state.streams.length
     )
     debug('streams', { network: networkId, added: count })
     this.host.scheduleUpdate()
@@ -957,7 +963,7 @@ export class HttpTransfer implements Transfer {
     if (count < 1) return
     // Streams the server just refused go first (see concurrency.ts), then ones whose last
     // request failed, then the newest.
-    const rank = (chunk: ChunkState): number => {
+    const rank = (chunk: HttpStreamState): number => {
       const self = this.chunkRuntimes.get(chunk.id)
       return self?.refused ? 2 : (self?.failures ?? 0) > 0 ? 1 : 0
     }
@@ -976,16 +982,16 @@ export class HttpTransfer implements Transfer {
   }
 
   /** Takes a retired stream off the list. */
-  private removeStream(chunk: ChunkState): void {
+  private removeStream(chunk: HttpStreamState): void {
     this.chunkRuntimes.delete(chunk.id)
-    this.runtime.speedSamplesByChunk.delete(chunk.id)
-    const index = this.runtime.state.chunks.indexOf(chunk)
+    this.runtime.speedSamplesByStream.delete(chunk.id)
+    const index = this.runtime.state.streams.indexOf(chunk)
     if (index < 0) return
-    this.runtime.state.chunks.splice(index, 1)
+    this.runtime.state.streams.splice(index, 1)
     this.host.scheduleUpdate()
   }
 
-  private async runWorker(chunk: ChunkState): Promise<void> {
+  private async runWorker(chunk: HttpStreamState): Promise<void> {
     const controller = new AbortController()
     const self: ChunkRuntime = {
       controller,
@@ -1028,7 +1034,7 @@ export class HttpTransfer implements Transfer {
         const work = pickWork(
           {
             blocks: this.runtime.blocks,
-            streams: this.runtime.state.chunks,
+            streams: this.runtime.state.streams,
             attempts: this.attempts,
             avoid: this.avoidNetworkByBlock,
             hedgesUsed: this.hedgesByBlock

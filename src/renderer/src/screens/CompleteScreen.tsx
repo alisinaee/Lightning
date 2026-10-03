@@ -50,9 +50,9 @@ export function CompleteScreen({
   // "Chunks" in the block grid means byte ranges, not parallel connections. A torrent's are its
   // pieces, those its chosen files needed.
   const totalChunkCount = isTorrent
-    ? (download.blocks?.filter((block) => block.status !== 'skipped').length ?? 0)
-    : (download.totalBlocks ?? download.blocks?.length ?? 1)
-  const files = download.files && download.files.total > 1 ? download.files : null
+    ? download.pieces.filter((piece) => piece.status !== 'skipped').length
+    : download.totalBlocks
+  const files = isTorrent && download.files.total > 1 ? download.files : null
 
   const handleReveal = (): void => void window.plexo.revealInFolder(download.destinationPath)
 
@@ -110,7 +110,7 @@ export function CompleteScreen({
           // The most it ran at once: streams that didn't make it faster were closed along the way.
           {
             label: isTorrent ? 'Peers' : 'Streams',
-            value: String(download.peakStreams ?? download.chunks.length)
+            value: String(isTorrent ? download.peakPeers : download.peakStreams)
           }
         ].map((stat, index) => (
           <div

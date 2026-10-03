@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test'
 import fc from 'fast-check'
-import filenameReservedRegex from 'filename-reserved-regex'
 import { posix, win32 } from 'node:path'
 import {
   safeTorrentPaths,
@@ -86,7 +85,7 @@ test.describe('torrent paths', () => {
   })
 
   test('names are cleaned the way webtorrent’s storage cleans them', () => {
-    expect(STRIPPED_FROM_NAMES.source).toBe(filenameReservedRegex().source)
+    expect(STRIPPED_FROM_NAMES.source).toBe('[<>:"/\\\\|?*\\u0000-\\u001F]')
     expect(safeTorrentPaths([{ path: 'Name/a:b?.txt', length: 1 }], 'darwin')).toEqual([
       { path: 'Name/ab.txt', length: 1 }
     ])

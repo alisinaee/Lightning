@@ -1,4 +1,4 @@
-import type { BlockState, BlockStatus } from '@shared/types'
+import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
 import { useCallback, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { formatBytes, type NetworkGroup } from '../utils/format'
@@ -42,7 +42,7 @@ interface CellSegment {
 }
 
 interface DisplayCell {
-  status: BlockStatus
+  status: TorrentPieceStatus
   /** The network that delivered the most bytes here — what the cell reads out as, and what
    * colors it when its share is drawn as a single block. */
   interfaceId?: string
@@ -53,6 +53,7 @@ interface DisplayCell {
   fillRatio: number
   totalBytes: number
   bytesDownloaded: number
+  provisionalBytes: number
   /** 1-based chunk number, matching the "Chunk #N" badges in the streams table so a hovered
    * square points back at a specific stream's work. */
   chunkNumber: number
@@ -65,7 +66,7 @@ interface DisplayCell {
  * retry or a pause/resume handed from one network to another would otherwise be repainted in the
  * finishing network's color. `orderedInterfaceIds` fixes the order contributors are listed in, so
  * a square's readout doesn't reshuffle between progress pushes. */
-function describeBlocks(blocks: BlockState[], orderedInterfaceIds: string[]): DisplayCell[] {
+function describeBlocks(blocks: DownloadUnitState[], orderedInterfaceIds: string[]): DisplayCell[] {
   return blocks.map((block, index) => {
     const totalBytes = block.rangeEnd !== null ? block.rangeEnd - block.rangeStart + 1 : 0
 
@@ -102,9 +103,14 @@ function describeBlocks(blocks: BlockState[], orderedInterfaceIds: string[]): Di
       interfaceId:
         dominantInterfaceId ?? (block.status === 'downloading' ? block.interfaceId : undefined),
       segments,
-      fillRatio: totalBytes > 0 ? block.bytesDownloaded / totalBytes : 0,
+      fillRatio:
+        totalBytes > 0
+          ? (block.bytesDownloaded + (block.kind === 'torrent' ? block.provisionalBytes : 0)) /
+            totalBytes
+          : 0,
       totalBytes,
       bytesDownloaded: block.bytesDownloaded,
+      provisionalBytes: block.kind === 'torrent' ? block.provisionalBytes : 0,
       chunkNumber: index + 1
     }
   })
@@ -138,7 +144,7 @@ function describeContributors(
 }
 
 interface BlockGridProps {
-  blocks?: BlockState[]
+  blocks?: DownloadUnitState[]
   groups: NetworkGroup[]
   visuals: NetworkVisual[]
   knownSize: boolean
@@ -210,7 +216,11 @@ export function BlockGrid({
           : hoveredCell.status === 'skipped'
             ? 'skipped: in no file chosen'
             : '—')
-      readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
+      const provisional =
+        hoveredCell.provisionalBytes > 0
+          ? ` · ${formatBytes(hoveredCell.provisionalBytes)} received, awaiting verification`
+          : ''
+      readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} verified${provisional} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
     } else {
       readout = `${blocks.length} ${unit.toLowerCase()}s · ${formatBytes(chunkBytes)} each`
     }
@@ -330,6 +340,7 @@ export function BlockGrid({
                         inset: 0,
                         width: `${fillPercent}%`,
                         background: fillColor,
+                        opacity: cell.provisionalBytes > 0 && cell.bytesDownloaded === 0 ? 0.55 : 1,
                         transition: 'width 0.15s, background 0.15s'
                       }}
                     />

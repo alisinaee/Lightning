@@ -1,4 +1,11 @@
-import type { ChunkState, DownloadNetwork, DownloadState } from '@shared/types'
+import type {
+  DownloadNetwork,
+  DownloadState,
+  HttpDownloadNetwork,
+  HttpDownloadState,
+  TorrentDownloadNetwork,
+  TorrentDownloadState
+} from '@shared/types'
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
@@ -38,8 +45,8 @@ export function describeFileCount(chosen: number, total: number): string {
 }
 
 /** What a download fetches: all of it, bar a torrent's pieces no chosen file needs. */
-export function wantedBytes(download: { totalBytes: number; skippedBytes?: number }): number {
-  return download.totalBytes - (download.skippedBytes ?? 0)
+export function wantedBytes(download: DownloadState): number {
+  return download.totalBytes - (download.kind === 'torrent' ? download.skippedBytes : 0)
 }
 
 export function formatPercent(bytesDownloaded: number, totalBytes: number): number {
@@ -82,17 +89,26 @@ export function dirnameOf(path: string): string {
   return path.slice(0, index)
 }
 
-/** A download's network with the streams it runs: what one row on screen shows. */
-export interface NetworkGroup extends DownloadNetwork {
-  chunks: ChunkState[]
+export interface HttpNetworkGroup extends HttpDownloadNetwork {
+  streams: HttpDownloadState['streams']
 }
 
-export function groupByNetwork(
-  download: Pick<DownloadState, 'networks' | 'chunks'>
-): NetworkGroup[] {
+export interface TorrentNetworkGroup extends TorrentDownloadNetwork {
+  peers: TorrentDownloadState['peers']
+}
+
+export type NetworkGroup = HttpNetworkGroup | TorrentNetworkGroup
+
+export function groupByNetwork(download: DownloadState): NetworkGroup[] {
+  if (download.kind === 'http') {
+    return download.networks.map((network) => ({
+      ...network,
+      streams: download.streams.filter((stream) => stream.interfaceId === network.id)
+    }))
+  }
   return download.networks.map((network) => ({
     ...network,
-    chunks: download.chunks.filter((chunk) => chunk.interfaceId === network.id)
+    peers: download.peers.filter((peer) => peer.interfaceId === network.id)
   }))
 }
 

@@ -1,7 +1,7 @@
 import { isIP, Socket } from 'node:net'
 import type WebTorrent from 'webtorrent'
 import type { Torrent, Wire } from 'webtorrent'
-import type { ChunkState, DownloadNetwork } from '../../../shared/types'
+import type { TorrentDownloadNetwork, TorrentPeerState } from '../../../shared/types'
 import { connectRoute } from '../../network/deviceBinding'
 import { routesFor, type NetworkRoute } from '../../network/routes'
 import {
@@ -11,7 +11,7 @@ import {
   type SpeedSample,
   type Transfer,
   type TransferHost,
-  type TransferTarget
+  type TorrentTransferTarget
 } from '../transfer'
 import { createClient } from './engine'
 import { bitfieldOf, creditPiece, pickNetwork } from './peers'
@@ -31,7 +31,7 @@ const addressOf = (host: string, port: number): string =>
   isIP(host) === 6 ? `[${host}]:${port}` : `${host}:${port}`
 
 interface Peer {
-  chunk: ChunkState
+  state: TorrentPeerState
   /** Everything it has sent, what its speed is measured from. */
   received: number
 }
@@ -40,7 +40,7 @@ interface Peer {
  * Fetches a torrent with webtorrent, every peer pinned to one network. webtorrent finds the peers
  * and runs the protocol; each time it dials one, its `connect` hook (see engine.ts and
  * patches/webtorrent+3.0.21.patch) asks this transfer which network to use, and the socket comes
- * from connectRoute, as HTTP's do. Peers are the download's streams, and a piece is credited to
+ * from connectRoute, as HTTP's do. Peers expose connection telemetry only; a piece is credited to
  * the networks that delivered it once webtorrent has verified it and written it to disk.
  *
  * One webtorrent client per run: a pause destroys it, files kept, and a resume starts a new one
@@ -64,9 +64,11 @@ export class TorrentTransfer implements Transfer {
   private unverified = new Map<number, Record<string, number>>()
   /** By network: what it has sent to peers, sampled for its upload speed. */
   private uploadSamples = new Map<string, SpeedSample[]>()
+  /** By peer: what it has sent, sampled independently from its network. */
+  private uploadSamplesByPeer = new Map<number, SpeedSample[]>()
 
   constructor(
-    private readonly runtime: TransferTarget,
+    private readonly runtime: TorrentTransferTarget,
     private readonly host: TransferHost,
     private readonly torrentFile: Uint8Array,
     /** Where webtorrent writes the torrent (StagingFolder.folder). */
@@ -79,12 +81,12 @@ export class TorrentTransfer implements Transfer {
     if (this.client) this.client.maxConns = PEERS_PER_NETWORK * usable.length
     // A network switched off, or gone, takes its peers with it.
     for (const [wire, peer] of this.peers) {
-      if (!usable.some((network) => network.id === peer.chunk.interfaceId)) wire.destroy()
+      if (!usable.some((network) => network.id === peer.state.interfaceId)) wire.destroy()
     }
   }
 
   tick(now: number): void {
-    const withPeers = new Set([...this.peers.values()].map((peer) => peer.chunk.interfaceId))
+    const withPeers = new Set([...this.peers.values()].map((peer) => peer.state.interfaceId))
     for (const network of this.usable()) {
       const reach = this.reachOf(network.id, now)
       if (
@@ -95,6 +97,13 @@ export class TorrentTransfer implements Transfer {
         withPeers.size > 0
       ) {
         network.status = 'unreachable'
+        this.host.scheduleUpdate()
+      }
+    }
+    for (const peer of this.peers.values()) {
+      const status = peer.state.speedBytesPerSec > 0 ? 'receiving' : 'connected'
+      if (peer.state.status !== status) {
+        peer.state.status = status
         this.host.scheduleUpdate()
       }
     }
@@ -117,11 +126,15 @@ export class TorrentTransfer implements Transfer {
     this.reach.clear()
     // webtorrent drops what it had of unfinished pieces with its client.
     this.unverified.clear()
+    for (const piece of this.runtime.pieces) {
+      piece.provisionalBytes = 0
+      if (piece.status === 'downloading') piece.status = 'pending'
+    }
   }
 
   wake(_pick: (networkId: string) => boolean, reconnect: (networkId: string) => boolean): void {
     // Peers on a network whose address changed are on dead sockets; webtorrent dials new ones.
-    for (const [wire, peer] of this.peers) if (reconnect(peer.chunk.interfaceId)) wire.destroy()
+    for (const [wire, peer] of this.peers) if (reconnect(peer.state.interfaceId)) wire.destroy()
   }
 
   systemResumed(now: number): void {
@@ -165,20 +178,26 @@ export class TorrentTransfer implements Transfer {
       for (const peer of this.peers.values()) this.removePeer(peer)
       this.peers.clear()
       this.uploadSamples.clear()
+      this.uploadSamplesByPeer.clear()
       this.updateUploadSpeeds(Date.now())
       this.ended = null
     }
   }
 
   /** A peer took `bytes` of a piece from this download, over `network`. */
-  private onUpload(network: DownloadNetwork, bytes: number): void {
+  private onUpload(network: TorrentDownloadNetwork, peer: Peer, bytes: number): void {
     const { state } = this.runtime
-    network.bytesUploaded = (network.bytesUploaded ?? 0) + bytes
-    state.bytesUploaded = (state.bytesUploaded ?? 0) + bytes
+    network.bytesUploaded += bytes
+    state.bytesUploaded += bytes
+    peer.state.bytesUploaded += bytes
+    const now = Date.now()
     let samples = this.uploadSamples.get(network.id)
     if (!samples) this.uploadSamples.set(network.id, (samples = []))
-    pushSpeedSample(samples, network.bytesUploaded, Date.now())
-    this.updateUploadSpeeds(Date.now())
+    pushSpeedSample(samples, network.bytesUploaded, now)
+    let peerSamples = this.uploadSamplesByPeer.get(peer.state.id)
+    if (!peerSamples) this.uploadSamplesByPeer.set(peer.state.id, (peerSamples = []))
+    peer.state.uploadSpeedBytesPerSec = pushSpeedSample(peerSamples, peer.state.bytesUploaded, now)
+    this.updateUploadSpeeds(now)
   }
 
   /** Each network's upload speed, and the download's, as of `now`: one that has stopped sending
@@ -191,6 +210,12 @@ export class TorrentTransfer implements Transfer {
       network.uploadSpeedBytesPerSec = speed
       total += speed
     }
+    for (const peer of this.peers.values()) {
+      peer.state.uploadSpeedBytesPerSec = calculateCurrentSpeed(
+        this.uploadSamplesByPeer.get(peer.state.id),
+        now
+      )
+    }
     if (total !== state.uploadSpeedBytesPerSec) this.host.scheduleUpdate()
     state.uploadSpeedBytesPerSec = total
   }
@@ -200,7 +225,7 @@ export class TorrentTransfer implements Transfer {
     const torrent = client.add(this.torrentFile, {
       path: this.folder,
       // Trusted as done, bar a hash check of a piece or two per file (more if one fails).
-      bitfield: bitfieldOf(this.runtime.blocks.map((block) => block.status === 'completed')),
+      bitfield: bitfieldOf(this.runtime.pieces.map((block) => block.status === 'completed')),
       // Only the chosen files, once webtorrent is ready to be told which (below).
       deselect: chosen !== undefined
     })
@@ -216,7 +241,7 @@ export class TorrentTransfer implements Transfer {
   }
 
   /** The networks peers may use now. One that can't reach the swarm stays, for its one dial. */
-  private usable(): DownloadNetwork[] {
+  private usable(): TorrentDownloadNetwork[] {
     return this.runtime.state.networks.filter(
       (network) => network.status === 'on' || network.status === 'unreachable'
     )
@@ -234,7 +259,7 @@ export class TorrentTransfer implements Transfer {
     const family = isIP(address) as 0 | 4 | 6
     const peersOn = (id: string): number =>
       (this.dialling.get(id) ?? 0) +
-      [...this.peers.values()].filter((peer) => peer.chunk.interfaceId === id).length
+      [...this.peers.values()].filter((peer) => peer.state.interfaceId === id).length
     const routes = new Map<string, NetworkRoute>()
     for (const network of this.usable()) {
       const iface = this.host.networks.find(network.id)
@@ -283,45 +308,46 @@ export class TorrentTransfer implements Transfer {
     reach.answeredAt = Date.now()
     if (network.status === 'unreachable') network.status = 'on'
 
-    const chunk: ChunkState = {
+    const peerState: TorrentPeerState = {
       id: this.nextPeerId++,
       interfaceId: network.id,
-      rangeStart: 0,
-      rangeEnd: null,
+      status: 'connected',
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
-      status: 'downloading'
+      bytesUploaded: 0,
+      uploadSpeedBytesPerSec: 0
     }
-    const peer: Peer = { chunk, received: 0 }
+    const peer: Peer = { state: peerState, received: 0 }
     this.peers.set(wire, peer)
     const { state } = this.runtime
-    state.chunks.push(chunk)
-    state.peakStreams = Math.max(state.peakStreams ?? 0, state.chunks.length)
+    state.peers.push(peerState)
+    state.peakPeers = Math.max(state.peakPeers, state.peers.length)
 
     wire.on('piece', (index: number, _offset: number, buffer: Uint8Array) => {
       const now = Date.now()
       peer.received += buffer.length
-      chunk.bytesDownloaded += buffer.length
+      peerState.bytesDownloaded += buffer.length
+      peerState.status = 'receiving'
       const pending = this.unverified.get(index) ?? {}
       pending[network.id] = (pending[network.id] ?? 0) + buffer.length
       this.unverified.set(index, pending)
-      const block = this.runtime.blocks[index]
-      if (block) {
+      const piece = this.runtime.pieces[index]
+      if (piece) {
         // In flight now; it counts once verified (onVerified).
-        if (block.status === 'pending') {
-          block.status = 'downloading'
-          block.interfaceId = network.id
+        if (piece.status === 'pending') {
+          piece.status = 'downloading'
+          piece.interfaceId = network.id
         }
-        chunk.currentBlockIndex = index
-        chunk.rangeStart = block.rangeStart
-        chunk.rangeEnd = block.rangeEnd
+        const provisional = Object.values(pending).reduce((sum, bytes) => sum + bytes, 0)
+        const length = piece.rangeEnd === null ? 0 : piece.rangeEnd - piece.rangeStart + 1
+        piece.provisionalBytes = Math.min(length, provisional)
       }
-      let samples = this.runtime.speedSamplesByChunk.get(chunk.id)
-      if (!samples) this.runtime.speedSamplesByChunk.set(chunk.id, (samples = []))
-      chunk.speedBytesPerSec = pushSpeedSample(samples, peer.received, now)
+      let samples = this.runtime.speedSamplesByPeer.get(peerState.id)
+      if (!samples) this.runtime.speedSamplesByPeer.set(peerState.id, (samples = []))
+      peerState.speedBytesPerSec = pushSpeedSample(samples, peer.received, now)
       this.host.scheduleUpdate()
     })
-    wire.on('upload', (bytes: number) => this.onUpload(network, bytes))
+    wire.on('upload', (bytes: number) => this.onUpload(network, peer, bytes))
     wire.once('close', () => {
       if (this.peers.delete(wire)) this.removePeer(peer)
     })
@@ -329,28 +355,29 @@ export class TorrentTransfer implements Transfer {
   }
 
   private removePeer(peer: Peer): void {
-    const { chunks } = this.runtime.state
-    const index = chunks.indexOf(peer.chunk)
-    if (index >= 0) chunks.splice(index, 1)
-    this.runtime.speedSamplesByChunk.delete(peer.chunk.id)
+    const { peers } = this.runtime.state
+    const index = peers.indexOf(peer.state)
+    if (index >= 0) peers.splice(index, 1)
+    this.runtime.speedSamplesByPeer.delete(peer.state.id)
+    this.uploadSamplesByPeer.delete(peer.state.id)
     this.host.scheduleUpdate()
   }
 
   /** A piece verified and written: it counts now, credited to the networks that delivered it. */
   private onVerified(index: number): void {
-    const block = this.runtime.blocks[index]
+    const piece = this.runtime.pieces[index]
     const received = this.unverified.get(index) ?? {}
     this.unverified.delete(index)
     // A skipped piece fetched anyway isn't this download's: nothing chosen needs it.
-    if (!block || block.status === 'completed' || block.status === 'skipped') return
-    if (block.rangeEnd === null) return
+    if (!piece || piece.status === 'completed' || piece.status === 'skipped') return
+    if (piece.rangeEnd === null) return
     const { state } = this.runtime
-    const length = block.rangeEnd - block.rangeStart + 1
+    const length = piece.rangeEnd - piece.rangeStart + 1
     // Found on disk rather than received: whoever held it last, else the first network in use.
-    const fallback = block.interfaceId ?? this.usable()[0]?.id ?? state.networks[0].id
+    const fallback = piece.interfaceId ?? this.usable()[0]?.id ?? state.networks[0].id
     const shares = creditPiece(received, length, fallback)
-    state.bytesDownloaded += length - block.bytesDownloaded
-    for (const [id, bytes] of Object.entries(block.bytesByInterface)) {
+    state.bytesDownloaded += length - piece.bytesDownloaded
+    for (const [id, bytes] of Object.entries(piece.bytesByInterface)) {
       const network = state.networks.find((entry) => entry.id === id)
       if (network) network.bytesDownloaded -= bytes
     }
@@ -358,10 +385,11 @@ export class TorrentTransfer implements Transfer {
       const network = state.networks.find((entry) => entry.id === id)
       if (network) network.bytesDownloaded += bytes
     }
-    block.bytesByInterface = shares
-    block.bytesDownloaded = length
-    block.interfaceId = Object.entries(shares).sort((a, b) => b[1] - a[1])[0][0]
-    block.status = 'completed'
+    piece.bytesByInterface = shares
+    piece.bytesDownloaded = length
+    piece.provisionalBytes = 0
+    piece.interfaceId = Object.entries(shares).sort((a, b) => b[1] - a[1])[0][0]
+    piece.status = 'completed'
     this.host.scheduleUpdate()
   }
 
@@ -372,16 +400,17 @@ export class TorrentTransfer implements Transfer {
    */
   private followEngine(torrent: Torrent): void {
     let changed = false
-    for (const block of this.runtime.blocks) {
-      if (block.status === 'completed' && !torrent.bitfield.get(block.index)) {
-        block.status = 'pending'
-        block.bytesDownloaded = 0
-        block.bytesByInterface = {}
+    for (const piece of this.runtime.pieces) {
+      if (piece.status === 'completed' && !torrent.bitfield.get(piece.index)) {
+        piece.status = 'pending'
+        piece.bytesDownloaded = 0
+        piece.provisionalBytes = 0
+        piece.bytesByInterface = {}
         changed = true
       }
     }
     if (changed) {
-      recomputeAggregates(this.runtime)
+      recomputeAggregates(this.runtime.state, this.runtime.pieces)
       this.host.scheduleUpdate()
     }
   }

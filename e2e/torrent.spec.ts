@@ -25,10 +25,10 @@ test.describe('torrent downloads', () => {
     const torrent = await swarm.seed([named(data, 'movie.mkv')], { pieceLength: PIECE })
 
     await plexo.start(await torrentFileOnDisk(torrent), sha256(data))
-    const done = await plexo.waitForStatus('completed', 30_000)
+    const done = await plexo.waitForTorrentStatus('completed', 30_000)
     expect(done.kind).toBe('torrent')
     expect(done.fileName).toBe('movie.mkv')
-    expect(done.totalBlocks).toBe((2 * MB) / PIECE)
+    expect(done.totalPieces).toBe((2 * MB) / PIECE)
   })
 
   test('a torrent of several files, published as its folder', async ({ plexo }) => {
@@ -43,7 +43,7 @@ test.describe('torrent downloads', () => {
       files.map((data) => ({ path: (data as { name?: string }).name!, data }))
     )
     await plexo.start(await torrentFileOnDisk(torrent), expected)
-    const done = await plexo.waitForStatus('completed', 30_000)
+    const done = await plexo.waitForTorrentStatus('completed', 30_000)
     expect(done.fileName).toBe('Album')
   })
 
@@ -61,12 +61,12 @@ test.describe('torrent downloads', () => {
     const id = await plexo.start(await torrentFileOnDisk(torrent), sha256(data))
     await plexo.waitUntil((state) => state.bytesDownloaded >= 2 * MB, 30_000)
     await plexo.relaunch()
-    const paused = await plexo.waitForStatus('paused')
+    const paused = await plexo.waitForTorrentStatus('paused')
     expect(paused.bytesDownloaded).toBeGreaterThanOrEqual(2 * MB)
 
     const sentBefore = swarm.uploaded()
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed', 60_000)
+    await plexo.waitForTorrentStatus('completed', 60_000)
     // What was missing, plus at most a few pieces each peer had half-sent when it stopped.
     expect(swarm.uploaded() - sentBefore).toBeLessThanOrEqual(
       data.length - paused.bytesDownloaded + 6 * PIECE
@@ -92,10 +92,10 @@ test.describe('choosing files', () => {
     await plexo.start(await torrentFileOnDisk(torrent), shaOf([files[0], files[2]]), {
       selectedFiles: [0, 2]
     })
-    const done = await plexo.waitForStatus('completed', 30_000)
+    const done = await plexo.waitForTorrentStatus('completed', 30_000)
     expect(done.skippedBytes).toBeGreaterThan(0)
     expect(done.bytesDownloaded).toBe(done.totalBytes - done.skippedBytes!)
-    expect(done.blocks?.filter((block) => block.status === 'skipped').length).toBeGreaterThan(0)
+    expect(done.pieces.filter((piece) => piece.status === 'skipped').length).toBeGreaterThan(0)
   })
 
   test('the choice is kept through a quit, a relaunch and a resume', async ({ plexo }) => {
@@ -117,12 +117,12 @@ test.describe('choosing files', () => {
       selectedFiles: [1, 3]
     })
     await plexo.waitUntil((state) => state.bytesDownloaded >= 1 * MB, 30_000)
-    const before = await plexo.current()
+    const before = await plexo.currentTorrent()
     await plexo.relaunch()
-    const paused = await plexo.waitForStatus('paused')
+    const paused = await plexo.waitForTorrentStatus('paused')
     expect(paused.skippedBytes).toBe(before!.skippedBytes)
     await plexo.api.resumeDownload(id)
-    await plexo.waitForStatus('completed', 60_000)
+    await plexo.waitForTorrentStatus('completed', 60_000)
   })
 })
 
@@ -144,12 +144,14 @@ test.describe('torrents over two networks', () => {
     const torrent = await seedThree(data, 'both.bin', 1 * MB)
 
     await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['a', 'b'] })
-    const done = await plexo.waitForStatus('completed', 30_000)
+    const done = await plexo.waitForTorrentStatus('completed', 30_000)
     for (const id of ['a', 'b']) {
       const network = done.networks.find((entry) => entry.id === id)!
       expect(network.bytesDownloaded, `network ${id} delivered pieces`).toBeGreaterThan(0)
     }
-    const seen = new Set(plexo.sessions.flat().flatMap((state) => state.chunks))
+    const seen = new Set(
+      plexo.sessions.flat().flatMap((state) => (state.kind === 'torrent' ? state.peers : []))
+    )
     expect(new Set([...seen].map((peer) => peer.interfaceId))).toEqual(new Set(['a', 'b']))
   })
 
@@ -165,8 +167,10 @@ test.describe('torrents over two networks', () => {
       30_000
     )
     await plexo.api.setDownloadNetwork(id, 'b', false)
-    await plexo.waitUntil((state) => !state.chunks.some((peer) => peer.interfaceId === 'b'))
-    const done = await plexo.waitForStatus('completed', 60_000)
+    await plexo.waitUntil(
+      (state) => state.kind === 'torrent' && !state.peers.some((peer) => peer.interfaceId === 'b')
+    )
+    const done = await plexo.waitForTorrentStatus('completed', 60_000)
     expect(done.networks.find((network) => network.id === 'b')?.enabled).toBe(false)
   })
 })
@@ -194,7 +198,7 @@ test.describe('uploading', () => {
     })
 
     await plexo.start(await torrentFileOnDisk(torrent), sha256(data), { networks: ['b'] })
-    const done = await plexo.waitForStatus('completed', 60_000)
+    const done = await plexo.waitForTorrentStatus('completed', 60_000)
     expect(connected, 'Plexo connected to the other client').toBe(true)
     expect(fromPlexo, 'what the other client received from Plexo').toBeGreaterThan(0)
     // What Plexo shows it sent: at least what arrived (a little may still be in flight at the end).

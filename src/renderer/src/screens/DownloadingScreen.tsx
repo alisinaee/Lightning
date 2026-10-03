@@ -298,7 +298,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 <>
                   <Dot />
                   <span>
-                    {download.chunks.length} {download.chunks.length === 1 ? 'peer' : 'peers'}
+                    {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
                   </span>
                   <Dot />
                   <span>
@@ -338,7 +338,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
       {/* Block grid + network table — share remaining flexible space, scroll internally */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-3 pb-2">
         <BlockGrid
-          blocks={download.blocks}
+          blocks={download.kind === 'http' ? download.blocks : download.pieces}
           groups={groups}
           visuals={visuals}
           knownSize={knownSize}
@@ -360,7 +360,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             >
               <div role="columnheader" aria-label="Status" />
               <div role="columnheader">Network</div>
-              <div role="columnheader">Progress</div>
+              <div role="columnheader">{isTorrent ? 'Verified' : 'Progress'}</div>
               <div role="columnheader" className="text-right">
                 Share
               </div>
@@ -368,7 +368,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 Speed
               </div>
               <div role="columnheader" className="pr-5 text-right">
-                Downloaded
+                {isTorrent ? 'Transferred' : 'Downloaded'}
               </div>
             </div>
             {rows.map((row, index) => (
@@ -382,8 +382,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                     : 0
                 }
                 totalBytes={wantedBytes(download)}
-                blocks={download.blocks}
-                peers={isTorrent}
+                blocks={download.kind === 'http' ? download.blocks : undefined}
                 onSwitch={(enabled) =>
                   void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
                 }

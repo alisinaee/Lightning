@@ -152,7 +152,7 @@ export function IdleScreen(): React.JSX.Element {
   }, [url])
 
   const ready = probe.status === 'ready' ? probe.result : null
-  const torrent = ready?.torrent ?? null
+  const torrent = ready?.kind === 'torrent' ? ready.torrent : null
   const chosenFiles = torrent
     ? torrent.files.flatMap((_, index) => (skippedFiles.includes(index) ? [] : [index]))
     : []
@@ -265,7 +265,7 @@ export function IdleScreen(): React.JSX.Element {
     setStarting(true)
     setStartError(null)
     try {
-      await window.plexo.startDownload({
+      const common = {
         url: probe.result.finalUrl,
         destinationDir,
         suggestedFileName: fileNameOverride?.trim() || probe.result.suggestedFileName,
@@ -273,11 +273,22 @@ export function IdleScreen(): React.JSX.Element {
         supportsRanges: multiChunkAllowed,
         interfaceIds: selectedInterfaceIds,
         etag: probe.result.etag,
-        lastModified: probe.result.lastModified,
-        streamsPerNetwork: streamsChoice === 'auto' || torrent ? undefined : streamsChoice,
-        infoHash: torrent?.infoHash,
-        selectedFiles: torrent && skippedFiles.length > 0 ? chosenFiles : undefined
-      })
+        lastModified: probe.result.lastModified
+      }
+      await window.plexo.startDownload(
+        probe.result.kind === 'torrent'
+          ? {
+              ...common,
+              kind: 'torrent',
+              infoHash: probe.result.torrent.infoHash,
+              selectedFiles: skippedFiles.length > 0 ? chosenFiles : undefined
+            }
+          : {
+              ...common,
+              kind: 'http',
+              streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
+            }
+      )
     } catch (error) {
       setStartError(describeError(error))
     } finally {
