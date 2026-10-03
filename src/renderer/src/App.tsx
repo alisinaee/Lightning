@@ -2,6 +2,7 @@ import type { DownloadState, FinishedDownload } from '@shared/types'
 import { useEffect } from 'react'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
+import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { UpdateDialog } from './components/UpdateDialog'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -67,6 +68,7 @@ function App(): React.JSX.Element {
         <div className="min-h-0 flex-1">
           {shown && !cancelled ? renderDownload(shown) : <DownloadsScreen />}
         </div>
+        <StatusBar />
         <NewDownloadDialog />
         <UpdateDialog />
         <NetworkBindingDialog />

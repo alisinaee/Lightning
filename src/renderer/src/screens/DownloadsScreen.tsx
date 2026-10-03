@@ -5,9 +5,6 @@ import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
-import { ScreenFooter } from '../components/ScreenFooter'
-import { ThemeToggle } from '../components/ThemeToggle'
-import { UpdateIndicator } from '../components/UpdateIndicator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +17,6 @@ import {
 } from '../components/ui/alert-dialog'
 import { Button, buttonVariants } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
-import { Switch } from '../components/ui/switch'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import {
@@ -233,7 +229,6 @@ export function DownloadsScreen(): React.JSX.Element {
         })}
       </div>
 
-      <StatusBar downloads={downloads} />
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />
       <LimitsDialog open={limitsOpen} onOpenChange={setLimitsOpen} />
 
@@ -320,60 +315,6 @@ function EmptyState(): React.JSX.Element {
         </>
       )}
     </div>
-  )
-}
-
-const FREE_SPACE_POLL_MS = 30_000
-
-/** Along the bottom: how fast everything is going and under what limit, the queue, the slow
- * mode switch, and the room left where downloads are saved. */
-function StatusBar({ downloads }: { downloads: DownloadState[] }): React.JSX.Element {
-  const speedLimit = useAppStore((store) => store.speedLimit)
-  const slowMode = useAppStore((store) => store.slowMode)
-  const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
-  const setSlowMode = useAppStore((store) => store.setSlowMode)
-  const destinationDir = useAppStore((store) => store.destinationDir)
-  const [free, setFree] = useState<number | null>(null)
-
-  useEffect(() => {
-    let disposed = false
-    const load = (): void => {
-      void window.plexo
-        .freeSpace(destinationDir)
-        .then((bytes) => !disposed && setFree(bytes))
-        .catch(() => {})
-    }
-    load()
-    const interval = setInterval(load, FREE_SPACE_POLL_MS)
-    return () => {
-      disposed = true
-      clearInterval(interval)
-    }
-  }, [destinationDir])
-
-  const speed = downloads.reduce(
-    (sum, download) => sum + (download.status === 'downloading' ? download.speedBytesPerSec : 0),
-    0
-  )
-  const limit = slowMode ? slowModeSpeed : speedLimit
-  const waiting = downloads.filter((download) => download.status === 'queued').length
-
-  return (
-    <ScreenFooter className="gap-4 font-mono text-[11.5px] text-muted-foreground">
-      <span className="tabular-nums">
-        ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
-        {limit !== undefined && ` · limit ${formatSpeed(limit)}`}
-      </span>
-      <span>{waiting === 0 ? 'Queue is empty' : `${waiting} waiting in the queue`}</span>
-      <div className="flex-1" />
-      <label className="flex items-center gap-2">
-        Slow mode
-        <Switch checked={slowMode} onCheckedChange={setSlowMode} />
-      </label>
-      {free !== null && <span>{formatBytes(free)} free</span>}
-      <UpdateIndicator />
-      <ThemeToggle />
-    </ScreenFooter>
   )
 }
 
