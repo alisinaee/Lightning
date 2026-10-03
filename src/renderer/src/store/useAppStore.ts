@@ -24,6 +24,8 @@ const PEAK_SAMPLES = 5
 let lastSpeedSampleAt = 0
 // The best PEAK_SAMPLES-sample average so far, for the current download.
 let sustainedPeak = 0
+// The best combined speed it has shown: its peak if it completes before it has held one.
+let bestSeen = 0
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -49,9 +51,10 @@ interface AppStore {
   /** Same rolling window as speedHistory, split by physical network — for the stacked
    * per-network throughput chart, keyed by interface id. */
   speedHistoryByInterface: Record<string, number[]>
-  /** Highest combined speed seen so far this download — a rolling history window would lose it
-   * once it ages out, so this is tracked as a running max instead. */
-  peakSpeedBytesPerSec: number
+  /** The best combined speed held for PEAK_SAMPLES seconds this download, so it only ever rises;
+   * null until it has run that long. A download done sooner gets the best speed it showed. Kept
+   * as a running max: the history window would lose it once it ages out. */
+  peakSpeedBytesPerSec: number | null
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
   draftUrl: string
@@ -98,7 +101,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   currentDownload: null,
   speedHistory: [],
   speedHistoryByInterface: {},
-  peakSpeedBytesPerSec: 0,
+  peakSpeedBytesPerSec: null,
 
   draftUrl: '',
   destinationDir: initial.destinationDir ?? initial.downloadsDir,
@@ -169,10 +172,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     let speedHistory = isNewDownload ? [] : get().speedHistory
     let speedHistoryByInterface = isNewDownload ? {} : get().speedHistoryByInterface
-    let peakSpeedBytesPerSec = isNewDownload ? 0 : get().peakSpeedBytesPerSec
+    let peakSpeedBytesPerSec = isNewDownload ? null : get().peakSpeedBytesPerSec
     if (isNewDownload) {
       lastSpeedSampleAt = 0
       sustainedPeak = 0
+      bestSeen = 0
     }
 
     if (download.status === 'downloading') {
@@ -197,11 +201,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
         speedHistoryByInterface = nextByInterface
       }
-      peakSpeedBytesPerSec =
-        speedHistory.length >= PEAK_SAMPLES
-          ? sustainedPeak
-          : // Too short to have held a speed yet: the best seen, until it has.
-            Math.max(peakSpeedBytesPerSec, download.speedBytesPerSec)
+      bestSeen = Math.max(bestSeen, download.speedBytesPerSec)
+      if (speedHistory.length >= PEAK_SAMPLES) peakSpeedBytesPerSec = sustainedPeak
+    } else if (download.status === 'completed' && peakSpeedBytesPerSec === null && bestSeen > 0) {
+      // Done before it held a speed for long: the best it showed.
+      peakSpeedBytesPerSec = bestSeen
     }
 
     set({ currentDownload: download, speedHistory, speedHistoryByInterface, peakSpeedBytesPerSec })
@@ -212,7 +216,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       currentDownload: null,
       speedHistory: [],
       speedHistoryByInterface: {},
-      peakSpeedBytesPerSec: 0
+      peakSpeedBytesPerSec: null
     }),
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),

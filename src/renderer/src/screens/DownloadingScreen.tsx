@@ -233,7 +233,11 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
               <div className="flex items-center gap-2 font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground">
                 <InlineStat label="AVG" value={formatSpeed(avgSpeedBytesPerSec)} />
                 <Dot />
-                <InlineStat label="PEAK" value={formatSpeed(peakSpeedBytesPerSec)} />
+                {/* A dash until a speed has been held long enough to call it the peak. */}
+                <InlineStat
+                  label="PEAK"
+                  value={peakSpeedBytesPerSec === null ? '—' : formatSpeed(peakSpeedBytesPerSec)}
+                />
               </div>
               {isPaused || waiting
                 ? (download.error || waiting) && (

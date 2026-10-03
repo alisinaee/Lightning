@@ -105,7 +105,10 @@ export function CompleteScreen({
         {[
           { label: 'Size', value: formatBytes(finalSize) },
           { label: 'Time', value: formatDuration(elapsedSeconds) },
-          { label: 'Peak', value: formatSpeed(peakSpeedBytesPerSec) },
+          {
+            label: 'Peak',
+            value: peakSpeedBytesPerSec === null ? '—' : formatSpeed(peakSpeedBytesPerSec)
+          },
           { label: 'Networks', value: String(groups.length) },
           // The most it ran at once: streams that didn't make it faster were closed along the way.
           {
