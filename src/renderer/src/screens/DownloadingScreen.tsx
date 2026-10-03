@@ -342,8 +342,9 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
         />
       </div>
 
-      {/* Network table: only its rows scroll, under their column headers. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-2">
+      {/* Network table: only its rows scroll, under their column headers. Edge to edge: its rows
+          pad themselves. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
         <div className="mt-3">
           <div
             role="table"
