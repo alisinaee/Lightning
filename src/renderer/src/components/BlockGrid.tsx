@@ -1,5 +1,6 @@
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
 import { cn } from 'cn'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { formatBytes, type NetworkGroup } from '../utils/format'
@@ -287,13 +288,17 @@ export function BlockGrid({
             <button
               type="button"
               onClick={goToActive}
-              aria-label="Show the chunks in progress"
+              aria-label={`Show the ${unit.toLowerCase()}s in progress`}
               className={cn(
-                'absolute right-4 z-10 cursor-pointer rounded-full border-[0.5px] border-[var(--border-strong)] bg-card px-2 py-[3px] font-mono text-[10px] leading-none font-medium text-[var(--text-secondary)] shadow-sm hover:text-foreground',
+                'absolute right-4 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
                 nearestActive < firstInView ? '-top-1' : '-bottom-1'
               )}
             >
-              {nearestActive < firstInView ? '↑' : '↓'} Active
+              {nearestActive < firstInView ? (
+                <ArrowUp aria-hidden className="size-3.5" />
+              ) : (
+                <ArrowDown aria-hidden className="size-3.5" />
+              )}
             </button>
           )}
           <div
