@@ -1,5 +1,5 @@
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { formatBytes, type NetworkGroup } from '../utils/format'
 
@@ -167,6 +167,29 @@ export function BlockGrid({
   const [gridWidth, setGridWidth] = useState(0)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const pointerInside = useRef(false)
+
+  const fittedCols = Math.floor((gridWidth + CELL_GAP_PX) / (TARGET_CELL_PX + CELL_GAP_PX))
+  // Squares keep their size and the grid wraps; how many rows that takes is the file's business,
+  // not the window's. Only the width decides the wrap, exactly like a paragraph reflowing.
+  const cols = Math.min(blocks?.length ?? 0, Math.max(MIN_COLS, fittedCols))
+
+  // A grid taller than its viewport follows the download: the first chunk in flight (or, paused,
+  // the first not started) stays in view, a row of what's done above it. Not while the pointer is
+  // over the grid, so it never scrolls from under someone reading or scrolling it.
+  const inFlight = blocks?.findIndex((block) => block.status === 'downloading') ?? -1
+  const next = inFlight >= 0 ? inFlight : (blocks?.findIndex((b) => b.status === 'pending') ?? -1)
+  const followTop =
+    next >= 0 && cols > 0
+      ? Math.max(0, Math.floor(next / cols) - 1) * (CELL_HEIGHT_PX + CELL_GAP_PX)
+      : null
+  const follow = useCallback(() => {
+    if (followTop === null || pointerInside.current) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    scrollerRef.current?.scrollTo({ top: followTop, behavior: reduce ? 'auto' : 'smooth' })
+  }, [followTop])
+  useEffect(follow, [follow])
 
   // A callback ref rather than useEffect: the measured node only exists on the grid branch
   // below, so this has to re-observe whenever that node mounts or unmounts.
@@ -188,10 +211,6 @@ export function BlockGrid({
       }
     })
 
-    const fittedCols = Math.floor((gridWidth + CELL_GAP_PX) / (TARGET_CELL_PX + CELL_GAP_PX))
-    // Squares keep their size and the grid wraps; how many rows that takes is the file's business,
-    // not the window's. Only the width decides the wrap, exactly like a paragraph reflowing.
-    const cols = Math.min(blocks.length, Math.max(MIN_COLS, fittedCols))
     const orderedInterfaceIds = groups.map((g) => g.id)
     const cells = gridWidth > 0 ? describeBlocks(blocks, orderedInterfaceIds) : []
     const chunkBytes =
@@ -251,7 +270,13 @@ export function BlockGrid({
         </div>
 
         <div
-          onMouseLeave={() => setHoveredIndex(null)}
+          ref={scrollerRef}
+          onMouseEnter={() => (pointerInside.current = true)}
+          onMouseLeave={() => {
+            pointerInside.current = false
+            setHoveredIndex(null)
+            follow()
+          }}
           style={{
             maxHeight: gridMaxHeight,
             // gridMaxHeight is measured including the inset padding, so say so rather than
