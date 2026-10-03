@@ -1,6 +1,6 @@
 import type { DownloadState } from '@shared/types'
 import { Folder } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
 import { CombineDiagram } from '../components/CombineDiagram'
@@ -96,7 +96,13 @@ function waitingFor(download: DownloadState): string | null {
     : 'Waiting for a network. Reconnect one or switch one on.'
 }
 
-export function DownloadingScreen({ download }: { download: DownloadState }): React.JSX.Element {
+// Memoized: App re-renders on every download's progress, and this one's grid and tables are
+// the heaviest thing on screen. Its download keeps its object until its own update arrives.
+export const DownloadingScreen = memo(function DownloadingScreen({
+  download
+}: {
+  download: DownloadState
+}): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
   const speedHistory = download.speedHistory ?? {}
   const peakSpeedBytesPerSec = download.peakSpeedBytesPerSec
@@ -484,4 +490,4 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
       </div>
     </div>
   )
-}
+})

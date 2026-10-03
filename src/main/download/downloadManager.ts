@@ -30,7 +30,7 @@ import {
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
-import { addToHistory, listHistory, removeFromHistory } from './history'
+import { addToHistory, findInHistory, removeFromHistory } from './history'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { HttpTransfer, splittable } from './httpTransfer'
@@ -1207,7 +1207,7 @@ export class DownloadManager {
       return
     }
     // A finished one, from history.
-    const entry = trashFile ? (await listHistory()).find((other) => other.id === id) : undefined
+    const entry = trashFile ? await findInHistory(id) : undefined
     if (entry && !entry.missing) await trashDownload(entry)
     await removeFromHistory([id])
     this.historyChanged()
@@ -1235,12 +1235,27 @@ export class DownloadManager {
     runtime.transfer.reset()
     const { signal } = runtime.stop
     this.reconcile(runtime)
+    // One watcher per stream for its whole life. Racing every stream each tick would pile a
+    // handler per tick onto each one still running, held until it ends.
+    const watched = new WeakSet<Promise<void>>()
+    let wake: { resolve: () => void; reject: (error: unknown) => void } | null = null
 
     while (
       runtime.state.status === 'downloading' &&
       unitsOf(runtime).some((unit) => !isDone(unit))
     ) {
-      await Promise.race([delay(TICK_MS, signal), ...runtime.transfer.running()])
+      await new Promise<void>((resolve, reject) => {
+        wake = { resolve, reject }
+        for (const worker of runtime.transfer.running()) {
+          if (watched.has(worker)) continue
+          watched.add(worker)
+          worker.then(
+            () => wake?.resolve(),
+            (error) => wake?.reject(error)
+          )
+        }
+        void delay(TICK_MS, signal).then(resolve)
+      })
       if ((runtime.state.status as DownloadStatus) !== 'downloading') break
       const now = Date.now()
       const speed = runtime.state.speedBytesPerSec

@@ -19,7 +19,13 @@ export function useDownloadEvents(): void {
     // Subscribed before the snapshots are asked for, so nothing sent in between is missed; each
     // update carries a count, so whichever arrives late can't undo the other.
     const unsubscribe = window.plexo.onDownloadUpdated(receiveDownloadUpdate)
-    const unsubscribeHistory = window.plexo.onHistoryChanged(loadHistory)
+    // A bulk removal changes history once per download: list it once they've settled, rather
+    // than re-checking every entry's file after each one. The rows already went from the store.
+    let reload: ReturnType<typeof setTimeout> | undefined
+    const unsubscribeHistory = window.plexo.onHistoryChanged(() => {
+      clearTimeout(reload)
+      reload = setTimeout(loadHistory, 150)
+    })
 
     void window.plexo
       .listDownloads()
@@ -31,6 +37,7 @@ export function useDownloadEvents(): void {
 
     return () => {
       disposed = true
+      clearTimeout(reload)
       unsubscribe()
       unsubscribeHistory()
     }

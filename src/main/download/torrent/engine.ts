@@ -30,9 +30,9 @@ export function loadClientNamer(): Promise<(peerId: string) => string | null> {
 /**
  * webtorrent's own file store, writing the torrent's top entry (its folder, or its one file) under
  * `name` rather than the torrent's: a download claims a free name, "Name (1)" when the torrent's
- * is taken.
+ * is taken. `onWritten` hears each file a piece landed in, once it's written.
  */
-export async function storeNamed(name: string): Promise<Store> {
+export async function storeNamed(name: string, onWritten: (path: string) => void): Promise<Store> {
   const { default: FsChunkStore } = await import('fs-chunk-store')
   return class extends FsChunkStore {
     constructor(chunkLength: number, options: StoreOptions) {
@@ -43,6 +43,13 @@ export async function storeNamed(name: string): Promise<Store> {
           length: file.length,
           offset: file.offset
         }))
+      })
+    }
+
+    put(index: number, buf: Uint8Array, cb?: (error?: Error | null) => void): void {
+      super.put(index, buf, (error) => {
+        if (!error) for (const target of this.chunkMap[index] ?? []) onWritten(target.file.path)
+        cb?.(error)
       })
     }
   }

@@ -95,6 +95,9 @@ declare module 'fs-chunk-store' {
   /** webtorrent's default store: a torrent's files on disk, at `path` + each file's path. */
   export default class FsChunkStore {
     constructor(chunkLength: number, options: StoreOptions)
+    /** By piece: the stretches of the torrent's files it covers. */
+    chunkMap: { file: { path: string } }[][]
+    put(index: number, buf: Uint8Array, cb?: (error?: Error | null) => void): void
   }
 }
 

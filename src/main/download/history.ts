@@ -56,6 +56,19 @@ export async function listHistory(): Promise<FinishedDownload[]> {
   )
 }
 
+/** One finished download, its file checked alone rather than every entry's. */
+export async function findInHistory(id: string): Promise<FinishedDownload | undefined> {
+  const entry = entriesOf(await readJson(historyPath()).catch(() => undefined)).find(
+    (other) => other.id === id
+  )
+  if (!entry) return undefined
+  const missing = !(await stat(entry.destinationPath).then(
+    () => true,
+    () => false
+  ))
+  return { ...entry, missing }
+}
+
 export function addToHistory(entry: FinishedDownload): Promise<void> {
   const { missing: omitted, ...kept } = entry
   void omitted

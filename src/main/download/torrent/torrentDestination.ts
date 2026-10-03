@@ -73,16 +73,32 @@ export class TorrentDestination extends DownloadFile {
     return this.totalBytes
   }
 
+  /** The files written to since the last sync (the store adds them): only they need one. A
+   * torrent of thousands of files has a few in progress at a time. */
+  readonly written = new Set<string>()
+
   async sync(): Promise<void> {
     if (!(await stat(this.path)).isDirectory()) return super.sync()
-    for (const entry of await readdir(this.path, { recursive: true, withFileTypes: true })) {
-      if (!entry.isFile()) continue
-      const handle = await open(join(entry.parentPath, entry.name), 'r+')
-      try {
-        await handle.sync()
-      } finally {
-        await handle.close()
+    const paths = [...this.written]
+    this.written.clear()
+    try {
+      for (const path of paths) {
+        const handle = await open(path, 'r+').catch((error: NodeJS.ErrnoException) => {
+          // A file not chosen, removed before publishing.
+          if (error.code === 'ENOENT') return null
+          throw error
+        })
+        if (!handle) continue
+        try {
+          await handle.sync()
+        } finally {
+          await handle.close()
+        }
       }
+    } catch (error) {
+      // Synced at the next checkpoint instead.
+      for (const path of paths) this.written.add(path)
+      throw error
     }
   }
 

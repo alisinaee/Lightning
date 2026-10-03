@@ -12,6 +12,7 @@ import type {
 import type { NetworkMonitor } from '../network/interfaces'
 import type { Limits } from '../network/limits'
 import type { DownloadFile } from './downloadFile'
+import type { TorrentDestination } from './torrent/torrentDestination'
 
 /**
  * How a download's bytes get fetched: HTTP streams today (see httpTransfer.ts). The manager runs
@@ -53,6 +54,7 @@ export interface HttpTransferTarget extends TransferTargetBase {
 }
 
 export interface TorrentTransferTarget extends TransferTargetBase {
+  file: TorrentDestination
   state: TorrentDownloadState
   requestPayload: StartTorrentDownloadRequest
   pieces: TorrentPieceState[]

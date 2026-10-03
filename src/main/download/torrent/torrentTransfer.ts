@@ -154,7 +154,9 @@ export class TorrentTransfer implements Transfer {
     const stop = this.runtime.stop.signal
     try {
       this.nameClient ??= await loadClientNamer()
-      this.store ??= await storeNamed(basename(this.destination))
+      this.store ??= await storeNamed(basename(this.destination), (path) =>
+        this.runtime.file.written.add(path)
+      )
       const client = await createClient({
         connect: (options) => this.connect(options),
         maxConns: PEERS_PER_NETWORK * Math.max(1, this.usable().length)

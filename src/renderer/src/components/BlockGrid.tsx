@@ -31,6 +31,8 @@ const MIN_COLS = 8
 const MAX_VISIBLE_ROWS = 4
 // Room for the hover outline (1.5px, offset 1) so it isn't clipped against the scroll edges.
 const GRID_INSET_PX = 3
+// Rows drawn beyond the visible ones on each side, so a scroll doesn't show blank rows first.
+const BUFFER_ROWS = 2
 
 // A cell whose bytes can't be traced to a network must not borrow a network's color: the brand
 // amber IS the USB network's color (--color-accent and --color-usb are the same hex), so the old
@@ -70,7 +72,11 @@ interface DisplayCell {
  * retry or a pause/resume handed from one network to another would otherwise be repainted in the
  * finishing network's color. `orderedInterfaceIds` fixes the order contributors are listed in, so
  * a square's readout doesn't reshuffle between progress pushes. */
-function describeBlocks(blocks: DownloadUnitState[], orderedInterfaceIds: string[]): DisplayCell[] {
+function describeBlocks(
+  blocks: DownloadUnitState[],
+  orderedInterfaceIds: string[],
+  firstIndex = 0
+): DisplayCell[] {
   return blocks.map((block, index) => {
     const totalBytes = block.rangeEnd !== null ? block.rangeEnd - block.rangeStart + 1 : 0
 
@@ -115,7 +121,7 @@ function describeBlocks(blocks: DownloadUnitState[], orderedInterfaceIds: string
       totalBytes,
       bytesDownloaded: block.bytesDownloaded,
       provisionalBytes: block.kind === 'torrent' ? block.provisionalBytes : 0,
-      chunkNumber: index + 1
+      chunkNumber: firstIndex + index + 1
     }
   })
 }
@@ -201,11 +207,21 @@ export function BlockGrid({
     })
 
     const orderedInterfaceIds = groups.map((g) => g.id)
-    const cells = gridWidth > 0 ? describeBlocks(blocks, orderedInterfaceIds) : []
     const chunkBytes =
       blocks[0].rangeEnd !== null ? blocks[0].rangeEnd - blocks[0].rangeStart + 1 : 0
     const rows = Math.ceil(blocks.length / cols)
     const visibleRows = Math.min(rows, MAX_VISIBLE_ROWS)
+    // Only the rows in view (and a few either side) are drawn: a big torrent has hundreds of
+    // thousands of pieces. Padding above and below stands in for the rest, so the scroll height
+    // is the whole file's.
+    const rowStride = CELL_HEIGHT_PX + CELL_GAP_PX
+    const startRow = Math.max(0, Math.floor(scrollTop / rowStride) - BUFFER_ROWS)
+    const endRow = Math.min(rows, Math.floor(scrollTop / rowStride) + visibleRows + BUFFER_ROWS)
+    const firstIndex = startRow * cols
+    const cells =
+      gridWidth > 0
+        ? describeBlocks(blocks.slice(firstIndex, endRow * cols), orderedInterfaceIds, firstIndex)
+        : []
     // Cut the viewport exactly on a row boundary, so a scrollable grid never shows a half-row
     // that could be mistaken for a shorter square.
     const gridMaxHeight =
@@ -214,8 +230,7 @@ export function BlockGrid({
     // The grid stays where it's scrolled: following the work moved it from under the reader, and
     // a torrent's work is all over the file. When none of what's in flight is in view, a pill
     // points the way to the nearest of it, and goes there.
-    const rowHeight = CELL_HEIGHT_PX + CELL_GAP_PX
-    const firstInView = Math.round(scrollTop / rowHeight)
+    const firstInView = Math.round(scrollTop / rowStride)
     const lastInView = firstInView + visibleRows - 1
     const activeRows = blocks.flatMap((block, index) =>
       block.status === 'downloading' ? [Math.floor(index / cols)] : []
@@ -233,7 +248,7 @@ export function BlockGrid({
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       scrollerRef.current?.scrollTo({
         // A row of what's before it above, for context.
-        top: Math.max(0, nearestActive - 1) * rowHeight,
+        top: Math.max(0, nearestActive - 1) * rowStride,
         behavior: reduce ? 'auto' : 'smooth'
       })
     }
@@ -241,7 +256,10 @@ export function BlockGrid({
     // Hovering reads out into the legend line rather than a native `title` tooltip: the grid
     // re-renders on every progress push, which resets Chromium's tooltip timer so it never
     // appears on an active block — and a tooltip advertises nothing to hover in the first place.
-    const hoveredCell = hoveredIndex !== null ? cells[hoveredIndex] : undefined
+    const hoveredCell =
+      hoveredIndex !== null && blocks[hoveredIndex]
+        ? describeBlocks([blocks[hoveredIndex]], orderedInterfaceIds, hoveredIndex)[0]
+        : undefined
     let readout: string
     if (hoveredCell) {
       const where =
@@ -333,10 +351,13 @@ export function BlockGrid({
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 gap: CELL_GAP_PX,
                 width: '100%',
-                minHeight: CELL_HEIGHT_PX
+                minHeight: CELL_HEIGHT_PX,
+                paddingTop: startRow * rowStride,
+                paddingBottom: (rows - endRow) * rowStride
               }}
             >
-              {cells.map((cell, index) => {
+              {cells.map((cell, slot) => {
+                const index = firstIndex + slot
                 const visual = cell.interfaceId
                   ? visualByInterfaceId.get(cell.interfaceId)
                   : undefined
@@ -384,12 +405,7 @@ export function BlockGrid({
                         hoveredIndex === index ? '1.5px solid var(--text-secondary)' : 'none',
                       outlineOffset: 1,
                       overflow: 'hidden',
-                      transition: 'opacity 0.3s, box-shadow 0.15s',
-                      // A multi-GB file can mean thousands of cells; skip layout/paint work for the
-                      // ones scrolled out of view (MAX_VISIBLE_ROWS caps what's visible, not what's
-                      // rendered) rather than hand-rolling a virtualized list for a fixed-size grid.
-                      contentVisibility: 'auto',
-                      containIntrinsicSize: `${TARGET_CELL_PX}px ${CELL_HEIGHT_PX}px`
+                      transition: 'opacity 0.3s, box-shadow 0.15s'
                     }}
                   >
                     {/* One square, one color: the network that actually delivered most of this

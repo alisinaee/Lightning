@@ -1,7 +1,7 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { ChevronRight, Pause, Play, Plus, RotateCw, X, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
-import { useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
@@ -21,7 +21,7 @@ import {
 import { Button, buttonVariants } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
-import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { useNetworkVisuals, type ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useAppStore, type DownloadFilter } from '../store/useAppStore'
 import {
   describeError,
@@ -129,15 +129,32 @@ export function DownloadsScreen(): React.JSX.Element {
   // Only what's still listed counts: one that finished or went is no longer selected.
   const chosen = items.filter((item) => selected.has(item.id))
 
-  const toggle = (ids: string[], on: boolean): void =>
-    setSelected((previous) => {
-      const next = new Set(previous)
-      for (const id of ids) {
-        if (on) next.add(id)
-        else next.delete(id)
-      }
-      return next
-    })
+  const toggle = useCallback(
+    (ids: string[], on: boolean): void =>
+      setSelected((previous) => {
+        const next = new Set(previous)
+        for (const id of ids) {
+          if (on) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      }),
+    []
+  )
+  // Stable, with the colors resolved once here, so a finished row skips every progress push.
+  const networkVisual = useNetworkVisuals()
+  const selectRow = useCallback((id: string, on: boolean) => toggle([id], on), [toggle])
+  const openRow = useCallback((id: string) => setView({ name: 'download', id }), [setView])
+  const fixRow = useCallback((item: Item) => {
+    if (!isFinished(item)) setFixing(item)
+  }, [])
+  const againRow = useCallback(
+    (item: Item) => {
+      removeDownload(item.id)
+      openNewDownload(item.url)
+    },
+    [removeDownload, openNewDownload]
+  )
 
   const pausable = chosen.filter(
     (item): item is DownloadState =>
@@ -417,13 +434,13 @@ export function DownloadsScreen(): React.JSX.Element {
                   now={now}
                   selected={selected.has(item.id)}
                   selecting={chosen.length > 0}
-                  onSelect={(on) => toggle([item.id], on)}
-                  onOpen={() => setView({ name: 'download', id: item.id })}
-                  onFix={() => !isFinished(item) && setFixing(item)}
-                  onAgain={() => {
-                    removeDownload(item.id)
-                    openNewDownload(item.url)
-                  }}
+                  networkVisual={
+                    isFinished(item) || item.status === 'completed' ? undefined : networkVisual
+                  }
+                  onSelect={selectRow}
+                  onOpen={openRow}
+                  onFix={fixRow}
+                  onAgain={againRow}
                 />
               ))}
             </section>
@@ -539,11 +556,12 @@ function EmptyState(): React.JSX.Element {
   )
 }
 
-function DownloadRow({
+const DownloadRow = memo(function DownloadRow({
   item,
   now,
   selected,
   selecting,
+  networkVisual,
   onSelect,
   onOpen,
   onFix,
@@ -554,12 +572,13 @@ function DownloadRow({
   selected: boolean
   /** Something is selected: every checkbox shows, not just the hovered row's. */
   selecting: boolean
-  onSelect: (on: boolean) => void
-  onOpen: () => void
-  onFix: () => void
-  onAgain: () => void
+  /** Colors its progress bar; a finished row has none. */
+  networkVisual?: ResolveNetworkVisual
+  onSelect: (id: string, on: boolean) => void
+  onOpen: (id: string) => void
+  onFix: (item: Item) => void
+  onAgain: (item: Item) => void
 }): React.JSX.Element {
-  const networkVisual = useNetworkVisuals()
   const finished = isFinished(item) || item.status === 'completed'
   const badge = isFolder(item) ? 'DIR' : fileExtensionBadge(item.fileName)
   const wanted = wantedBytes(item)
@@ -622,20 +641,20 @@ function DownloadRow({
       default:
         detail = describeError(download.error ?? 'Something went wrong')
         tone = 'text-[var(--color-danger)]'
-        if (linkExpired(download)) action = { label: 'Fix link', run: onFix }
+        if (linkExpired(download)) action = { label: 'Fix link', run: () => onFix(item) }
         else if (download.resumable !== false) {
           action = {
             label: 'Retry',
             icon: RotateCw,
             run: () => void window.plexo.resumeDownload(download.id)
           }
-        } else action = { label: 'Download again', run: onAgain }
+        } else action = { label: 'Download again', run: () => onAgain(item) }
     }
   }
 
   // The bar shows each network's share of the file in its color; a failed one shows in red.
   const segments =
-    finished || isFinished(item)
+    finished || isFinished(item) || !networkVisual
       ? []
       : item.status === 'error'
         ? [
@@ -671,11 +690,11 @@ function DownloadRow({
         )}
         aria-label={`Select ${item.fileName}`}
         checked={selected}
-        onCheckedChange={(on) => onSelect(on)}
+        onCheckedChange={(on) => onSelect(item.id, on)}
       />
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => onOpen(item.id)}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
@@ -740,11 +759,11 @@ function DownloadRow({
       <button
         type="button"
         aria-label={`Open ${item.fileName}`}
-        onClick={onOpen}
+        onClick={() => onOpen(item.id)}
         className="rounded-md p-1 text-muted-foreground transition-colors group-hover/download-row:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         <ChevronRight className="size-4" />
       </button>
     </div>
   )
-}
+})
