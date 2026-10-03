@@ -329,8 +329,8 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
         </div>
       </div>
 
-      {/* Block grid + network table — share remaining flexible space, scroll internally */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-3 pb-2">
+      {/* Block grid: pinned with the file info. It's capped in height and scrolls itself. */}
+      <div className="shrink-0 px-5 pt-3">
         <BlockGrid
           blocks={download.kind === 'http' ? download.blocks : download.pieces}
           groups={groups}
@@ -340,7 +340,10 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
           isPaused={isPaused}
           pieces={isTorrent}
         />
+      </div>
 
+      {/* Network table: only its rows scroll, under their column headers. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-2">
         <div className="mt-3">
           <div
             role="table"
@@ -350,7 +353,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
           >
             <div
               role="row"
-              className="col-span-full grid grid-cols-subgrid gap-x-3 border-b border-border pt-2.5 pb-[7px] font-mono text-[9.5px] leading-none tracking-[0.12em] text-muted-foreground uppercase"
+              className="sticky top-0 z-10 col-span-full grid grid-cols-subgrid gap-x-3 border-b border-border bg-background pt-2.5 pb-[7px] font-mono text-[9.5px] leading-none tracking-[0.12em] text-muted-foreground uppercase"
             >
               <div role="columnheader" aria-label="Status" />
               <div role="columnheader">Network</div>
