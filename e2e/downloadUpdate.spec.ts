@@ -106,6 +106,7 @@ test.describe('download updates', () => {
         totalPieces: 2,
         pieceLength: 100,
         files: { chosen: 1, total: 1 },
+        folder: false,
         skippedBytes: 0,
         bytesUploaded: 0,
         uploadSpeedBytesPerSec: 0,

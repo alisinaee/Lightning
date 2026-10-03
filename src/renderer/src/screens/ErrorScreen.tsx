@@ -1,9 +1,16 @@
 import type { DownloadState } from '@shared/types'
+import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
-import { describeError, fileExtensionBadge, formatBytes, wantedBytes } from '../utils/format'
+import {
+  describeError,
+  fileExtensionBadge,
+  formatBytes,
+  isFolder,
+  wantedBytes
+} from '../utils/format'
 
 export function ErrorScreen({
   download,
@@ -109,7 +116,11 @@ export function ErrorScreen({
           {/* File capsule */}
           <div className="flex w-full items-center gap-[11px] rounded-[9px] border-[0.5px] border-border bg-background p-[10px_12px] text-left">
             <div className="flex size-[34px] shrink-0 items-center justify-center rounded-[7px] border-[0.5px] border-[var(--border-strong)] bg-card font-mono text-[8.5px] leading-none font-semibold text-[var(--text-secondary)]">
-              {fileExtensionBadge(download.fileName)}
+              {isFolder(download) ? (
+                <Folder aria-label="Folder" className="size-[15px]" />
+              ) : (
+                fileExtensionBadge(download.fileName)
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <TruncatedText

@@ -150,7 +150,7 @@ test.describe('getting a torrent in', () => {
     await expect(files.getByRole('checkbox', { name: /clip\.mov/ })).toBeChecked({
       timeout: 15_000
     })
-    await expect(files.getByRole('checkbox', { name: 'All files' })).toHaveCount(0)
+    await expect(files.getByRole('checkbox')).toHaveCount(1)
     // Its files name it: no SAVE AS to repeat them.
     await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toBeHidden()
     await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeEnabled()
@@ -173,7 +173,8 @@ test.describe('getting a torrent in', () => {
       .getByRole('textbox', { name: 'LINK' })
       .fill(`${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`)
 
-    const all = page.getByRole('checkbox', { name: 'All files' })
+    // Its folder, by name, ticks them all.
+    const all = page.getByRole('checkbox', { name: 'Pack', exact: true })
     await expect(all).toBeChecked({ timeout: 15_000 })
     await expect(page.getByText('3 files · 5.9 KB')).toBeVisible()
 

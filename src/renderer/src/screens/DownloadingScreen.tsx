@@ -1,4 +1,5 @@
 import type { DownloadState } from '@shared/types'
+import { Folder } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
@@ -35,6 +36,7 @@ import {
   formatPercent,
   formatSpeed,
   groupByNetwork,
+  isFolder,
   networksInPlay,
   splitFormattedBytes,
   toDisplayPath,
@@ -279,7 +281,11 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
       <div className="shrink-0 p-[16px_20px_0px]">
         <div className="flex items-center gap-[14px]">
           <div className="flex size-11 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] border-[var(--border-strong)] bg-card font-mono text-[10.5px] leading-none font-bold tracking-[0.04em] text-[var(--text-secondary)]">
-            {fileExtensionBadge(download.fileName)}
+            {isFolder(download) ? (
+              <Folder aria-label="Folder" className="size-[18px]" />
+            ) : (
+              fileExtensionBadge(download.fileName)
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <TruncatedText

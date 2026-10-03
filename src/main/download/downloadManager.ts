@@ -584,6 +584,7 @@ export class DownloadManager {
         id,
         kind: 'torrent',
         files: { chosen: chosen?.size ?? torrent.files.length, total: torrent.files.length },
+        folder: torrent.files[0].path.includes(sep),
         url: requestPayload.url,
         fileName: basename(destinationPath),
         destinationPath,

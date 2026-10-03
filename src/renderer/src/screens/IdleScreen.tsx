@@ -1,6 +1,6 @@
 import type { ProbeResult, TorrentInfo } from '@shared/types'
 import { cn } from 'cn'
-import { AlertTriangle, ClipboardPaste, FolderOpen, Info } from 'lucide-react'
+import { AlertTriangle, ClipboardPaste, Folder, FolderOpen, Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NetworkCard } from '../components/NetworkCard'
 import { ScreenFooter } from '../components/ScreenFooter'
@@ -66,7 +66,8 @@ function InfoAlert({ title, message }: { title?: string; message: string }): Rea
   )
 }
 
-/** A torrent's files, each ticked to be downloaded; with several, a tick for all of them above. */
+/** A torrent's files, each ticked to be downloaded. Several come in the torrent's folder, whose
+ * row above them, by its name, ticks all of them. */
 function TorrentFileList({
   files,
   skipped,
@@ -76,24 +77,31 @@ function TorrentFileList({
   skipped: number[]
   onChange: (skipped: number[]) => void
 }): React.JSX.Element {
+  // A torrent in a folder (always so with several files) starts every path with it.
+  const parts = files[0]?.path.split(/[\\/]/) ?? []
+  const folder = parts.length > 1 ? parts[0] : null
   return (
     <div
       role="group"
       aria-label="Files"
       className="max-h-36 overflow-y-auto rounded-[9px] border border-border px-3 py-1.5"
     >
-      {files.length > 1 && (
-        <label className="flex items-center gap-2 py-0.5 text-[12px] font-medium">
+      {folder && (
+        <label className="flex items-center gap-2 py-0.5 font-mono text-[11.5px] font-medium">
           <Checkbox
             checked={skipped.length === 0}
             indeterminate={skipped.length > 0 && skipped.length < files.length}
             onCheckedChange={(checked) => onChange(checked ? [] : files.map((_, index) => index))}
           />
-          All files
+          <Folder aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{folder}</span>
         </label>
       )}
       {files.map((file, index) => (
-        <label key={index} className="flex items-center gap-2 py-0.5 font-mono text-[11.5px]">
+        <label
+          key={index}
+          className={cn('flex items-center gap-2 py-0.5 font-mono text-[11.5px]', folder && 'pl-6')}
+        >
           <Checkbox
             checked={!skipped.includes(index)}
             onCheckedChange={(checked) =>

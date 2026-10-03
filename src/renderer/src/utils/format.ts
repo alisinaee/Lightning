@@ -64,6 +64,11 @@ export function fileNameFromPath(path: string): string {
 }
 
 /** Short uppercase file-type badge from a name's extension, e.g. "Xcode_16.2.xip" -> "XIP", "photo.jpeg" -> "JPEG". */
+/** A download that is a folder: a torrent's, of its files. */
+export function isFolder(download: DownloadState): boolean {
+  return download.kind === 'torrent' && download.folder
+}
+
 export function fileExtensionBadge(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.')
   if (dotIndex <= 0 || dotIndex === fileName.length - 1) return 'FILE'
