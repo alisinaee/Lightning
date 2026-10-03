@@ -4,6 +4,7 @@ import type {
   NetworkInterfaceInfo,
   ProbeResult,
   StartDownloadRequest,
+  TorrentFileEntry,
   UpdateInfo
 } from './types'
 
@@ -24,6 +25,8 @@ export interface IpcContract {
   revealInFolder: { args: [filePath: string]; result: void }
   startDownload: { args: [request: StartDownloadRequest]; result: string }
   getCurrentDownload: { args: []; result: DownloadUpdate | null }
+  /** A torrent download's files, in the torrent's order; empty for any other download. */
+  torrentFiles: { args: [id: string]; result: TorrentFileEntry[] }
   pauseDownload: { args: [id: string]; result: void }
   resumeDownload: { args: [id: string]; result: void }
   setDownloadNetwork: { args: [id: string, networkId: string, enabled: boolean]; result: void }

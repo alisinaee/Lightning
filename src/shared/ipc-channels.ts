@@ -12,6 +12,7 @@ export const IpcChannels = {
   revealInFolder: 'shell:reveal-in-folder',
   startDownload: 'download:start',
   getCurrentDownload: 'download:get-current',
+  torrentFiles: 'download:torrent-files',
   pauseDownload: 'download:pause',
   resumeDownload: 'download:resume',
   setDownloadNetwork: 'download:set-network',

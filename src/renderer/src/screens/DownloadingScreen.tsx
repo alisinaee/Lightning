@@ -8,6 +8,7 @@ import { HeroBand } from '../components/HeroBand'
 import { NetworkRow } from '../components/NetworkRow'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { ThroughputChart } from '../components/ThroughputChart'
+import { TorrentFiles } from '../components/TorrentFiles'
 import { TruncatedText } from '../components/TruncatedText'
 import {
   AlertDialog,
@@ -26,6 +27,7 @@ import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS } from '../theme'
 import {
+  describeFileCount,
   dirnameOf,
   fileExtensionBadge,
   formatBytes,
@@ -118,6 +120,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   // status away from 'paused' (an ETag re-check over the network for a real download) — with no
   // feedback in between, a slow check reads as the button not having registered the click.
   const [resuming, setResuming] = useState(false)
+  const [filesOpen, setFilesOpen] = useState(false)
   useEffect(() => {
     if (!isPaused || download.error) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -302,6 +305,25 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   </span>
                 </>
               )}
+              {/* Several files: they open below. One is the name above. */}
+              {download.kind === 'torrent' && download.files.total > 1 && (
+                <>
+                  <Dot />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setFilesOpen((open) => !open)}
+                    aria-expanded={filesOpen}
+                    className="h-auto cursor-pointer rounded-[4px] border-[0.5px] bg-card px-[7px] py-[3px] font-mono text-[10.5px] leading-none font-medium text-[var(--text-secondary)] aria-expanded:bg-secondary dark:bg-card"
+                  >
+                    {describeFileCount(download.files.chosen, download.files.total)}{' '}
+                    <span aria-hidden className="text-[7.5px] opacity-75">
+                      {filesOpen ? '▲' : '▼'}
+                    </span>
+                  </Button>
+                </>
+              )}
               {!isPaused && knownSize && effectiveSpeed > 0 && (
                 <>
                   <Dot />
@@ -327,6 +349,9 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             </div>
           </div>
         </div>
+        {download.kind === 'torrent' && filesOpen && (
+          <TorrentFiles downloadId={download.id} pieces={download.pieces} />
+        )}
       </div>
 
       {/* Block grid: pinned with the file info. It's capped in height and scrolls itself. */}

@@ -20,6 +20,7 @@ import type {
   StartTorrentDownloadRequest,
   TorrentDownloadNetwork,
   TorrentDownloadState,
+  TorrentFileEntry,
   TorrentInfo
 } from '../../shared/types'
 import { testKnobs } from '../testKnobs'
@@ -862,6 +863,19 @@ export class DownloadManager {
     } catch {
       // Not every desktop can be kept awake; the download runs regardless.
     }
+  }
+
+  /** A torrent download's files, read from its .torrent: they never change, so they're asked
+   * for when shown rather than sent with every update. */
+  async torrentFiles(id: string): Promise<TorrentFileEntry[]> {
+    const request = this.runtimes.get(id)?.requestPayload
+    if (request?.kind !== 'torrent') return []
+    const torrentFile = await readFile(this.torrentFilePath(id))
+    const probe = await describeTorrent(torrentFile, request.url)
+    if (probe.kind !== 'torrent') return []
+    const { files } = probe.torrent
+    const chosen = chosenFiles(request.selectedFiles, files.length)
+    return files.map((file, index) => ({ ...file, chosen: !chosen || chosen.has(index) }))
   }
 
   async cancel(id: string): Promise<void> {

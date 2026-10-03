@@ -170,6 +170,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('getCurrentDownload', async () => manager.getCurrentDownload())
 
+  handle('torrentFiles', async (_event, id) => manager.torrentFiles(id))
+
   handle('pauseDownload', async (_event, id) => {
     await manager.pause(id)
   })

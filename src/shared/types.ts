@@ -54,6 +54,15 @@ export interface TorrentInfo {
   files: { path: string; length: number }[]
 }
 
+/** One of a torrent download's files, for listing them while it runs. */
+export interface TorrentFileEntry {
+  /** As TorrentInfo's: relative to the destination folder, the torrent's own folder first. */
+  path: string
+  length: number
+  /** Chosen to be downloaded. */
+  chosen: boolean
+}
+
 export type DownloadStatus = 'downloading' | 'paused' | 'completed' | 'error' | 'cancelled'
 
 /** An HTTP stream's state. `pending` means it is waiting for work: it holds no block, either because

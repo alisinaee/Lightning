@@ -10,7 +10,13 @@ import { Checkbox } from '../components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group'
 import { useLatencyPolling } from '../hooks/useNetworks'
 import { useAppStore } from '../store/useAppStore'
-import { describeError, describeFileCount, formatBytes, toDisplayPath } from '../utils/format'
+import {
+  describeError,
+  describeFileCount,
+  formatBytes,
+  pathInTorrent,
+  toDisplayPath
+} from '../utils/format'
 
 type StreamsChoice = 'auto' | number
 /** Streams per network the user can pick instead of Auto. */
@@ -70,8 +76,6 @@ function TorrentFileList({
   skipped: number[]
   onChange: (skipped: number[]) => void
 }): React.JSX.Element {
-  // Every path starts with the torrent's own folder: the files are listed within it.
-  const inFolder = (path: string): string => path.split(/[\\/]/).slice(1).join('/') || path
   return (
     <div
       role="group"
@@ -96,7 +100,7 @@ function TorrentFileList({
               onChange(checked ? skipped.filter((entry) => entry !== index) : [...skipped, index])
             }
           />
-          <span className="min-w-0 flex-1 truncate">{inFolder(file.path)}</span>
+          <span className="min-w-0 flex-1 truncate">{pathInTorrent(file.path)}</span>
           <span className="shrink-0 text-muted-foreground">{formatBytes(file.length)}</span>
         </label>
       ))}

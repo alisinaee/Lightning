@@ -38,6 +38,7 @@ const plexoApi = {
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>
     invoke('startDownload', request),
   getCurrentDownload: () => invoke('getCurrentDownload'),
+  torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),
   resumeDownload: (downloadId: string) => invoke('resumeDownload', downloadId),
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
