@@ -25,8 +25,9 @@ const TARGET_CELL_PX = 12
 const CELL_GAP_PX = 3
 const CELL_HEIGHT_PX = 13
 const MIN_COLS = 8
-// Rows visible before the grid starts scrolling.
-const MAX_VISIBLE_ROWS = 6
+// Rows visible before the grid starts scrolling: few enough that the network table below keeps
+// room for its rows at the window's minimum height.
+const MAX_VISIBLE_ROWS = 4
 // Room for the hover outline (1.5px, offset 1) so it isn't clipped against the scroll edges.
 const GRID_INSET_PX = 3
 
