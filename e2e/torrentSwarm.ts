@@ -62,10 +62,14 @@ export class Swarm {
     options: { folder?: string; pieceLength?: number; uploadLimit?: number } = {}
   ): Promise<Torrent> {
     const client = await this.client({ uploadLimit: options.uploadLimit })
+    // A folder of its own, as leech() has: left to webtorrent, every seeder shares /tmp/webtorrent,
+    // and two tests seeding different files under one name in parallel overwrite each other's —
+    // the seeder then serves pieces that fail verification, forever.
+    const path = await mkdtemp(join(tmpdir(), 'plexo-seed-'))
     return new Promise((resolve) =>
       client.seed(
         files.length === 1 ? files[0] : files,
-        { name: options.folder, pieceLength: options.pieceLength, announce: this.announce },
+        { name: options.folder, pieceLength: options.pieceLength, announce: this.announce, path },
         resolve
       )
     )

@@ -43,6 +43,8 @@ declare module 'webtorrent' {
     name?: string
     pieceLength?: number
     announce?: string[]
+    /** Where it keeps the seeded files; webtorrent's default is a shared /tmp/webtorrent. */
+    path?: string
   }
 
   /** One peer connection (bittorrent-protocol). Emits 'piece' (index, offset, buffer) for each
