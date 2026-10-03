@@ -1,7 +1,8 @@
-import { cp, readFile, rm, truncate, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, truncate, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BLOCK, expect, test } from './fixtures'
+import { seededBytes } from './origin'
 
 // D. Quitting, crashing and restarting. kill() is SIGKILL: no before-quit, no final save —
 // what's on disk is whatever the app had managed to persist, exactly as after a crash or a
@@ -78,6 +79,8 @@ test.describe('persisted state on disk @smoke', () => {
     await writeFile(join(dirs.userData, 'downloads', id, 'manifest.json'), 'not json {')
     await plexo.launch()
     expect(await plexo.currentHttp()).toBeNull()
+    // Nothing can bring it back: its folder is cleared rather than kept forever.
+    await expect.poll(() => existsSync(join(dirs.userData, 'downloads', id))).toBe(false)
 
     // And a new download still works.
     const origin = await serve({ size: 4 * BLOCK, seed: 99 })
@@ -124,38 +127,63 @@ test.describe('persisted state on disk @smoke', () => {
     expect((await plexo.currentHttp())?.error).toMatch(/partial download file is missing/)
   })
 
-  test('a download saved by the previous version resumes where it was', async ({
+  test('downloads an older version saved are cleared, partial data and all', async ({
     plexo,
     serve,
     dirs
   }) => {
-    const { id, origin } = await pausedDownload(plexo, serve)
-    const paused = (await plexo.currentHttp())!
+    // A paused download of this version's, which the clearing must leave alone.
+    const { id } = await pausedDownload(plexo, serve)
     await plexo.quit()
+    const root = join(dirs.userData, 'downloads')
+    const manifest = (folder: string, content: object): Promise<void> =>
+      mkdir(join(root, folder), { recursive: true }).then(() =>
+        writeFile(join(root, folder, 'manifest.json'), JSON.stringify(content))
+      )
 
-    // What version 4 wrote: every block whole, inside the state.
-    const manifestPath = join(dirs.userData, 'downloads', id, 'manifest.json')
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'))
-    delete manifest.progress
-    await writeFile(
-      manifestPath,
-      JSON.stringify({
-        ...manifest,
-        version: 4,
-        state: { ...manifest.state, blocks: paused.blocks }
-      })
-    )
+    // What rc.1–rc.9 left: manifest version 2, the parts in a folder of their own, and the final
+    // name claimed as an empty file.
+    const oldId = '00000000-0000-4000-8000-000000000002'
+    const placeholder = join(dirs.dest, 'old-movie.mkv')
+    await manifest(oldId, {
+      version: 2,
+      state: { id: oldId, destinationPath: placeholder, status: 'paused' }
+    })
+    await mkdir(join(root, oldId, 'parts'))
+    await writeFile(join(root, oldId, 'parts', '0'), seededBytes(1000, 5))
+    await writeFile(placeholder, '')
+
+    // A layout this version doesn't read, with its staging file beside the destination.
+    const laterId = '00000000-0000-4000-8000-000000000005'
+    const staging = join(dirs.dest, 'other.iso.plexo')
+    await manifest(laterId, {
+      version: 5,
+      partialPath: staging,
+      state: { id: laterId, destinationPath: join(dirs.dest, 'other.iso'), status: 'paused' }
+    })
+    await writeFile(staging, seededBytes(1000, 6))
+
+    // An old manifest naming a file that holds something: never Plexo's to delete.
+    const realId = '00000000-0000-4000-8000-000000000003'
+    const realFile = join(dirs.dest, 'mine.txt')
+    await manifest(realId, {
+      version: 2,
+      state: { id: realId, destinationPath: realFile, status: 'paused' }
+    })
+    await writeFile(realFile, 'keep me')
 
     await plexo.launch()
-    expect((await plexo.currentHttp())?.bytesDownloaded).toBe(paused.bytesDownloaded)
-    const before = origin.chunkRequests().length
+    expect((await plexo.currentHttp())?.id).toBe(id)
+    for (const gone of [join(root, oldId), placeholder, join(root, laterId), staging]) {
+      await expect.poll(() => existsSync(gone), { message: `${gone} cleared` }).toBe(false)
+    }
+    await expect.poll(() => existsSync(join(root, realId))).toBe(false)
+    expect(await readFile(realFile, 'utf-8')).toBe('keep me')
+    // Ours, not the download's: out of the way of the end-of-test check for stray files.
+    await rm(realFile)
+
     await plexo.api.resumeDownload(id)
     await plexo.waitForHttpStatus('completed')
-    const refetched = origin
-      .chunkRequests()
-      .slice(before)
-      .some((request) => request.range!.start < paused.bytesDownloaded / 2)
-    expect(refetched, 'what was already there is not fetched again').toBe(false)
   })
 
   test('a staging file cut short while the app was closed is fetched again', async ({

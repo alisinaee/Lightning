@@ -52,10 +52,17 @@ test.describe('a torrent through the UI', () => {
       const peers = page.getByRole('button', { name: /^\d+ peers?/ }).first()
       await expect(peers).toBeVisible()
       await peers.click()
-      const peerRow = page.getByRole('row').filter({ hasText: 'Peer #1' }).first()
+      // Numbered by connection, so whichever peers are connected now.
+      const peerRow = page
+        .getByRole('row')
+        .filter({ hasText: /Peer #\d+/ })
+        .first()
       await expect(peerRow).toBeVisible()
       await expect(peerRow).toContainText(/RECEIVING|CONNECTED/)
-      await expect(peerRow).toContainText('Peer connection')
+      await expect(peerRow).not.toContainText('Peer connection')
+      // Each direction read out in words, not only shown as an arrow.
+      await expect(peerRow).toContainText('Receiving at')
+      await expect(peerRow).toContainText('Sending at')
       await expect(peerRow.getByRole('cell')).toHaveCount(6)
       await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
       const networks = page.getByRole('table', { name: 'Networks' })

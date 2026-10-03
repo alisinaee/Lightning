@@ -84,8 +84,13 @@ test.describe('torrent paths', () => {
     ])
   })
 
-  test('names are cleaned the way webtorrent’s storage cleans them', () => {
-    expect(STRIPPED_FROM_NAMES.source).toBe('[<>:"/\\\\|?*\\u0000-\\u001F]')
+  test('names are cleaned the way webtorrent’s storage cleans them', async () => {
+    // fs-chunk-store's own regex, as installed: an upgrade that changes it fails here. (ESM-only,
+    // so through import(), as specs load such packages.)
+    const { default: filenameReservedRegex } = (await import(
+      'filename-reserved-regex' as string
+    )) as { default: () => RegExp }
+    expect(STRIPPED_FROM_NAMES.source).toBe(filenameReservedRegex().source)
     expect(safeTorrentPaths([{ path: 'Name/a:b?.txt', length: 1 }], 'darwin')).toEqual([
       { path: 'Name/ab.txt', length: 1 }
     ])

@@ -293,6 +293,26 @@ Built on branch `torrent-phase-a`. What landed, which phases B–C build on:
     - The parallel e2e launches still work.
     - Manual check on each OS.
 
+## After phase E: separate models, and saved data cleared — DONE
+
+> **`codex/torrent-final`** (`c9bcf52`–`17e81d4`, built in Codex):
+>
+> - **Separate models.** HTTP and torrent downloads now have models of their own:
+>   - HTTP has `streams` and `blocks`.
+>   - Torrents have `peers` (CONNECTED or RECEIVING, each with ↓/↑ bytes and speed) and `pieces`. A piece also carries `provisionalBytes`: received but not yet verified, never counted as progress.
+>   - The manifest is version 6.
+> - **Peer rows** lost the empty progress bar and the stale piece badge.
+>
+> **`torrent-final-followup`** (on top of it):
+>
+> - **No conversion of older saved downloads.** Only manifest version 6 is read. The app is unsigned and reinstalled by hand, so older paused downloads aren't carried over.
+> - **Saved downloads that can't be restored are cleared at startup instead of being kept forever.** That covers a garbled or missing manifest, another version's (including rc.1–rc.9's version 2 with its own `parts/` folder), a wrong id, progress that doesn't fit its plan, or a torrent whose `.torrent` is gone.
+>   - Its folder under `Plexo/downloads/` is deleted.
+>   - Its partial data beside the destination is deleted only when it's unmistakably Plexo's (`partialLeftovers()`): a `<name>.plexo` file or folder, or rc.1–rc.9's placeholder at the final name, and only while that placeholder is still empty.
+>   - Any other read error (a drive not mounted, a permission) leaves it for the next launch.
+> - **The path-regex test** again compares against what webtorrent's storage actually imports.
+> - **Peer rows** lose the repeated "Peer connection" filler, keep their number by connection id rather than list position, and read ↓/↑ out to screen readers.
+
 ## Docs (last)
 
 README section "Torrents":

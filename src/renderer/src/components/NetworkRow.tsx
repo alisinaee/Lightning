@@ -215,7 +215,9 @@ function PeerRows({
             </div>
             <div role="cell" className="flex min-w-0 items-center gap-[6px]">
               <span className="font-medium whitespace-nowrap text-foreground">
-                Peer #{index + 1}
+                {/* Its connection's number, not its place in the list: peers come and go, and a
+                    number that moved to another peer would mislead. */}
+                Peer #{peer.id + 1}
               </span>
               <ColorBadge
                 bg={visual.bg}
@@ -226,9 +228,9 @@ function PeerRows({
                 {receiving ? 'RECEIVING' : 'CONNECTED'}
               </ColorBadge>
             </div>
-            <div role="cell" className="text-[10px] text-muted-foreground">
-              Peer connection
-            </div>
+            {/* A peer has no progress of its own: a piece counts once verified, and several
+                peers may send parts of one. The cell stays, for the columns to line up. */}
+            <div role="cell" />
             <div role="cell" className="text-right text-muted-foreground">
               —
             </div>
@@ -237,10 +239,12 @@ function PeerRows({
               className="text-right font-mono text-[10px] leading-[1.35] whitespace-nowrap tabular-nums"
             >
               <div style={{ color: receiving ? visual.text : 'var(--text-tertiary)' }}>
+                <span className="sr-only">Receiving at </span>
                 <span aria-hidden>↓ </span>
                 {formatSpeed(peer.speedBytesPerSec)}
               </div>
               <div className="text-muted-foreground">
+                <span className="sr-only">Sending at </span>
                 <span aria-hidden>↑ </span>
                 {formatSpeed(peer.uploadSpeedBytesPerSec)}
               </div>
@@ -250,10 +254,12 @@ function PeerRows({
               className="pr-5 text-right font-mono text-[10px] leading-[1.35] text-[var(--text-secondary)] tabular-nums"
             >
               <div>
+                <span className="sr-only">Received </span>
                 <span aria-hidden>↓ </span>
                 {formatBytes(peer.bytesDownloaded)}
               </div>
               <div>
+                <span className="sr-only">Sent </span>
                 <span aria-hidden>↑ </span>
                 {formatBytes(peer.bytesUploaded)}
               </div>
