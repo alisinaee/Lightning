@@ -310,6 +310,8 @@ export function IdleScreen(): React.JSX.Element {
               streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
             }
       )
+      // Started: the link is spent, so the next download starts from an empty one.
+      setUrl('')
     } catch (error) {
       setStartError(describeError(error))
     } finally {
