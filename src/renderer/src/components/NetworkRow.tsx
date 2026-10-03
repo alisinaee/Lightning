@@ -436,9 +436,14 @@ export function NetworkRow({
         </div>
         <div
           role="cell"
-          className="pr-5 text-right font-mono text-[11.5px] leading-none text-[var(--text-secondary)] tabular-nums"
+          className="pr-5 text-right font-mono text-[11.5px] leading-[1.35] text-[var(--text-secondary)] tabular-nums"
         >
-          {formatBytes(group.bytesDownloaded)}
+          <TwoWay
+            down={formatBytes(group.bytesDownloaded)}
+            up={formatBytes(group.transfer === 'torrent' ? group.bytesUploaded : 0)}
+            showUp={group.transfer === 'torrent'}
+            labels={['Downloaded', 'Uploaded']}
+          />
         </div>
       </div>
       {expanded &&
