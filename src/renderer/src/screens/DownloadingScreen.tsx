@@ -300,17 +300,13 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   <span>
                     {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
                   </span>
-                  {/* Upload once there is any, as on the network rows. */}
-                  {download.bytesUploaded > 0 && (
-                    <>
-                      <Dot />
-                      <span>
-                        <span className="sr-only">Uploading at </span>
-                        <span aria-hidden="true">↑ </span>
-                        {formatSpeed(download.uploadSpeedBytesPerSec)}
-                      </span>
-                    </>
-                  )}
+                  {/* Always, so it's plain that a torrent uploads: the rows show it once there is any. */}
+                  <Dot />
+                  <span>
+                    <span className="sr-only">Uploading at </span>
+                    <span aria-hidden="true">↑ </span>
+                    {formatSpeed(download.uploadSpeedBytesPerSec)}
+                  </span>
                 </>
               )}
               {!isPaused && knownSize && effectiveSpeed > 0 && (
