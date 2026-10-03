@@ -1,7 +1,7 @@
 import type { ProbeResult, TorrentInfo } from '@shared/types'
 import { cn } from 'cn'
-import { AlertTriangle, ClipboardPaste, Folder, FolderOpen, Info } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { AlertTriangle, ClipboardPaste, Folder, FolderOpen, Info, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { NetworkCard } from '../components/NetworkCard'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
@@ -124,6 +124,7 @@ export function IdleScreen(): React.JSX.Element {
   const latencies = useAppStore((store) => store.latencies)
   const url = useAppStore((store) => store.draftUrl)
   const setUrl = useAppStore((store) => store.setDraftUrl)
+  const linkInput = useRef<HTMLInputElement>(null)
   const destinationDir = useAppStore((store) => store.destinationDir)
   const setDestinationDir = useAppStore((store) => store.setDestinationDir)
 
@@ -334,6 +335,7 @@ export function IdleScreen(): React.JSX.Element {
               LINK
             </div>
             <input
+              ref={linkInput}
               type="text"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
@@ -342,6 +344,21 @@ export function IdleScreen(): React.JSX.Element {
               aria-labelledby="idle-link-label"
               className="min-w-0 flex-1 rounded-[3px] border-none bg-transparent font-mono text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
+            {/* A magnet link or a .torrent's path is one long line: one click empties it, ready for
+                the next. */}
+            {url && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUrl('')
+                  linkInput.current?.focus()
+                }}
+                aria-label="Clear link"
+                className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                <X aria-hidden className="size-3.5" />
+              </button>
+            )}
             <Button
               type="button"
               variant="secondary"
