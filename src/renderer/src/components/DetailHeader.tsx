@@ -29,7 +29,7 @@ export function DetailHeader({
   const setView = useAppStore((store) => store.setView)
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5 py-3.5">
+    <div className="flex shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5 py-2">
       <button
         type="button"
         onClick={() => setView({ name: 'list' })}

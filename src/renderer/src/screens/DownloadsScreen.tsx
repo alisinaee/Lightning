@@ -130,7 +130,7 @@ export function DownloadsScreen(): React.JSX.Element {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5 py-3.5">
+      <div className="flex shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5 py-2">
         <h1 className="font-sans text-[17px] leading-none font-semibold">All downloads</h1>
         <div className="font-mono text-[11.5px] leading-none text-muted-foreground">
           {summaryOf(downloads)}
