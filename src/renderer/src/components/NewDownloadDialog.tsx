@@ -85,8 +85,11 @@ export function NewDownloadDialog(): React.JSX.Element {
   const close = useAppStore((store) => store.closeNewDownload)
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]">
+    <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]"
+      >
         {/* Mounted only while open, so each opening starts fresh from the link field. */}
         {open && <NewDownloadForm onDone={close} />}
       </DialogContent>
@@ -368,8 +371,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                   !torrent &&
                     (isSingleStreamOnly
                       ? ready.supportsRanges
-                        ? 'one connection: the size isn’t known'
-                        : 'one connection: the server can’t split it'
+                        ? 'Uses one connection. The file size is unknown.'
+                        : 'Uses one connection. This server doesn’t support parallel downloads.'
                       : 'resumable')
                 ]
                   .filter(Boolean)
@@ -442,12 +445,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         )}
         {isSingleStreamOnly && selectedInterfaceIds.length === 1 && interfaces.length > 1 && (
           <div className="text-[12px] text-muted-foreground">
-            A file that comes in one piece uses one network.
+            This download uses one connection on one network.
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 border-t-[0.5px] border-border px-5 py-3">
+      <div className="flex items-center gap-2 border-t-[0.5px] border-border px-4 py-2">
         {startError ? (
           <div className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--color-danger)]">
             {startError}

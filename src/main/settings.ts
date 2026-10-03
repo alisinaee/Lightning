@@ -39,6 +39,13 @@ function sanitizeNetworkPreferences(parsed: unknown): NetworkPreferences {
     if (value.off === true) preference.off = true
     preference.speedLimit = byteCount(value.speedLimit)
     preference.dataLimit = byteCount(value.dataLimit)
+    if (
+      value.dataLimitPeriod === 'day' ||
+      value.dataLimitPeriod === 'week' ||
+      value.dataLimitPeriod === 'month'
+    ) {
+      preference.dataLimitPeriod = value.dataLimitPeriod
+    }
     for (const key of Object.keys(preference) as (keyof NetworkPreference)[]) {
       if (preference[key] === undefined) delete preference[key]
     }

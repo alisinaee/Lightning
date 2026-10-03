@@ -12,6 +12,8 @@ import type {
 } from '@shared/types'
 import { create } from 'zustand'
 
+export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
+
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /** What the window shows: the list of downloads, or one download. */
@@ -40,6 +42,8 @@ interface AppStore {
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
   view: View
+  downloadFilter: DownloadFilter
+  setDownloadFilter: (filter: DownloadFilter) => void
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
   /** Persisted — how many downloads run at once; the rest wait in the queue. */
@@ -106,6 +110,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   downloads: {},
   history: [],
   view: { name: 'list' },
+  downloadFilter: 'all',
+  setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
   newDownloadOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,
   speedLimit: initial.speedLimit,

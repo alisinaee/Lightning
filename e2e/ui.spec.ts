@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { BLOCK, expect, interfacesEnv, NETWORKS, test, treeSha } from './fixtures'
@@ -174,8 +174,8 @@ test.describe('UI journeys @smoke', () => {
     await page.getByRole('button', { name: 'Download' }).click()
     await reached
     await page.getByRole('button', { name: /^Open / }).click()
-    await page.getByRole('button', { name: 'Delete…' }).click()
-    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await page.getByRole('button', { name: 'Cancel download…' }).click()
+    await page.getByRole('button', { name: 'Cancel download', exact: true }).click()
     origin.release()
     // Gone, with what it had downloaded.
     await expect(page.getByText('No downloads yet')).toBeVisible()
@@ -195,7 +195,7 @@ test.describe('UI journeys @smoke', () => {
     origin.setRule(() => ({ status: 404 }))
     const page = plexo.page
     await (await plexo.newDownload()).fill(origin.url())
-    await expect(page.getByText(/could not be found/)).toBeVisible()
+    await expect(page.getByText(/couldn’t be found/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
   })
 
@@ -305,14 +305,146 @@ test.describe('no networks', () => {
   test.use({ appEnv: { PLEXO_E2E_INTERFACES: '' } })
 
   test('a network appearing makes the list ready for downloads @smoke', async ({ plexo }) => {
-    await expect(plexo.page.getByText('No networks to combine')).toBeVisible()
+    await expect(plexo.page.getByText('No networks connected')).toBeVisible()
     await plexo.evaluateMain(
       (_electron, value) => {
         process.env['PLEXO_E2E_INTERFACES'] = value
       },
       interfacesEnv({ a: NETWORKS['a'] })
     )
-    await plexo.page.getByRole('button', { name: 'Scan Again' }).click()
+    await plexo.page.getByRole('button', { name: 'Scan again' }).click()
     await expect(plexo.page.getByText('No downloads yet')).toBeVisible()
   })
+})
+
+test('new download and limits dialogs stay open after outside clicks and close with their buttons', async ({
+  plexo
+}) => {
+  const page = plexo.page
+  await plexo.newDownload()
+  const newDownload = page.getByRole('dialog', { name: 'New download', exact: true })
+  await expect(newDownload.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
+  await expect(newDownload).toBeVisible()
+  await newDownload.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(newDownload).toBeHidden()
+
+  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
+  await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
+  const limits = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
+  await expect(limits.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
+  await expect(limits).toBeVisible()
+  await limits.getByRole('button', { name: 'Done', exact: true }).click()
+  await expect(limits).toBeHidden()
+})
+
+test('compact limits controls convert units without changing the limit and show monthly resets', async ({
+  plexo,
+  dirs
+}) => {
+  const page = plexo.page
+  const settings = async (): Promise<Record<string, unknown>> =>
+    JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
+  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
+  await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
+  const total = dialog.getByRole('radiogroup', { name: 'Total speed', exact: true })
+  await expect(total.getByRole('textbox')).toBeDisabled()
+  await expect(total.getByRole('button', { name: 'KB/s', exact: true })).toBeDisabled()
+  await total.getByRole('radio', { name: 'Limit to', exact: true }).check()
+  await total.getByRole('button', { name: 'KB/s', exact: true }).click()
+  await total.getByRole('textbox').fill('512')
+  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
+  await total.getByRole('button', { name: 'MB/s', exact: true }).click()
+  await expect(total.getByRole('textbox')).toHaveValue('0.5')
+  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
+  await total.getByRole('radio', { name: 'No limit', exact: true }).check()
+  await expect(total.getByRole('textbox')).toBeDisabled()
+  await total.getByRole('radio', { name: 'Limit to', exact: true }).check()
+  await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
+  await page.screenshot({ path: '/tmp/plexo-limits-general.png' })
+
+  await dialog.locator('nav button').nth(1).click()
+  const data = dialog.getByRole('radiogroup', { name: /data limit$/, exact: false })
+  await expect(data.getByRole('textbox')).toBeDisabled()
+  await data.getByRole('radio', { name: 'Limit to', exact: true }).check()
+  await data.getByRole('textbox').fill('10')
+  const reset = await page.evaluate(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long'
+    })
+  })
+  await expect(dialog.getByText(`Resets on ${reset}.`, { exact: false })).toBeVisible()
+  await expect(dialog.getByText('10.0 GB this month', { exact: false })).toBeVisible()
+  await data.getByRole('button', { name: 'Day', exact: true }).click()
+  await expect(dialog.getByText('Resets tomorrow at midnight.', { exact: false })).toBeVisible()
+  await expect(dialog.getByText('10.0 GB today', { exact: false })).toBeVisible()
+  await data.getByRole('button', { name: 'Week', exact: true }).click()
+  await expect(dialog.getByText('Weeks start Monday.', { exact: false })).toBeVisible()
+  await expect(dialog.getByText('10.0 GB this week', { exact: false })).toBeVisible()
+  await expect
+    .poll(async () => {
+      const saved = (await settings()).networkPreferences as Record<
+        string,
+        { dataLimitPeriod?: string }
+      >
+      return Object.values(saved).some((entry) => entry.dataLimitPeriod === 'week')
+    })
+    .toBe(true)
+  await page.screenshot({ path: '/tmp/plexo-limits-network.png' })
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await expect(dialog).toBeHidden()
+})
+
+test('network reset controls confirm scope, keep limits when resetting usage, and keep usage when removing limits', async ({
+  plexo,
+  serve
+}) => {
+  const origin = await serve({ size: BLOCK })
+  await plexo.start(origin.url(), origin.sha256)
+  await plexo.waitForStatus('completed')
+  const usage = await plexo.api.networkUsage()
+  const id = Object.keys(usage).find((key) => usage[key] > 0)!
+  await plexo.api.updateSettings({
+    networkPreferences: {
+      [id]: { speedLimit: 1024 ** 2, dataLimit: 1024 ** 3, dataLimitPeriod: 'week' }
+    }
+  })
+  await plexo.page.reload()
+  const page = plexo.page
+  await page.getByRole('button', { name: /\d+ networks?.*Idle/ }).click()
+  await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Speed & data limits' })
+  const iface = (await plexo.api.listInterfaces()).findIndex((entry) => entry.id === id)
+  await dialog
+    .locator('nav button')
+    .nth(iface + 1)
+    .click()
+  await dialog.getByRole('button', { name: 'Remove limits…', exact: true }).click()
+  let confirmation = page.getByRole('alertdialog')
+  await expect(confirmation.getByText(/recorded data usage stays unchanged/)).toBeVisible()
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Reset data usage…', exact: true }).click()
+  confirmation = page.getByRole('alertdialog')
+  await expect(confirmation.getByText(/usage this week to zero/)).toBeVisible()
+  await confirmation.getByRole('button', { name: 'Reset data usage', exact: true }).click()
+  await expect(confirmation).toBeHidden()
+  await expect(
+    dialog.getByRole('button', { name: 'Reset data usage…', exact: true })
+  ).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeEnabled()
+  expect((await plexo.api.networkUsage())[id]).toBe(0)
+  await dialog.getByRole('button', { name: 'Remove limits…', exact: true }).click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Remove limits', exact: true })
+    .click()
+  await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await plexo.relaunch()
+  expect((await plexo.api.networkUsage())[id]).toBe(0)
 })

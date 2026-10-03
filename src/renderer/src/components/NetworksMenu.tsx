@@ -7,6 +7,7 @@ import { formatSpeed } from '../utils/format'
 import { UsageBar } from './LimitsDialog'
 import { NetworkEditPopover } from './NetworkEditPopover'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 
 /** The networks new downloads combine, switched on or off here; each download can still change
@@ -36,12 +37,7 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="flex h-8 items-center gap-2.5 rounded-lg border border-border bg-card px-3 text-[13px]"
-          />
-        }
+        render={<Button type="button" variant="secondary" className="gap-2.5 px-3 text-[13px]" />}
       >
         <span className="flex gap-1" aria-hidden>
           {interfaces.slice(0, 4).map((iface) => (
@@ -61,7 +57,7 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
           <>
             {on.length} {on.length === 1 ? 'network' : 'networks'}
             <span className="font-mono text-[11.5px] text-muted-foreground">
-              {total > 0 ? formatSpeed(total) : 'idle'}
+              {total > 0 ? formatSpeed(total) : 'Idle'}
             </span>
           </>
         )}
@@ -105,10 +101,10 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                     className={`font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
                   >
                     {reached
-                      ? 'Data limit reached · paused'
+                      ? 'Data limit reached'
                       : [
                           iface.displayName,
-                          speed > 0 ? formatSpeed(speed) : 'idle',
+                          speed > 0 ? formatSpeed(speed) : 'Idle',
                           typeof latencies[iface.id] === 'number' &&
                             `${Math.round(latencies[iface.id]!)} ms`
                         ]
@@ -135,7 +131,13 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                   <ChevronRight className="size-4" />
                 </button>
               </div>
-              {dataLimit !== undefined && <UsageBar used={used} limit={dataLimit} />}
+              {dataLimit !== undefined && (
+                <UsageBar
+                  used={used}
+                  limit={dataLimit}
+                  period={preference?.dataLimitPeriod ?? 'month'}
+                />
+              )}
             </div>
           )
         })}

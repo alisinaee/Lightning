@@ -1,6 +1,8 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, Plus, X } from 'lucide-react'
+import { cn } from 'cn'
 import { useEffect, useState } from 'react'
+import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
@@ -18,7 +20,7 @@ import {
 import { Button, buttonVariants } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, type DownloadFilter } from '../store/useAppStore'
 import {
   describeError,
   fileExtensionBadge,
@@ -38,6 +40,11 @@ type Item = DownloadState | FinishedDownload
 interface Group {
   label: string
   items: Item[]
+}
+
+function filterOf(item: Item): Exclude<DownloadFilter, 'all'> {
+  if ('unitsWritten' in item || item.status === 'completed') return 'finished'
+  return item.status === 'error' ? 'failed' : 'progress'
 }
 
 const isFinished = (item: Item): item is FinishedDownload => 'unitsWritten' in item
@@ -82,9 +89,16 @@ export function DownloadsScreen(): React.JSX.Element {
   const setView = useAppStore((store) => store.setView)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const removeDownload = useAppStore((store) => store.removeDownload)
+  const filter = useAppStore((store) => store.downloadFilter)
+  const setFilter = useAppStore((store) => store.setDownloadFilter)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fixing, setFixing] = useState<DownloadState | null>(null)
-  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const [confirmation, setConfirmation] = useState<{
+    kind: 'cancel' | 'trash'
+    ids: string[]
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [limitsOpen, setLimitsOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
@@ -96,7 +110,18 @@ export function DownloadsScreen(): React.JSX.Element {
   const downloads = Object.values(downloadsById)
     .filter((download) => download.status !== 'cancelled')
     .sort((a, b) => a.startedAt - b.startedAt)
-  const groups = groupsOf(downloads, history)
+  const allGroups = groupsOf(downloads, history)
+  const allItems = allGroups.flatMap((group) => group.items)
+  const counts: Record<DownloadFilter, number> = {
+    all: allItems.length,
+    progress: 0,
+    finished: 0,
+    failed: 0
+  }
+  for (const item of allItems) counts[filterOf(item)]++
+  const groups = allGroups.filter(
+    (group) => filter === 'all' || filterOf(group.items[0]) === filter
+  )
   const items = groups.flatMap((group) => group.items)
   // Only what's still listed counts: one that finished or went is no longer selected.
   const chosen = items.filter((item) => selected.has(item.id))
@@ -116,75 +141,214 @@ export function DownloadsScreen(): React.JSX.Element {
       !isFinished(item) && (item.status === 'downloading' || item.status === 'queued')
   )
   const resumable = chosen.filter(
+    (item): item is DownloadState => !isFinished(item) && item.status === 'paused'
+  )
+  const retryable = chosen.filter(
     (item): item is DownloadState =>
-      !isFinished(item) &&
-      (item.status === 'paused' || (item.status === 'error' && item.resumable !== false))
+      !isFinished(item) && item.status === 'error' && item.resumable !== false && !linkExpired(item)
   )
   const unfinished = chosen.filter((item) => !isFinished(item) && item.status !== 'completed')
+  const finished = chosen.filter((item) => isFinished(item) || item.status === 'completed')
+  const trashable = finished.filter(
+    (item) =>
+      !(isFinished(item) && item.missing) &&
+      (item.kind !== 'torrent' ||
+        !item.folder ||
+        !isFinished(item) ||
+        !!item.downloadedFiles?.length)
+  )
+  const confirmationItems = confirmation
+    ? chosen.filter(
+        (item) =>
+          confirmation.ids.includes(item.id) &&
+          (confirmation.kind === 'cancel' ? unfinished.includes(item) : trashable.includes(item))
+      )
+    : []
 
-  const removeChosen = (): void => {
-    for (const item of chosen) removeDownload(item.id)
-    setSelected(new Set())
-    setConfirmingRemove(false)
+  const runAction = async (
+    targets: Item[],
+    action: 'pause' | 'resume' | 'remove' | 'trash'
+  ): Promise<void> => {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      for (const item of targets) {
+        if (action === 'pause') await window.plexo.pauseDownload(item.id)
+        else if (action === 'resume') await window.plexo.resumeDownload(item.id)
+        else {
+          await window.plexo.removeDownload(item.id, { trashFile: action === 'trash' })
+          useAppStore.setState((store) => {
+            const { [item.id]: removed, ...downloads } = store.downloads
+            void removed
+            return { downloads, history: store.history.filter((entry) => entry.id !== item.id) }
+          })
+          setSelected((previous) => {
+            const next = new Set(previous)
+            next.delete(item.id)
+            return next
+          })
+        }
+      }
+    } catch (error) {
+      setActionError(describeError(error))
+    } finally {
+      setBusy(false)
+      setConfirmation(null)
+    }
   }
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5 py-2">
-        <h1 className="font-sans text-[17px] leading-none font-semibold">All downloads</h1>
-        <div className="font-mono text-[11.5px] leading-none text-muted-foreground">
-          {summaryOf(downloads)}
-        </div>
-        <div className="flex-1" />
-        <NetworksMenu onOpenLimits={() => setLimitsOpen(true)} />
-        <Button type="button" onClick={() => openNewDownload()}>
-          <Plus data-icon="inline-start" />
-          New download
-        </Button>
-      </div>
-
-      {chosen.length > 0 && (
-        <div className="flex shrink-0 items-center gap-2 border-b-[0.5px] border-border bg-card px-5 py-2">
-          <div className="font-mono text-[11.5px] text-muted-foreground">
-            {chosen.length} selected
+      {chosen.length === 0 ? (
+        <div className="flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5">
+          <DownloadFilterMenu
+            value={filter}
+            counts={counts}
+            onChange={(next) => {
+              setFilter(next)
+              setSelected(new Set())
+            }}
+          />
+          <div className="font-mono text-[11.5px] leading-none text-muted-foreground">
+            {summaryOf(downloads)}
           </div>
           <div className="flex-1" />
-          {pausable.length > 0 && (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => pausable.forEach((item) => void window.plexo.pauseDownload(item.id))}
-            >
-              Pause
-            </Button>
-          )}
-          {resumable.length > 0 && (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => resumable.forEach((item) => void window.plexo.resumeDownload(item.id))}
-            >
-              Resume
-            </Button>
-          )}
+          <NetworksMenu onOpenLimits={() => setLimitsOpen(true)} />
+          <Button type="button" onClick={() => openNewDownload()}>
+            <Plus data-icon="inline-start" />
+            New download
+          </Button>
+        </div>
+      ) : (
+        <div
+          role="toolbar"
+          aria-label="Selected downloads"
+          aria-busy={busy}
+          className="flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
+        >
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Deselect all"
+            disabled={busy}
+            onClick={() => setSelected(new Set())}
+          >
+            <X />
+          </Button>
+          <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">
+            {chosen.length} selected
+          </span>
           <Button
             type="button"
             size="sm"
-            variant="destructive"
-            onClick={() => (unfinished.length > 0 ? setConfirmingRemove(true) : removeChosen())}
+            variant="ghost"
+            disabled={busy || chosen.length === items.length}
+            onClick={() => setSelected(new Set(items.map((item) => item.id)))}
           >
-            Remove
+            Select all
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-            Done
-          </Button>
+          <div className="flex-1" />
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {pausable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void runAction(pausable, 'pause')}
+              >
+                Pause ({pausable.length})
+              </Button>
+            )}
+            {resumable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void runAction(resumable, 'resume')}
+              >
+                Resume ({resumable.length})
+              </Button>
+            )}
+            {retryable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void runAction(retryable, 'resume')}
+              >
+                Retry ({retryable.length})
+              </Button>
+            )}
+            {finished.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void runAction(finished, 'remove')}
+              >
+                Remove from list ({finished.length})
+              </Button>
+            )}
+            {unfinished.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() =>
+                  setConfirmation({ kind: 'cancel', ids: unfinished.map((item) => item.id) })
+                }
+              >
+                Cancel downloads… ({unfinished.length})
+              </Button>
+            )}
+            {trashable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() =>
+                  setConfirmation({ kind: 'trash', ids: trashable.map((item) => item.id) })
+                }
+              >
+                Move files to {window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash'}… (
+                {trashable.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="border-b border-border px-5 py-2 text-[12px] text-destructive">
+          {actionError}
         </div>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-        {groups.length === 0 && <EmptyState />}
+        {groups.length === 0 &&
+          (filter === 'all' ? (
+            <EmptyState />
+          ) : (
+            <div role="status" className="flex flex-col items-center gap-2 px-5 py-16 text-center">
+              <p className="text-[16px] font-semibold">
+                {filter === 'progress'
+                  ? 'No downloads in progress'
+                  : filter === 'finished'
+                    ? 'No finished downloads'
+                    : 'No downloads need attention'}
+              </p>
+              <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
+                Show all downloads
+              </Button>
+            </div>
+          ))}
         {groups.map((group) => {
           const ids = group.items.map((item) => item.id)
           const all = ids.every((id) => selected.has(id))
@@ -193,7 +357,11 @@ export function DownloadsScreen(): React.JSX.Element {
             <section key={group.label} aria-label={group.label}>
               <div className="flex items-center gap-3 border-b-[0.5px] border-border pt-5 pb-3">
                 <Checkbox
-                  aria-label={`Select every ${group.label.toLowerCase()} download`}
+                  aria-label={
+                    group.label === 'Needs attention'
+                      ? 'Select all downloads needing attention'
+                      : `Select all ${group.label.toLowerCase()} downloads`
+                  }
                   checked={all}
                   indeterminate={some}
                   onCheckedChange={(on) => toggle(ids, on)}
@@ -207,9 +375,10 @@ export function DownloadsScreen(): React.JSX.Element {
                   <button
                     type="button"
                     className="text-[12.5px] text-[var(--text-secondary)] hover:text-foreground"
+                    title="Downloaded files stay on your computer"
                     onClick={() => void window.plexo.clearHistory()}
                   >
-                    Clear list
+                    Clear finished list
                   </button>
                 )}
               </div>
@@ -222,6 +391,10 @@ export function DownloadsScreen(): React.JSX.Element {
                   onSelect={(on) => toggle([item.id], on)}
                   onOpen={() => setView({ name: 'download', id: item.id })}
                   onFix={() => !isFinished(item) && setFixing(item)}
+                  onAgain={() => {
+                    removeDownload(item.id)
+                    openNewDownload(item.url)
+                  }}
                 />
               ))}
             </section>
@@ -232,24 +405,40 @@ export function DownloadsScreen(): React.JSX.Element {
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />
       <LimitsDialog open={limitsOpen} onOpenChange={setLimitsOpen} />
 
-      <AlertDialog open={confirmingRemove} onOpenChange={setConfirmingRemove}>
+      <AlertDialog
+        open={confirmation !== null}
+        onOpenChange={(open) => !open && setConfirmation(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Remove {chosen.length} {chosen.length === 1 ? 'download' : 'downloads'}?
+              {confirmation?.kind === 'cancel'
+                ? 'Cancel'
+                : `Move files to ${window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash'} for`}{' '}
+              {confirmationItems.length} {confirmationItems.length === 1 ? 'download' : 'downloads'}
+              ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {unfinished.length === 1 ? 'One isn’t' : `${unfinished.length} aren’t`} finished: what
-              they’ve downloaded is lost. Finished files stay where they are.
+              {confirmation?.kind === 'cancel'
+                ? 'This stops the selected unfinished downloads and deletes their downloaded data. Finished downloads stay unchanged.'
+                : `This moves the selected finished downloads’ files to the ${window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash'} and removes them from the list. Unrelated files stay in place.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              disabled={busy || confirmationItems.length === 0}
               className={buttonVariants({ variant: 'destructive', size: 'sm' })}
-              onClick={removeChosen}
+              onClick={() =>
+                void runAction(
+                  confirmationItems,
+                  confirmation?.kind === 'cancel' ? 'remove' : 'trash'
+                )
+              }
             >
-              Remove
+              {confirmation?.kind === 'cancel'
+                ? 'Cancel downloads'
+                : `Move files to ${window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash'}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -281,23 +470,21 @@ function EmptyState(): React.JSX.Element {
       <CombineDiagram networks={PLACEHOLDER_NETWORKS} muted />
       {noNetworks ? (
         <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">
-            No networks to combine
-          </div>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">No networks connected</div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
             Plexo needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
-            connect an iPhone over USB with Personal Hotspot enabled.
+            connect your phone using USB tethering.
           </div>
           <div className="mt-1 flex gap-2">
             <Button type="button" variant="secondary" onClick={() => loadInterfaces()}>
-              Scan Again
+              Scan again
             </Button>
             <Button
               type="button"
               variant="secondary"
               onClick={() => window.plexo.openNetworkSettings()}
             >
-              Network Settings…
+              Network settings…
             </Button>
           </div>
         </>
@@ -324,7 +511,8 @@ function DownloadRow({
   selected,
   onSelect,
   onOpen,
-  onFix
+  onFix,
+  onAgain
 }: {
   item: Item
   now: number
@@ -332,6 +520,7 @@ function DownloadRow({
   onSelect: (on: boolean) => void
   onOpen: () => void
   onFix: () => void
+  onAgain: () => void
 }): React.JSX.Element {
   const networkVisual = useNetworkVisuals()
   const finished = isFinished(item) || item.status === 'completed'
@@ -380,10 +569,10 @@ function DownloadRow({
       default:
         detail = describeError(download.error ?? 'Something went wrong')
         tone = 'text-[var(--color-danger)]'
-        if (linkExpired(download)) action = { label: 'Fix', run: onFix, danger: true }
+        if (linkExpired(download)) action = { label: 'Fix link', run: onFix }
         else if (download.resumable !== false) {
-          action = { label: 'Resume', run: () => void window.plexo.resumeDownload(download.id) }
-        }
+          action = { label: 'Retry', run: () => void window.plexo.resumeDownload(download.id) }
+        } else action = { label: 'Download again', run: onAgain }
     }
   }
 
@@ -408,7 +597,15 @@ function DownloadRow({
             }))
 
   return (
-    <div className="flex items-center gap-3 border-b-[0.5px] border-border py-3">
+    <div
+      data-selected={selected || undefined}
+      className={cn(
+        'group/download-row my-0.5 -mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors',
+        selected
+          ? 'bg-primary/10 hover:bg-primary/15 focus-within:bg-primary/15'
+          : 'hover:bg-secondary focus-within:bg-secondary'
+      )}
+    >
       <Checkbox
         aria-label={`Select ${item.fileName}`}
         checked={selected}
@@ -417,7 +614,7 @@ function DownloadRow({
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
           {badge}
@@ -443,13 +640,7 @@ function DownloadRow({
         </div>
       </button>
       {action && (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className={`rounded-full px-3.5 ${action.danger ? 'text-[var(--color-danger)]' : 'text-primary'}`}
-          onClick={action.run}
-        >
+        <Button type="button" size="sm" variant="secondary" onClick={action.run}>
           {action.label}
         </Button>
       )}
@@ -457,7 +648,7 @@ function DownloadRow({
         type="button"
         aria-label={`Open ${item.fileName}`}
         onClick={onOpen}
-        className="text-muted-foreground hover:text-foreground"
+        className="rounded-md p-1 text-muted-foreground transition-colors group-hover/download-row:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         <ChevronRight className="size-4" />
       </button>

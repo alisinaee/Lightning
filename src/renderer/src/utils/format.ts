@@ -179,10 +179,8 @@ export function toDisplayPath(path: string, homeDir: string): string {
   return path
 }
 
-const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*':\s*/
-const NESTED_ERROR_PREFIX = /^Error:\s*/
+export { describeError } from '@shared/errors'
 
-/** A link that worked and then stopped: signed links run out, and a server turns them away. */
 const LINK_REFUSED = /status (401|403|404|410) for range request/
 
 /** A download whose link the server now refuses: a fresh link to the same file picks it up. */
@@ -192,79 +190,4 @@ export function linkExpired(download: DownloadState): boolean {
     download.status === 'error' &&
     LINK_REFUSED.test(download.error ?? '')
   )
-}
-
-const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
-  {
-    pattern: LINK_REFUSED,
-    message: 'The download link expired · paste a new link to continue'
-  },
-  {
-    pattern: /Download is incomplete/,
-    message: 'The download did not finish every range. Try downloading again.'
-  },
-  {
-    pattern: /Download file size does not match/,
-    message: 'The downloaded file did not match its expected size, so Plexo did not publish it.'
-  },
-  {
-    pattern: /ENOTFOUND|EAI_AGAIN/,
-    message: 'Could not resolve that host — check the URL and your connection.'
-  },
-  {
-    pattern: /ECONNREFUSED/,
-    message: 'The server refused the connection — it may be down or blocking requests.'
-  },
-  {
-    pattern: /ECONNRESET|socket hang up/,
-    message: 'The connection was reset by the server — try again in a moment.'
-  },
-  {
-    pattern: /ETIMEDOUT|ESOCKETTIMEDOUT/,
-    message: 'The connection timed out — check your network and try again.'
-  },
-  {
-    pattern: /CERT|SSL|TLS/i,
-    message: "The server's security certificate could not be verified."
-  },
-  {
-    pattern: /Invalid URL|ERR_INVALID_URL/,
-    message: 'That doesn’t look like a valid URL.'
-  },
-  {
-    pattern: /Server responded with status 401/,
-    message: 'This link requires you to sign in — Plexo can’t download it.'
-  },
-  {
-    pattern: /Server responded with status 403/,
-    message: 'Access to this file was denied by the server.'
-  },
-  {
-    pattern: /Server responded with status 404/,
-    message: 'That file could not be found — check the link and try again.'
-  },
-  {
-    pattern: /Server responded with status 4\d\d/,
-    message: 'The server rejected this request — check the link and try again.'
-  },
-  {
-    pattern: /Server responded with status 5\d\d/,
-    message: 'The server is having trouble right now — try again later.'
-  }
-]
-
-/** Electron wraps a rejected IPC call as "Error invoking remote method 'x': Error: <message>" —
- * strip that framework noise and translate common network errors and internal consistency-check
- * failures into plain English. Used for both the pre-download probe and a download's own
- * `error` field, so a failure partway through a transfer reads exactly as friendly as one caught
- * before it started. */
-export function describeError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error)
-  const stripped = raw.replace(IPC_INVOKE_PREFIX, '').replace(NESTED_ERROR_PREFIX, '')
-
-  for (const { pattern, message } of ERROR_HINTS) {
-    if (pattern.test(stripped)) return message
-  }
-
-  return stripped
 }

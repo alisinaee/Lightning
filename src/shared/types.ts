@@ -153,8 +153,8 @@ export type DownloadUnitState = HttpBlockState | TorrentPieceState
  *   trying, and the rest follow once it gets through.
  * - failed: the server kept refusing requests over it (`error` says how). Switching it off and
  *   on, reconnecting it, or resuming tries again.
- * - limit: it has used up its data for the month (NetworkPreference.dataLimit). It's used again
- *   once the month ends or the limit is raised.
+ * - limit: it has used up its data for the chosen period (NetworkPreference.dataLimit). It's used again
+ *   once the period ends or the limit is raised.
  */
 export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit'
 
@@ -256,6 +256,8 @@ export type FinishedDownload = (
   unitsWritten: number
   /** Set when listed: its file or folder is no longer where it was saved. */
   missing?: boolean
+  /** Chosen torrent files relative to its destination folder, retained for safe file removal. */
+  downloadedFiles?: string[]
 }
 
 /** What the main process sends as a download changes: everything but its blocks, and only the
@@ -279,6 +281,8 @@ export type DownloadUpdate = HttpDownloadUpdate | TorrentDownloadUpdate
 /** User customization for one physical network, keyed by NetworkInterfaceInfo.id — lets a
  * cryptic OS device name (e.g. "feth0") get a real label, and a color distinct from its
  * kind's default. Persisted in the main process, independent of any single download. */
+export type DataLimitPeriod = 'day' | 'week' | 'month'
+
 export interface NetworkPreference {
   customName?: string
   /** One of the app's curated swatch ids (see NETWORK_COLOR_SWATCHES) — not a raw hex, so every
@@ -289,9 +293,10 @@ export interface NetworkPreference {
   off?: boolean
   /** Bytes a second all downloads together may take over it. */
   speedLimit?: number
-  /** Bytes it may receive a calendar month, counted from what Plexo receives over it; once used
-   * up, downloads stop using it until the month ends or the limit is raised. */
+  /** Bytes Plexo may receive in the chosen calendar period. */
   dataLimit?: number
+  /** Defaults to month for existing settings. Weeks start Monday in local time. */
+  dataLimitPeriod?: DataLimitPeriod
 }
 
 export type NetworkPreferences = Record<string, NetworkPreference>

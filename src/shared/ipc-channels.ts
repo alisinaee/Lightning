@@ -15,6 +15,7 @@ export const IpcChannels = {
   listHistory: 'history:list',
   clearHistory: 'history:clear',
   networkUsage: 'network:usage',
+  resetNetworkUsage: 'network:reset-usage',
   freeSpace: 'disk:free-space',
   historyChanged: 'history:changed',
   torrentFiles: 'download:torrent-files',

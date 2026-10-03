@@ -198,7 +198,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('clearHistory', async () => manager.clearHistory())
 
-  handle('networkUsage', async () => manager.limits.usedThisMonth())
+  handle('networkUsage', async () => manager.limits.usedByPeriod())
+  handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))
 
   handle('freeSpace', async (_event, dir) => freeSpace(dir))
 

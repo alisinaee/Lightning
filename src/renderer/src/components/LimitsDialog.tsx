@@ -1,23 +1,36 @@
-import { DOWNLOADS_AT_ONCE } from '@shared/types'
+import { DATA_LIMIT_PERIODS, dataUsageLabel, nextDataReset } from '@shared/dataLimits'
+import { DOWNLOADS_AT_ONCE, type DataLimitPeriod, type NetworkPreference } from '@shared/types'
 import { Minus, Plus } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
-import { formatBytes, formatSpeed } from '../utils/format'
+import { describeError, formatBytes, formatSpeed } from '../utils/format'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction
+} from './ui/alert-dialog'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Switch } from './ui/switch'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
+const KB = 1024
 const MB = 1024 ** 2
 const GB = 1024 ** 3
 
-const sectionClass = 'flex flex-col gap-3 border-t-[0.5px] border-border py-5'
+const sectionClass = 'flex flex-col gap-2.5 border-t-[0.5px] border-border py-3'
 const headingClass = 'font-sans text-[14px] leading-none font-semibold'
 const hintClass = 'text-[12.5px] leading-snug text-[var(--text-secondary)]'
 const navLabelClass =
-  'px-3 pt-4 pb-2 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase'
+  'px-2.5 pt-3 pb-1.5 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase'
 
 /** A number of `unit`s typed in, as bytes; anything that isn't a positive number is ignored. */
 function NumberInput({
@@ -25,83 +38,154 @@ function NumberInput({
   unit,
   unitBytes,
   label,
+  disabled = false,
+  showUnit = true,
   onChange
 }: {
   bytes: number
   unit: string
   unitBytes: number
   label: string
+  disabled?: boolean
+  showUnit?: boolean
   onChange: (bytes: number) => void
 }): React.JSX.Element {
-  // Kept as typed, so a half-typed "1." isn't rewritten under the cursor.
-  const [text, setText] = useState(() => String(Number((bytes / unitBytes).toFixed(2))))
+  // Keep the draft as typed; changing units remounts it using the same byte value.
+  const [text, setText] = useState(() => String(bytes / unitBytes))
   return (
     <span className="flex items-center gap-2">
       <Input
         aria-label={label}
         inputMode="decimal"
+        disabled={disabled}
         value={text}
         onChange={(event) => {
           setText(event.target.value)
           const value = Number(event.target.value)
-          if (value > 0) onChange(Math.round(value * unitBytes))
+          const converted = Math.round(value * unitBytes)
+          if (Number.isSafeInteger(converted) && converted > 0) onChange(converted)
         }}
         className="w-20 text-right font-mono tabular-nums"
       />
-      <span className="font-mono text-[12px] text-muted-foreground">{unit}</span>
+      {showUnit && <span className="font-mono text-[12px] text-muted-foreground">{unit}</span>}
     </span>
   )
 }
 
-/** No limit, or a limit of so many `unit`s: two radio buttons and the number. */
+function SpeedInput({
+  bytes,
+  label,
+  disabled = false,
+  onChange
+}: {
+  bytes: number
+  label: string
+  disabled?: boolean
+  onChange: (bytes: number) => void
+}): React.JSX.Element {
+  const [unit, setUnit] = useState<'KB/s' | 'MB/s'>(() => (bytes < MB ? 'KB/s' : 'MB/s'))
+  return (
+    <div className="flex items-center gap-2">
+      <NumberInput
+        key={unit}
+        bytes={bytes}
+        unit={unit}
+        unitBytes={unit === 'KB/s' ? KB : MB}
+        label={`${label}, in ${unit}`}
+        disabled={disabled}
+        showUnit={false}
+        onChange={onChange}
+      />
+      <ToggleGroup
+        aria-label={`${label} unit`}
+        value={[unit]}
+        disabled={disabled}
+        onValueChange={(values) => {
+          if (values[0] === 'KB/s' || values[0] === 'MB/s') setUnit(values[0])
+        }}
+        size="sm"
+        spacing={0.5}
+        className="bg-secondary p-0.5"
+      >
+        <ToggleGroupItem value="KB/s">KB/s</ToggleGroupItem>
+        <ToggleGroupItem value="MB/s">MB/s</ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  )
+}
+
+/** No limit, or an editable limit. Turning it off retains the last value while open. */
 function LimitChoice({
   label,
   value,
   fallback,
   unit,
   unitBytes,
-  onChange
+  onChange,
+  children
 }: {
+  children?: React.ReactNode
   label: string
   value: number | undefined
-  /** Offered when switching from no limit. */
   fallback: number
   unit: string
   unitBytes: number
   onChange: (bytes: number | undefined) => void
 }): React.JSX.Element {
   const name = useId()
+  const [lastValue, setLastValue] = useState(value ?? fallback)
+  const enabled = value !== undefined
+  const changeValue = (bytes: number): void => {
+    setLastValue(bytes)
+    onChange(bytes)
+  }
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-col gap-2.5">
-      <label className="flex items-center gap-2.5 text-[13.5px]">
+    <div role="radiogroup" aria-label={label} className="flex flex-col gap-2">
+      <label className="flex w-fit items-center gap-2.5 text-[13px]">
         <input
           type="radio"
           name={name}
-          checked={value === undefined}
-          onChange={() => onChange(undefined)}
+          checked={!enabled}
+          onChange={() => {
+            if (value !== undefined) setLastValue(value)
+            onChange(undefined)
+          }}
           className="size-4 accent-[var(--color-accent)]"
         />
         No limit
       </label>
-      <label className="flex items-center gap-2.5 text-[13.5px]">
-        <input
-          type="radio"
-          name={name}
-          checked={value !== undefined}
-          onChange={() => onChange(fallback)}
-          className="size-4 accent-[var(--color-accent)]"
-        />
-        Limit to
-        <NumberInput
-          // Remounted when the limit is switched on, so it shows the value it starts at.
-          key={value === undefined ? 'off' : 'on'}
-          bytes={value ?? fallback}
-          unit={unit}
-          unitBytes={unitBytes}
-          label={`${label}, in ${unit}`}
-          onChange={onChange}
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <label className="flex items-center gap-2.5 text-[13px]">
+          <input
+            type="radio"
+            name={name}
+            checked={enabled}
+            onChange={() => onChange(lastValue)}
+            className="size-4 accent-[var(--color-accent)]"
+          />
+          Limit to
+        </label>
+        {unit === 'MB/s' ? (
+          <SpeedInput
+            key={enabled ? 'on' : 'off'}
+            bytes={value ?? lastValue}
+            label={label}
+            disabled={!enabled}
+            onChange={changeValue}
+          />
+        ) : (
+          <NumberInput
+            key={enabled ? 'on' : 'off'}
+            bytes={value ?? lastValue}
+            unit={unit}
+            unitBytes={unitBytes}
+            label={`${label}, in ${unit}`}
+            disabled={!enabled}
+            onChange={changeValue}
+          />
+        )}
+        {children}
+      </div>
     </div>
   )
 }
@@ -118,18 +202,16 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
 
   return (
     <>
-      <div className="flex flex-col gap-1.5 pb-5">
-        <h3 className="font-sans text-[20px] leading-none font-semibold">All downloads</h3>
+      <div className="flex flex-col gap-1 pb-3">
+        <h3 className="font-sans text-[18px] leading-none font-semibold">All downloads</h3>
         <div className="font-mono text-[12px] text-muted-foreground">
-          {running === 0 ? 'nothing downloading right now' : `${running} downloading right now`}
+          {running === 0 ? 'No active downloads' : `${running} downloading right now`}
         </div>
       </div>
 
       <section className={sectionClass}>
         <h4 className={headingClass}>Total speed</h4>
-        <p className={hintClass}>
-          A ceiling for everything Plexo downloads, across all networks together.
-        </p>
+        <p className={hintClass}>Limits the combined download speed across all networks.</p>
         <LimitChoice
           label="Total speed"
           value={speedLimit}
@@ -143,21 +225,12 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
       <section className={sectionClass}>
         <h4 className={headingClass}>Slow mode</h4>
         <p className={hintClass}>
-          A one-click switch in the status bar for video calls or streaming. Turns on this lower
-          limit until you switch it off.
+          Replaces the total speed limit while enabled. Useful during calls or streaming.
         </p>
-        <div className="flex items-center gap-3 text-[13.5px]">
-          Slow mode speed
-          <NumberInput
-            bytes={slowModeSpeed}
-            unit="MB/s"
-            unitBytes={MB}
-            label="Slow mode speed, in MB/s"
-            onChange={setSlowModeSpeed}
-          />
-          <div className="flex-1" />
-          <label className="flex items-center gap-2.5">
-            On now
+        <div className="flex flex-wrap items-center gap-3">
+          <SpeedInput bytes={slowModeSpeed} label="Slow mode speed" onChange={setSlowModeSpeed} />
+          <label className="ml-auto flex items-center gap-2 text-[13px]">
+            Enabled
             <Switch checked={slowMode} onCheckedChange={setSlowMode} />
           </label>
         </div>
@@ -165,14 +238,14 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
 
       <section className={sectionClass}>
         <h4 className={headingClass}>Downloads at once</h4>
-        <p className={hintClass}>The rest wait in line and start by themselves.</p>
+        <p className={hintClass}>Other downloads wait in the queue and start automatically.</p>
         <div className="flex items-center gap-3 text-[13.5px]">
           <div className="flex items-center rounded-lg border border-input">
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="One fewer"
+              aria-label="Decrease simultaneous downloads"
               disabled={downloadsAtOnce <= DOWNLOADS_AT_ONCE.min}
               onClick={() => setDownloadsAtOnce(downloadsAtOnce - 1)}
             >
@@ -188,7 +261,7 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="One more"
+              aria-label="Increase simultaneous downloads"
               disabled={downloadsAtOnce >= DOWNLOADS_AT_ONCE.max}
               onClick={() => setDownloadsAtOnce(downloadsAtOnce + 1)}
             >
@@ -205,30 +278,54 @@ function GeneralPage({ running }: { running: number }): React.JSX.Element {
 function NetworkPage({
   id,
   name,
-  used
+  used,
+  onUsageReset
 }: {
   id: string
   name: string
   used: number
+  onUsageReset: () => void
 }): React.JSX.Element {
   const preference = useAppStore((store) => store.networkPreferences[id])
   const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
   const dataLimit = preference?.dataLimit
+  const period = preference?.dataLimitPeriod ?? 'month'
+  const [reset, setReset] = useState<'usage' | 'limits' | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const confirmReset = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      if (reset === 'usage') {
+        await window.plexo.resetNetworkUsage(id)
+        onUsageReset()
+      } else setNetworkPreference(id, { speedLimit: undefined, dataLimit: undefined })
+      setReset(null)
+    } catch (cause) {
+      setError(describeError(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   return (
     <>
-      <div className="flex flex-col gap-1.5 pb-5">
-        <h3 className="font-sans text-[20px] leading-none font-semibold">{name}</h3>
+      <div className="flex flex-col gap-1 pb-3">
+        <h3 className="font-sans text-[18px] leading-none font-semibold">{name}</h3>
         <div className="font-mono text-[12px] text-muted-foreground">
-          {formatBytes(used)} used by Plexo this month
+          {formatBytes(used)} used by Plexo {dataUsageLabel(period)}
         </div>
       </div>
 
       <section className={sectionClass}>
         <h4 className={headingClass}>Speed</h4>
-        <p className={hintClass}>
-          How fast Plexo may download over {name}, every download together.
-        </p>
+        <p className={hintClass}>Limits the combined download speed on {name}.</p>
         <LimitChoice
           label={`${name} speed`}
           value={preference?.speedLimit}
@@ -240,27 +337,117 @@ function NetworkPage({
       </section>
 
       <section className={sectionClass}>
-        <h4 className={headingClass}>Data each month</h4>
+        <h4 className={headingClass}>Data limit</h4>
         <p className={hintClass}>
-          For a phone or a metered plan. Counts what Plexo downloads over {name}, not other apps;
-          once it’s used up, downloads stop using {name} until next month.
+          Stops downloads on {name} at the limit. Uploads and other apps don’t count.
         </p>
         <LimitChoice
-          label={`${name} data each month`}
+          label={`${name} data limit`}
           value={dataLimit}
           fallback={5 * GB}
           unit="GB"
           unitBytes={GB}
           onChange={(limit) => setNetworkPreference(id, { dataLimit: limit })}
-        />
-        {dataLimit !== undefined && <UsageBar used={used} limit={dataLimit} />}
+        >
+          <span className="text-[12px] text-muted-foreground">per</span>
+          <ToggleGroup
+            aria-label={`${name} data limit period`}
+            value={[period]}
+            disabled={dataLimit === undefined}
+            onValueChange={(values) => {
+              const next = values[0]
+              if (next === 'day' || next === 'week' || next === 'month') {
+                setNetworkPreference(id, { dataLimitPeriod: next })
+              }
+            }}
+            size="sm"
+            spacing={0.5}
+            className="bg-secondary p-0.5"
+          >
+            {DATA_LIMIT_PERIODS.map((entry) => (
+              <ToggleGroupItem key={entry.value} value={entry.value}>
+                {entry.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </LimitChoice>
+        {dataLimit !== undefined && (
+          <>
+            <UsageBar used={used} limit={dataLimit} period={period} />
+            <p className="text-[11.5px] text-muted-foreground">
+              Resets{' '}
+              {period === 'day'
+                ? 'tomorrow at midnight'
+                : `on ${nextDataReset(period, now).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}`}
+              . {period === 'week' && 'Weeks start Monday. '}Raise the limit or reset data usage to
+              keep using this network sooner.
+            </p>
+          </>
+        )}
       </section>
+      <div className="flex flex-wrap items-center gap-2 border-t-[0.5px] border-border pt-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy || used === 0}
+          onClick={() => setReset('usage')}
+        >
+          Reset data usage…
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy || (preference?.speedLimit === undefined && dataLimit === undefined)}
+          onClick={() => setReset('limits')}
+        >
+          Remove limits…
+        </Button>
+      </div>
+      <AlertDialog open={reset !== null} onOpenChange={(open) => !open && !busy && setReset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {reset === 'usage' ? `Reset data usage for ${name}?` : `Remove limits for ${name}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {reset === 'usage'
+                ? `This resets ${name}’s usage ${dataUsageLabel(period)} to zero. Its configured limits and usage for other periods stay unchanged. Downloads can use this network again if its data limit was reached.`
+                : `This removes ${name}’s speed and data limits. Its recorded data usage stays unchanged. The total speed limit and slow mode still apply.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && (
+            <p role="alert" className="text-[13px] text-destructive">
+              {error}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmReset()
+              }}
+            >
+              {reset === 'usage' ? 'Reset data usage' : 'Remove limits'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
 
 /** "5.00 of 5 GB this month", with a bar that turns red once the limit is reached. */
-export function UsageBar({ used, limit }: { used: number; limit: number }): React.JSX.Element {
+export function UsageBar({
+  used,
+  limit,
+  period = 'month'
+}: {
+  used: number
+  limit: number
+  period?: DataLimitPeriod
+}): React.JSX.Element {
   const reached = used >= limit
   const color = reached ? 'var(--color-danger)' : 'var(--color-wifi)'
   return (
@@ -274,25 +461,23 @@ export function UsageBar({ used, limit }: { used: number; limit: number }): Reac
       <div
         className={`font-mono text-[11.5px] whitespace-nowrap ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
       >
-        {formatBytes(used)} of {formatBytes(limit)} this month
+        {formatBytes(used)} of {formatBytes(limit)} {dataUsageLabel(period)}
       </div>
     </div>
   )
 }
 
 /** One line under a network's name: its limits, or that it has reached one. */
-function describeLimits(
-  preference: { speedLimit?: number; dataLimit?: number } | undefined,
-  used: number
-): string {
+function describeLimits(preference: NetworkPreference | undefined, used: number): string {
   if (preference?.dataLimit !== undefined && used >= preference.dataLimit) {
-    return 'data limit reached'
+    return 'Data limit reached'
   }
   const parts = [
     preference?.speedLimit !== undefined && formatSpeed(preference.speedLimit),
-    preference?.dataLimit !== undefined && `${formatBytes(preference.dataLimit)} a month`
+    preference?.dataLimit !== undefined &&
+      `${formatBytes(preference.dataLimit)} per ${preference.dataLimitPeriod ?? 'month'}`
   ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : 'no limits'
+  return parts.length > 0 ? parts.join(' · ') : 'No limit'
 }
 
 /** Speed & data limits: every download's together, and each network's. Changes apply at once. */
@@ -312,7 +497,8 @@ export function LimitsDialog({
       Object.values(store.downloads).filter((download) => download.status === 'downloading').length
   )
   const networkVisual = useNetworkVisuals()
-  const usage = useNetworkUsage(open)
+  const [usageRevision, setUsageRevision] = useState(0)
+  const usage = useNetworkUsage(open, usageRevision)
   const [page, setPage] = useState<string | null>(null)
   const shown = interfaces.find((iface) => iface.id === page)
 
@@ -328,7 +514,7 @@ export function LimitsDialog({
       type="button"
       aria-current={page === key ? 'page' : undefined}
       onClick={() => setPage(key)}
-      className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left aria-[current=page]:bg-secondary"
+      className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-secondary"
     >
       <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: dot }} />
       <span className="flex min-w-0 flex-col gap-1">
@@ -343,19 +529,22 @@ export function LimitsDialog({
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(620px,calc(100%-2rem))] max-w-[760px] flex-col gap-0 p-0 sm:max-w-[760px]">
-        <div className="flex items-center border-b-[0.5px] border-border px-5 py-4">
+    <Dialog open={open} disablePointerDismissal onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[min(520px,calc(100%-2rem))] max-w-[680px] flex-col gap-0 p-0 sm:max-w-[680px]"
+      >
+        <div className="flex items-center border-b-[0.5px] border-border px-4 py-3">
           <DialogTitle className="text-[16px] font-semibold">Speed &amp; data limits</DialogTitle>
         </div>
         <div className="flex min-h-0 flex-1">
-          <nav className="w-[230px] shrink-0 overflow-y-auto border-r-[0.5px] border-border p-2">
+          <nav className="flex w-[190px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r-[0.5px] border-border p-2">
             <div className={navLabelClass}>General</div>
             {navItem(
               null,
               'var(--text-secondary)',
               'All downloads',
-              slowMode ? 'slow mode on' : speedLimit ? formatSpeed(speedLimit) : 'no limit'
+              slowMode ? 'Slow mode on' : speedLimit ? formatSpeed(speedLimit) : 'No limit'
             )}
             <div className={navLabelClass}>Networks</div>
             {interfaces.map((iface) => {
@@ -366,24 +555,25 @@ export function LimitsDialog({
                 visual.solid,
                 visual.name,
                 detail,
-                detail === 'data limit reached'
+                detail === 'Data limit reached'
               )
             })}
           </nav>
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {shown ? (
               <NetworkPage
                 key={shown.id}
                 id={shown.id}
                 name={networkVisual(shown.id, shown.kind, shown.displayName).name}
                 used={usage[shown.id] ?? 0}
+                onUsageReset={() => setUsageRevision((value) => value + 1)}
               />
             ) : (
               <GeneralPage running={running} />
             )}
           </div>
         </div>
-        <div className="flex items-center border-t-[0.5px] border-border px-5 py-3">
+        <div className="flex items-center border-t-[0.5px] border-border px-4 py-2">
           <div className="font-mono text-[11.5px] text-muted-foreground">
             Changes apply right away
           </div>

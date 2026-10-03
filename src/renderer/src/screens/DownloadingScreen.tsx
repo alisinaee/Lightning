@@ -17,6 +17,7 @@ import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS } from '../theme'
 import {
+  describeError,
   describeFileCount,
   dirnameOf,
   fileExtensionBadge,
@@ -85,7 +86,9 @@ function waitingFor(download: DownloadState): string | null {
   const enabled = download.networks.filter((network) => network.enabled)
   if (enabled.some((network) => network.status === 'on')) return null
   if (enabled.some((network) => network.status === 'unreachable')) {
-    return 'Can’t reach the server. Retrying…'
+    return download.kind === 'torrent'
+      ? 'Can’t reach peers. Retrying…'
+      : 'Can’t reach the server. Retrying…'
   }
   return enabled.length > 0 && enabled.every((network) => network.status === 'limit')
     ? 'Every network in use has reached its data limit. Raise one in Speed & data limits.'
@@ -253,7 +256,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                       role="alert"
                       className="mt-0.5 font-sans text-[11px] leading-[1.2] font-medium text-destructive"
                     >
-                      {download.error ?? waiting}
+                      {download.error ? describeError(download.error) : waiting}
                     </div>
                   )
                 : activeChipOption && (

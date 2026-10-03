@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app } from 'electron'
-import { DEFAULT_SLOW_MODE_SPEED, type AppSettings } from '../../shared/types'
+import { dataPeriodKey } from '../../shared/dataLimits'
+import { DEFAULT_SLOW_MODE_SPEED, type AppSettings, type DataLimitPeriod } from '../../shared/types'
 import { readJson, updateJson } from '../jsonFile'
 
 // Speed and data limits, for every download together: what the user sets in Speed & data limits.
@@ -26,10 +27,14 @@ class Bucket {
   }
 }
 
-/** This month, as usage is counted by: "2026-10". */
-function monthOf(time: number): string {
-  const date = new Date(time)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+type Usage = { key: string; bytes: Record<string, number> }
+const PERIODS: DataLimitPeriod[] = ['day', 'week', 'month']
+function freshUsage(time: number): Record<DataLimitPeriod, Usage> {
+  return {
+    day: { key: dataPeriodKey('day', time), bytes: {} },
+    week: { key: dataPeriodKey('week', time), bytes: {} },
+    month: { key: dataPeriodKey('month', time), bytes: {} }
+  }
 }
 
 const USAGE_SAVE_MS = 10_000
@@ -37,23 +42,41 @@ const USAGE_SAVE_MS = 10_000
 export class Limits {
   private total: Bucket | null = null
   private perNetwork = new Map<string, Bucket>()
-  /** Each network's data limit for the month, in bytes. */
+  /** Each network's data limit and selected calendar period. */
   private dataLimits = new Map<string, number>()
-  private usage: { month: string; bytes: Record<string, number> } = {
-    month: monthOf(Date.now()),
-    bytes: {}
-  }
+  private periods = new Map<string, DataLimitPeriod>()
+  private usage = freshUsage(Date.now())
   private saveTimer: NodeJS.Timeout | null = null
   readonly loaded: Promise<void>
 
-  /** `onLimitReached` is told when a network uses up its data for the month. */
+  /** `onLimitReached` is told when a network uses up its data for its selected period. */
   constructor(private readonly onLimitReached: () => void) {
     this.loaded = readJson(this.usagePath())
       .then((saved) => {
-        const { month, bytes } = (saved ?? {}) as { month?: unknown; bytes?: unknown }
-        if (month !== this.usage.month || typeof bytes !== 'object' || bytes === null) return
-        for (const [id, used] of Object.entries(bytes)) {
-          if (Number.isFinite(used) && used >= 0) this.usage.bytes[id] = used
+        if (!saved || typeof saved !== 'object') return
+        const record = saved as Record<string, unknown>
+        // Older releases saved only monthly usage. Preserve it without attributing it to a day or week.
+        const entries =
+          record.version === 2
+            ? record.periods
+            : {
+                month: { key: record.month, bytes: record.bytes }
+              }
+        if (!entries || typeof entries !== 'object') return
+        for (const period of PERIODS) {
+          const entry = (entries as Record<string, unknown>)[period]
+          if (!entry || typeof entry !== 'object') continue
+          const { key, bytes } = entry as { key?: unknown; bytes?: unknown }
+          if (
+            key !== this.usage[period].key ||
+            !bytes ||
+            typeof bytes !== 'object' ||
+            Array.isArray(bytes)
+          )
+            continue
+          for (const [id, used] of Object.entries(bytes)) {
+            if (Number.isSafeInteger(used) && used >= 0) this.usage[period].bytes[id] = used
+          }
         }
       })
       .catch(() => {})
@@ -77,7 +100,9 @@ export class Limits {
       else this.perNetwork.delete(id)
     }
     this.dataLimits.clear()
+    this.periods.clear()
     for (const [id, preference] of Object.entries(preferences)) {
+      this.periods.set(id, preference.dataLimitPeriod ?? 'month')
       if (preference.dataLimit !== undefined) this.dataLimits.set(id, preference.dataLimit)
     }
   }
@@ -85,9 +110,12 @@ export class Limits {
   /** Counts `bytes` just received on `networkId`, and says how many ms to stop reading for. */
   take(networkId: string, bytes: number): number {
     const now = Date.now()
-    this.rollMonth(now)
-    const before = this.usage.bytes[networkId] ?? 0
-    this.usage.bytes[networkId] = before + bytes
+    this.rollPeriods(now)
+    const period = this.periods.get(networkId) ?? 'month'
+    const before = this.usage[period].bytes[networkId] ?? 0
+    for (const entry of Object.values(this.usage)) {
+      entry.bytes[networkId] = (entry.bytes[networkId] ?? 0) + bytes
+    }
     this.saveTimer ??= setTimeout(() => void this.save(), USAGE_SAVE_MS)
     const limit = this.dataLimits.get(networkId)
     // Told once the caller is done with its bytes: what it does may stop the very connection
@@ -101,30 +129,61 @@ export class Limits {
     )
   }
 
-  /** Whether the network has used up its data for the month. */
+  /** Whether the network has used up its data for the selected period. */
   limitReached(networkId: string): boolean {
-    this.rollMonth(Date.now())
+    this.rollPeriods(Date.now())
     const limit = this.dataLimits.get(networkId)
-    return limit !== undefined && (this.usage.bytes[networkId] ?? 0) >= limit
+    return (
+      limit !== undefined &&
+      (this.usage[this.periods.get(networkId) ?? 'month'].bytes[networkId] ?? 0) >= limit
+    )
   }
 
-  /** What each network has received this month, by id. */
-  usedThisMonth(): Record<string, number> {
-    this.rollMonth(Date.now())
-    return { ...this.usage.bytes }
+  /** Each network's usage for its selected calendar period. */
+  usedByPeriod(): Record<string, number> {
+    this.rollPeriods(Date.now())
+    const ids = new Set(Object.values(this.usage).flatMap((entry) => Object.keys(entry.bytes)))
+    return Object.fromEntries(
+      [...ids].map((id) => [id, this.usage[this.periods.get(id) ?? 'month'].bytes[id] ?? 0])
+    )
   }
 
-  /** Writes the month's usage now (on quit; otherwise it's saved every USAGE_SAVE_MS). */
+  /** Reset only the selected network's current period; other periods retain their usage. */
+  async resetUsage(networkId: string): Promise<void> {
+    await this.loaded
+    this.rollPeriods(Date.now())
+    const period = this.periods.get(networkId) ?? 'month'
+    const previous = this.usage[period].bytes[networkId] ?? 0
+    this.usage[period].bytes[networkId] = 0
+    try {
+      const snapshot = { version: 2, periods: structuredClone(this.usage) }
+      await updateJson(this.usagePath(), () => snapshot)
+    } catch (error) {
+      this.usage[period].bytes[networkId] += previous
+      throw error
+    }
+  }
+
+  /** Writes every period’s usage now (on quit; otherwise it's saved every USAGE_SAVE_MS). */
   async save(): Promise<void> {
     if (this.saveTimer) clearTimeout(this.saveTimer)
     this.saveTimer = null
-    const usage = structuredClone(this.usage)
+    this.rollPeriods(Date.now(), false)
+    const usage = { version: 2, periods: structuredClone(this.usage) }
     await updateJson(this.usagePath(), () => usage).catch(() => {})
   }
 
-  private rollMonth(now: number): void {
-    const month = monthOf(now)
-    if (month !== this.usage.month) this.usage = { month, bytes: {} }
+  private rollPeriods(now: number, scheduleSave = true): void {
+    let changed = false
+    for (const period of PERIODS) {
+      const key = dataPeriodKey(period, now)
+      if (key !== this.usage[period].key) {
+        this.usage[period] = { key, bytes: {} }
+        changed = true
+      }
+    }
+    if (changed && scheduleSave)
+      this.saveTimer ??= setTimeout(() => void this.save(), USAGE_SAVE_MS)
   }
 }
 

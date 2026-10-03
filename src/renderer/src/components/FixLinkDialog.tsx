@@ -46,13 +46,17 @@ export function FixLinkDialog({
   }
 
   return (
-    <Dialog open={download !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent>
+    <Dialog
+      disablePointerDismissal
+      open={download !== null}
+      onOpenChange={(open) => !open && close()}
+    >
+      <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Paste a new link</DialogTitle>
           <DialogDescription>
             {download &&
-              `A fresh link to ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. It carries on from where it stopped.`}
+              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Plexo resumes from where the download stopped.`}
           </DialogDescription>
         </DialogHeader>
         <form

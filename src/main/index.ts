@@ -80,7 +80,8 @@ function createWindow(): void {
     // Windows and Linux draw over the strip's right end.
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 16, y: 10 } }
+      ? // Center the 14px native buttons in the renderer’s 32px macOS title bar.
+        { trafficLightPosition: { x: 16, y: 9 } }
       : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

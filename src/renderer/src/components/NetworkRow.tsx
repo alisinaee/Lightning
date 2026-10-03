@@ -2,7 +2,7 @@ import type { HttpBlockState, HttpStreamState, NetworkStatus } from '@shared/typ
 import { useState } from 'react'
 import { DANGER, type NetworkVisual } from '../theme'
 import type { HttpNetworkGroup, NetworkGroup, TorrentNetworkGroup } from '../utils/format'
-import { formatBytes, formatSpeed } from '../utils/format'
+import { describeError, formatBytes, formatSpeed } from '../utils/format'
 import { ColorBadge } from './ColorBadge'
 import { NetworkEditPopover } from './NetworkEditPopover'
 import { TruncatedText } from './TruncatedText'
@@ -396,7 +396,7 @@ export function NetworkRow({
                   </span>
                 }
               />
-              <TooltipContent>{group.error}</TooltipContent>
+              <TooltipContent>{group.error && describeError(group.error)}</TooltipContent>
             </Tooltip>
           )}
         </div>

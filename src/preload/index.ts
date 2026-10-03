@@ -41,6 +41,7 @@ const plexoApi = {
   listHistory: () => invoke('listHistory'),
   clearHistory: () => invoke('clearHistory'),
   networkUsage: () => invoke('networkUsage'),
+  resetNetworkUsage: (id) => invoke('resetNetworkUsage', id),
   freeSpace: (dir: string) => invoke('freeSpace', dir),
   torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),

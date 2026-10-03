@@ -1,6 +1,7 @@
 import { open, readdir, rm, rmdir, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { DownloadFile } from '../downloadFile'
+import { ownedTorrentFiles } from './ownedFiles'
 import { claimDestinationPath } from '../paths'
 
 /**
@@ -14,7 +15,8 @@ export class TorrentDestination extends DownloadFile {
   constructor(
     path: string,
     private readonly totalBytes: number,
-    private readonly unwanted: readonly string[] = []
+    private readonly unwanted: readonly string[] = [],
+    private readonly owned: readonly string[] = []
   ) {
     super(path)
   }
@@ -25,10 +27,11 @@ export class TorrentDestination extends DownloadFile {
     name: string,
     folder: boolean,
     totalBytes: number,
-    unwanted: readonly string[] = []
+    unwanted: readonly string[] = [],
+    owned: readonly string[] = []
   ): Promise<TorrentDestination> {
     const path = await claimDestinationPath(directory, name, folder)
-    return new TorrentDestination(path, totalBytes, unwanted)
+    return new TorrentDestination(path, totalBytes, unwanted, owned)
   }
 
   /** Already in place: it drops the files not chosen, and stays where it is. */
@@ -83,8 +86,22 @@ export class TorrentDestination extends DownloadFile {
     }
   }
 
-  /** All of it: an unfinished download's folder (or file), which it claimed new. */
+  /** Remove owned partial files and empty folders, preserving unrelated files. */
   async discard(): Promise<void> {
-    await rm(this.path, { recursive: true, force: true })
+    const info = await stat(this.path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (!info) return
+    if (!info.isDirectory()) {
+      await rm(this.path, { force: true })
+      return
+    }
+    if (!this.owned.length)
+      throw new Error('Plexo can’t identify this torrent’s files for removal.')
+    const files = this.owned.map((path) => path.split(/[\\/]/).slice(1).join(sep))
+    const { targets, folders } = await ownedTorrentFiles(this.path, files)
+    for (const target of targets) await rm(target, { force: true })
+    for (const folder of folders) await rmdir(folder).catch(() => {})
   }
 }

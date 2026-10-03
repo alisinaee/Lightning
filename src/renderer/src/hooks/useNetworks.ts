@@ -30,9 +30,10 @@ export function useLatencyPolling(active: boolean): void {
 
 const USAGE_POLL_MS = 2000
 
-/** What each network has received this month, by id, kept fresh while `active` (a screen that
+/** What each network has received in its selected calendar period, by id, kept fresh while `active` (a screen that
  * shows data limits is open). */
-export function useNetworkUsage(active: boolean): Record<string, number> {
+export function useNetworkUsage(active: boolean, revision = 0): Record<string, number> {
+  const preferences = useAppStore((store) => store.networkPreferences)
   const [usage, setUsage] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function useNetworkUsage(active: boolean): Record<string, number> {
       disposed = true
       clearInterval(interval)
     }
-  }, [active])
+  }, [active, preferences, revision])
 
   return usage
 }

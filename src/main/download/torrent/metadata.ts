@@ -9,9 +9,9 @@ import { safeTorrentPaths } from './paths'
 
 /** A .torrent file is metadata only; a link answering with more than this isn't one. */
 const MAX_TORRENT_FILE_BYTES = 10 * 1024 * 1024
-const TOO_LARGE = 'This .torrent file is too large to be a torrent'
+const TOO_LARGE = 'Plexo supports .torrent files up to 10 MB.'
 const V2_ONLY = 'This torrent uses BitTorrent v2 only, which Plexo doesn’t support yet'
-const NO_PEERS = 'No peers found for this magnet link'
+const NO_PEERS = 'No peers responded to this magnet link. Try again later or open a .torrent file.'
 
 /** The .torrent of each torrent probed lately, by info hash: what a download of it starts from,
  * so the window never has to hold or send it. */

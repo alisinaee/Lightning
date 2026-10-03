@@ -1,8 +1,10 @@
+import { trashDownload } from './trashDownload'
+import { describeError } from '../../shared/errors'
 import { randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { app, Notification, powerSaveBlocker, shell } from 'electron'
+import { app, Notification, powerSaveBlocker } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
 import {
   DOWNLOADS_AT_ONCE,
@@ -294,6 +296,11 @@ export class DownloadManager {
 
   /** A network ran out of data, or a limit changed: each download's networks are looked at
    * again, so one at its limit stops being used, and one no longer at it is used again. */
+  async resetNetworkUsage(id: string): Promise<void> {
+    await this.limits.resetUsage(id)
+    this.limitsChanged()
+  }
+
   private limitsChanged(): void {
     for (const runtime of this.runtimes.values()) {
       const { status } = runtime.state
@@ -509,7 +516,16 @@ export class DownloadManager {
       const { pieces, peers: omittedPeers, ...state } = runtime.state
       void omittedPeers
       const written = pieces.filter((piece) => piece.status !== 'skipped').length
-      entry = { ...state, unitsWritten: written }
+      const files = await this.torrentFiles(state.id)
+      entry = {
+        ...state,
+        unitsWritten: written,
+        downloadedFiles: files
+          .filter((file) => file.chosen)
+          .map((file) =>
+            state.folder ? file.path.split(/[\\/]/).slice(1).join(sep) : basename(file.path)
+          )
+      }
     }
     try {
       await addToHistory(structuredClone(entry))
@@ -573,7 +589,8 @@ export class DownloadManager {
         new TorrentDestination(
           persisted.partialPath,
           state.totalBytes,
-          unchosenPaths(torrent, chosen)
+          unchosenPaths(torrent, chosen),
+          torrent.files.map((file) => file.path)
         ),
         pieces,
         torrentFile
@@ -690,14 +707,14 @@ export class DownloadManager {
     const available = await this.networks.refresh()
     const selected = available.filter((iface) => requestPayload.interfaceIds.includes(iface.id))
     if (selected.length === 0) {
-      throw new Error('Select at least one network interface')
+      throw new Error('Select at least one network')
     }
     await ensureDirectory(requestPayload.destinationDir)
     const id = randomUUID()
     let runtime: DownloadRuntime
     if (requestPayload.kind === 'torrent') {
       const torrentFile = probedTorrentFile(requestPayload.infoHash)
-      if (!torrentFile) throw new Error('Look at this torrent again, then start it')
+      if (!torrentFile) throw new Error('Add the torrent again to start downloading.')
       const torrentProbe = await describeTorrent(torrentFile, requestPayload.url)
       if (torrentProbe.kind !== 'torrent') throw new Error('Invalid torrent metadata')
       const torrent = torrentProbe.torrent
@@ -712,7 +729,8 @@ export class DownloadManager {
         requestPayload.suggestedFileName,
         folder,
         totalBytes,
-        unchosenPaths(torrent, chosen)
+        unchosenPaths(torrent, chosen),
+        torrent.files.map((file) => file.path)
       )
       const destinationPath = file.path
       await ensureDirectory(this.downloadDir(id))
@@ -848,12 +866,12 @@ export class DownloadManager {
    * its bytes are the same is checked as on any resume (see HttpTransfer's version check). */
   async relink(id: string, url: string): Promise<void> {
     const runtime = this.runtimes.get(id)
-    if (runtime?.kind !== 'http') throw new Error('Only a download from a link can take a new one')
+    if (runtime?.kind !== 'http') throw new Error('Only web downloads support replacing a link.')
     const { status, resumable, totalBytes } = runtime.state
     if (status !== 'error' && status !== 'paused') {
-      throw new Error('Pause the download before giving it a new link')
+      throw new Error('Pause the download before replacing its link.')
     }
-    if (resumable === false) throw new Error('This download has to start over: nothing is kept')
+    if (resumable === false) throw new Error('This download can’t resume. Start it again.')
     const probe = await probeUrl(url)
     if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
     if ((probe.totalBytes ?? 0) !== totalBytes) {
@@ -862,7 +880,9 @@ export class DownloadManager {
       )
     }
     if (splittable(runtime.requestPayload) && !probe.supportsRanges) {
-      throw new Error('That server can’t carry on a download partway')
+      throw new Error(
+        'This server doesn’t support resuming downloads. Try another link to the same file.'
+      )
     }
     runtime.requestPayload.url = probe.finalUrl
     runtime.state.url = probe.finalUrl
@@ -1116,19 +1136,25 @@ export class DownloadManager {
     ) {
       await this.cancel(id)
     }
-    this.runtimes.delete(id)
     if (runtime) {
-      await this.removePersistedDownload(runtime)
       if (trashFile && runtime.state.status === 'completed') {
-        await shell.trashItem(runtime.state.destinationPath).catch(() => {})
+        const owned =
+          runtime.kind === 'torrent'
+            ? (await this.torrentFiles(id))
+                .filter((file) => file.chosen)
+                .map((file) => file.path.split(/[\\/]/).slice(1).join(sep))
+            : undefined
+        await trashDownload(runtime.state, owned)
       }
+      this.runtimes.delete(id)
+      await this.removePersistedDownload(runtime)
       return
     }
     // A finished one, from history.
     const entry = trashFile ? (await listHistory()).find((other) => other.id === id) : undefined
+    if (entry && !entry.missing) await trashDownload(entry)
     await removeFromHistory([id])
     this.historyChanged()
-    if (entry && !entry.missing) await shell.trashItem(entry.destinationPath).catch(() => {})
   }
 
   async suspendAll(): Promise<void> {
@@ -1214,11 +1240,14 @@ export class DownloadManager {
         runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discardLeftover().catch(() => {})
-      this.notify('Download Complete', `${runtime.state.fileName} has finished downloading.`)
+      this.notify('Download complete', `${runtime.state.fileName} has finished downloading.`)
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
-      this.notify('Download Failed', `${runtime.state.fileName}: ${runtime.state.error}`)
+      this.notify(
+        'Download failed',
+        `${runtime.state.fileName}: ${describeError(runtime.state.error)}`
+      )
     }
     runtime.publishing = false
 
@@ -1239,7 +1268,7 @@ export class DownloadManager {
     runtime.state.status = 'error'
     runtime.state.error = message
     runtime.state.resumable = !discard
-    this.notify('Download Failed', `${runtime.state.fileName}: ${message}`)
+    this.notify('Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
     this.stopRun(runtime)
   }
 

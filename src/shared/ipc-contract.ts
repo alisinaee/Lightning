@@ -31,8 +31,9 @@ export interface IpcContract {
   listHistory: { args: []; result: FinishedDownload[] }
   /** Forgets every finished download; their files stay. */
   clearHistory: { args: []; result: void }
-  /** Bytes each network has received this month, by id (see NetworkPreference.dataLimit). */
+  /** Bytes each network has received in its selected calendar period, by id (see NetworkPreference.dataLimit). */
   networkUsage: { args: []; result: Record<string, number> }
+  resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }
   /** A torrent download's files, in the torrent's order; empty for any other download. */

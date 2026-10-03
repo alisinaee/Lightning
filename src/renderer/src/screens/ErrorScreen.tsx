@@ -37,12 +37,12 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
   const percent = knownSize
     ? Math.min(100, Math.round((download.bytesDownloaded / wantedBytes(download)) * 100))
     : 0
-  const heading = cancelled ? 'Download Cancelled' : 'Download Failed'
+  const heading = cancelled ? 'Download cancelled' : 'Download failed'
   const description = cancelled
     ? 'The download was stopped before finishing.'
     : download.error
       ? describeError(download.error)
-      : 'An error occurred during transfer.'
+      : 'The download stopped unexpectedly. Try again.'
 
   const handleCopyUrl = async (): Promise<void> => {
     try {
@@ -70,7 +70,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
               void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
             }}
           >
-            {resuming ? 'Resuming…' : 'Resume'}
+            {resuming ? 'Retrying…' : 'Retry'}
           </Button>
         ) : (
           <Button type="button" onClick={handleDownloadAgain}>
@@ -79,7 +79,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
         )}
       </DetailHeader>
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-6">
-        <div className="flex w-full max-w-[440px] flex-col items-center gap-[18px] rounded-[14px] border-[0.5px] border-[var(--border-strong)] bg-card p-[28px_24px] text-center shadow-[0_16px_40px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.2)]">
+        <div className="flex w-full max-w-[440px] flex-col items-center gap-[18px] rounded-xl border-[0.5px] border-border bg-card p-6 text-center">
           {/* Status Icon */}
           <div
             className={`flex size-12 shrink-0 items-center justify-center rounded-full border ${
@@ -162,10 +162,10 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
                     {formatBytes(download.bytesDownloaded)}
                     {knownSize
                       ? ` of ${formatBytes(wantedBytes(download))} (${percent}%)`
-                      : ' transferred'}
+                      : ' downloaded'}
                   </>
                 ) : (
-                  'No data transferred'
+                  'No data downloaded'
                 )}
               </div>
             </div>
@@ -182,7 +182,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
                 copied ? 'text-[var(--color-success)]' : 'text-primary'
               }`}
             >
-              {copied ? 'Copied' : 'Copy URL'}
+              {copied ? 'Copied' : 'Copy link'}
             </button>
           </div>
         </div>
