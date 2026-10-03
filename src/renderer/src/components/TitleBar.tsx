@@ -6,9 +6,9 @@ const isMac = window.plexo.platform === 'darwin'
 export function TitleBar(): React.JSX.Element {
   return (
     <div
-      className={`flex h-11 shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card [-webkit-app-region:drag] ${
+      className={`flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card [-webkit-app-region:drag] ${
         // Clear of the controls on either side, so the name stays centered between them.
-        isMac ? 'px-[94px]' : 'px-[140px]'
+        isMac ? 'h-8 px-[94px]' : 'h-11 px-[140px]'
       }`}
     >
       <div className="truncate font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">

@@ -80,7 +80,7 @@ function createWindow(): void {
     // Windows and Linux draw over the strip's right end.
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 16, y: 16 } }
+      ? { trafficLightPosition: { x: 16, y: 10 } }
       : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
