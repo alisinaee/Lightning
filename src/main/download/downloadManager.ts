@@ -65,6 +65,7 @@ interface RuntimeFields {
   publicationPath?: string
   publicationIdentity?: { dev: number; ino: number }
   runPromise?: Promise<void>
+  cancelPromise?: Promise<void>
   publishing: boolean
   pushScheduled: boolean
   persistenceTimer?: NodeJS.Timeout
@@ -545,6 +546,12 @@ export class DownloadManager {
 
   /** Forgets every finished download. Their files are the user's: they stay. */
   async clearHistory(): Promise<void> {
+    await this.initialization
+    await Promise.allSettled(
+      [...this.runtimes.values()]
+        .filter((runtime) => runtime.state.status === 'completed')
+        .map((runtime) => runtime.runPromise)
+    )
     await removeFromHistory()
     this.historyChanged()
   }
@@ -892,7 +899,7 @@ export class DownloadManager {
 
   resume(id: string): void {
     const runtime = this.runtimes.get(id)
-    if (!runtime) return
+    if (!runtime || runtime.cancelPromise) return
     const { status, resumable } = runtime.state
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
 
@@ -917,7 +924,11 @@ export class DownloadManager {
       this.pushUpdate(runtime)
       return
     }
-    if (runtime.state.status !== 'paused' && runtime.state.status !== 'error') return
+    if (
+      runtime.cancelPromise ||
+      (runtime.state.status !== 'paused' && runtime.state.status !== 'error')
+    )
+      return
     const { networks } = runtime.state
     // Switched back on, then off again while the paused run wound down: it stays paused.
     if (byNetwork && !networks.some((network) => network.enabled)) return
@@ -994,7 +1005,11 @@ export class DownloadManager {
   async setNetworkEnabled(id: string, networkId: string, enabled: boolean): Promise<void> {
     const runtime = this.runtimes.get(id)
     const status = runtime?.state.status
-    if (!runtime || (status !== 'downloading' && status !== 'paused' && status !== 'queued')) {
+    if (
+      !runtime ||
+      runtime.cancelPromise ||
+      (status !== 'downloading' && status !== 'paused' && status !== 'queued')
+    ) {
       return
     }
     const { networks } = runtime.state
@@ -1098,6 +1113,7 @@ export class DownloadManager {
 
   async cancel(id: string): Promise<void> {
     const runtime = this.runtimes.get(id)
+    if (runtime?.cancelPromise) return runtime.cancelPromise
     if (
       !runtime ||
       runtime.publishing ||
@@ -1108,25 +1124,61 @@ export class DownloadManager {
     )
       return
 
-    runtime.state.status = 'cancelled'
-    clearSpeeds(runtime.state)
-    if (runtime.kind === 'http') {
-      for (const stream of runtime.state.streams) stream.status = 'cancelled'
+    runtime.cancelPromise = this.cancelRuntime(runtime)
+    try {
+      await runtime.cancelPromise
+    } finally {
+      runtime.cancelPromise = undefined
     }
-    this.stopRun(runtime)
-    this.pushUpdate(runtime, false)
-    await runtime.runPromise
-    await runtime.file.discard()
-    await this.removePersistedDownload(runtime)
-    // A queued one never ran, so no run's end makes room after it.
-    this.pump()
+  }
+
+  private async cancelRuntime(runtime: DownloadRuntime): Promise<void> {
+    try {
+      // Stop writing first, but keep the item visible until its files and manifest are gone.
+      await this.pause(runtime.state.id)
+      if (runtime.state.status !== 'error') {
+        runtime.state.status = 'paused'
+        runtime.state.queuedAt = undefined
+        runtime.state.pausedAt ??= Date.now()
+      }
+      clearSpeeds(runtime.state)
+      this.stopRun(runtime)
+      this.pushUpdate(runtime, false)
+      await runtime.runPromise?.catch(() => {})
+      await runtime.file.discard()
+      await this.removePersistedDownload(runtime, false)
+      runtime.state.status = 'cancelled'
+      if (runtime.kind === 'http') {
+        for (const stream of runtime.state.streams) stream.status = 'cancelled'
+      }
+      this.pushUpdate(runtime, false)
+    } catch (error) {
+      runtime.removed = false
+      runtime.state.status = 'error'
+      runtime.state.error = error instanceof Error ? error.message : String(error)
+      // Cleanup may have removed only some files: retry cancellation rather than resuming them.
+      runtime.state.resumable = false
+      this.pushUpdate(runtime, false)
+      await this.persistNow(runtime)
+      throw error
+    } finally {
+      // A queued one never ran, so no run's end makes room after it.
+      this.pump()
+    }
   }
 
   /** Removes a download, cancelling one under way. A finished one's file stays where it is,
    * unless `trashFile`: then it goes to the Trash, where the user can still get it back. The
    * path is the download's own, never one the window names. */
   async remove(id: string, trashFile = false): Promise<void> {
-    const runtime = this.runtimes.get(id)
+    await this.initialization
+    let runtime = this.runtimes.get(id)
+    if (runtime?.state.status === 'completed') {
+      // Completion is shown before history is saved. Let that move finish before choosing
+      // whether to remove a live runtime or a history entry, including for torrent file removal.
+      await runtime.runPromise?.catch(() => {})
+      runtime = this.runtimes.get(id)
+    }
     if (
       runtime &&
       (runtime.state.status === 'downloading' ||
@@ -1148,6 +1200,10 @@ export class DownloadManager {
       }
       this.runtimes.delete(id)
       await this.removePersistedDownload(runtime)
+      if (runtime.state.status === 'completed') {
+        await removeFromHistory([id])
+        this.historyChanged()
+      }
       return
     }
     // A finished one, from history.
