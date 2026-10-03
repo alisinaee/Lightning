@@ -135,7 +135,9 @@ test.describe('getting a torrent in', () => {
 
     test('a magnet link nobody answers gives up', async ({ plexo }) => {
       const magnet = `magnet:?xt=urn:btih:${'ab'.repeat(20)}&dn=nothing`
-      await expect(plexo.api.probeUrl(magnet)).rejects.toThrow(/No peers found/)
+      await expect(plexo.api.probeUrl(magnet)).rejects.toThrow(
+        /No peers responded to this magnet link/
+      )
     })
   })
 
