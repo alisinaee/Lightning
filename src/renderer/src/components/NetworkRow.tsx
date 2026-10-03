@@ -246,7 +246,10 @@ function PeerRows({
             className={`${rowClass} border-[var(--border-subtle)] bg-card py-[6px] font-mono text-[11px] leading-[1.2] ${index === 0 ? 'border-t-[0.5px] pt-[9px]' : ''} ${index === group.peers.length - 1 ? 'border-b-[0.5px] pb-[11px]' : ''}`}
           >
             <div role="cell" className="flex justify-center pl-5">
+              {/* Its state, with its speed: no word needed beside it. */}
               <div
+                role="img"
+                aria-label={receiving ? 'Receiving' : 'Idle'}
                 className="size-[5px] rounded-full"
                 style={{
                   background: receiving ? visual.solid : 'var(--icon-muted)',
@@ -266,8 +269,6 @@ function PeerRows({
                   {peer.client}
                 </span>
               )}
-              {/* A lit dot and a speed say it's sending; only a peer that isn't says so. */}
-              {!receiving && <span className="text-[9.5px] text-muted-foreground">Idle</span>}
             </div>
             {/* A peer has no progress of its own: a piece counts once verified, and several
                 peers may send parts of one. */}
