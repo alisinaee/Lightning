@@ -1,6 +1,7 @@
 import type {
   DownloadNetwork,
   DownloadState,
+  FinishedDownload,
   HttpDownloadNetwork,
   HttpDownloadState,
   TorrentDownloadNetwork,
@@ -50,7 +51,7 @@ export function pathInTorrent(path: string): string {
 }
 
 /** What a download fetches: all of it, bar a torrent's pieces no chosen file needs. */
-export function wantedBytes(download: DownloadState): number {
+export function wantedBytes(download: DownloadState | FinishedDownload): number {
   return download.totalBytes - (download.kind === 'torrent' ? download.skippedBytes : 0)
 }
 
@@ -65,7 +66,7 @@ export function fileNameFromPath(path: string): string {
 
 /** Short uppercase file-type badge from a name's extension, e.g. "Xcode_16.2.xip" -> "XIP", "photo.jpeg" -> "JPEG". */
 /** A download that is a folder: a torrent's, of its files. */
-export function isFolder(download: DownloadState): boolean {
+export function isFolder(download: DownloadState | FinishedDownload): boolean {
   return download.kind === 'torrent' && download.folder
 }
 
@@ -73,6 +74,32 @@ export function fileExtensionBadge(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.')
   if (dotIndex <= 0 || dotIndex === fileName.length - 1) return 'FILE'
   return fileName.slice(dotIndex + 1, dotIndex + 5).toUpperCase()
+}
+
+/** When something happened, as a list shows it: "Just now", "12 min ago", "Today 08:55",
+ * "Yesterday 21:10", or the date. */
+export function formatWhen(time: number, now: number): string {
+  const minutes = Math.floor((now - time) / 60_000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes} min ago`
+  const date = new Date(time)
+  const clock = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const days = Math.round(
+    (new Date(now).setHours(0, 0, 0, 0) - new Date(time).setHours(0, 0, 0, 0)) / 86_400_000
+  )
+  if (days === 0) return `Today ${clock}`
+  if (days === 1) return `Yesterday ${clock}`
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Where a download comes from, in a word: its link's host, or that it's a torrent. */
+export function sourceOf(download: { kind: 'http' | 'torrent'; url: string }): string {
+  if (download.kind === 'torrent') return 'torrent'
+  try {
+    return new URL(download.url).host
+  } catch {
+    return download.url
+  }
 }
 
 /** m:ss, or h:mm:ss past an hour. */
@@ -147,7 +174,23 @@ export function toDisplayPath(path: string, homeDir: string): string {
 const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*':\s*/
 const NESTED_ERROR_PREFIX = /^Error:\s*/
 
+/** A link that worked and then stopped: signed links run out, and a server turns them away. */
+const LINK_REFUSED = /status (401|403|404|410) for range request/
+
+/** A download whose link the server now refuses: a fresh link to the same file picks it up. */
+export function linkExpired(download: DownloadState): boolean {
+  return (
+    download.kind === 'http' &&
+    download.status === 'error' &&
+    LINK_REFUSED.test(download.error ?? '')
+  )
+}
+
 const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
+  {
+    pattern: LINK_REFUSED,
+    message: 'The download link expired · paste a new link to continue'
+  },
   {
     pattern: /Download is incomplete/,
     message: 'The download did not finish every range. Try downloading again.'

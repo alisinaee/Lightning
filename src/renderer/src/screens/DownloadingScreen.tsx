@@ -95,18 +95,22 @@ function waitingFor(download: DownloadState): string | null {
   if (download.status !== 'downloading') return null
   const enabled = download.networks.filter((network) => network.enabled)
   if (enabled.some((network) => network.status === 'on')) return null
-  return enabled.some((network) => network.status === 'unreachable')
-    ? 'Can’t reach the server. Retrying…'
+  if (enabled.some((network) => network.status === 'unreachable')) {
+    return 'Can’t reach the server. Retrying…'
+  }
+  return enabled.length > 0 && enabled.every((network) => network.status === 'limit')
+    ? 'Every network in use has reached its data limit. Raise one in Speed & data limits.'
     : 'Waiting for a network. Reconnect one or switch one on.'
 }
 
 export function DownloadingScreen({ download }: { download: DownloadState }): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
-  const speedHistory = useAppStore((store) => store.speedHistory)
-  const speedHistoryByInterface = useAppStore((store) => store.speedHistoryByInterface)
-  const peakSpeedBytesPerSec = useAppStore((store) => store.peakSpeedBytesPerSec)
+  const speedHistory = download.speedHistory ?? {}
+  const peakSpeedBytesPerSec = download.peakSpeedBytesPerSec
   const networkVisual = useNetworkVisuals()
-  const isPaused = download.status === 'paused'
+  const isQueued = download.status === 'queued'
+  // Waiting in the queue looks like a pause: nothing moves.
+  const isPaused = download.status === 'paused' || isQueued
   const isTorrent = download.kind === 'torrent'
   const percent = formatPercent(download.bytesDownloaded, wantedBytes(download))
   const knownSize = download.totalBytes > 0
@@ -132,14 +136,15 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
 
   useEffect(() => {
     if (isPaused) {
-      document.title = knownSize ? `Plexo — Paused (${percent}%)` : 'Plexo — Paused'
+      const label = isQueued ? 'Queued' : 'Paused'
+      document.title = knownSize ? `Plexo — ${label} (${percent}%)` : `Plexo — ${label}`
     } else {
       document.title = knownSize ? `Plexo — ${percent}%` : 'Plexo — downloading'
     }
     return () => {
       document.title = 'Plexo'
     }
-  }, [percent, knownSize, isPaused])
+  }, [percent, knownSize, isPaused, isQueued])
 
   const totalPausedMs =
     (download.totalPausedMs || 0) +
@@ -147,7 +152,8 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   const elapsedSeconds = Math.max(0, (now - download.startedAt - totalPausedMs) / 1000)
 
   const handlePauseResume = (): void => {
-    if (isPaused) {
+    // A queued one is paused out of the queue, as a running one is.
+    if (isPaused && !isQueued) {
       setResuming(true)
       void window.plexo.resumeDownload(download.id)
     } else {
@@ -203,10 +209,14 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
   const activeChipOption =
     chipOptions.length > 0 ? chipOptions[chipModeIndex % chipOptions.length] : null
 
-  const statusBadge = isPaused ? { label: 'PAUSED', palette: KIND_PALETTE.usb } : null
+  const statusBadge = isPaused
+    ? { label: isQueued ? 'QUEUED' : 'PAUSED', palette: KIND_PALETTE.usb }
+    : null
 
-  const throughputStatusLabel = isPaused ? null : `LAST ${speedHistory.length}S`
-  const pauseResumeLabel = resuming ? 'Resuming…' : isPaused ? 'Resume' : 'Pause'
+  const throughputStatusLabel = isPaused
+    ? null
+    : `LAST ${Object.values(speedHistory)[0]?.length ?? 0}S`
+  const pauseResumeLabel = resuming ? 'Resuming…' : isPaused && !isQueued ? 'Resume' : 'Pause'
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -236,7 +246,9 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 {/* A dash until a speed has been held long enough to call it the peak. */}
                 <InlineStat
                   label="PEAK"
-                  value={peakSpeedBytesPerSec === null ? '—' : formatSpeed(peakSpeedBytesPerSec)}
+                  value={
+                    peakSpeedBytesPerSec === undefined ? '—' : formatSpeed(peakSpeedBytesPerSec)
+                  }
                 />
               </div>
               {isPaused || waiting
@@ -275,7 +287,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 interfaceId: g.id,
                 solid: visuals[i].solid
               }))}
-              historyByInterface={speedHistoryByInterface}
+              historyByInterface={speedHistory}
             />
           </div>
         </div>
@@ -471,7 +483,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
         </div>
         <Button
           type="button"
-          variant={isPaused ? 'default' : 'secondary'}
+          variant={isPaused && !isQueued ? 'default' : 'secondary'}
           onClick={handlePauseResume}
           disabled={resuming}
         >

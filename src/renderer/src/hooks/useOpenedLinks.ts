@@ -11,7 +11,9 @@ export function useOpenedLinks(): void {
       void window.plexo
         .takePendingLink()
         .then((link) => {
-          if (link) setDraftUrl(link)
+          if (!link) return
+          setDraftUrl(link)
+          useAppStore.getState().setView({ name: 'new' })
         })
         .catch(() => {})
     }

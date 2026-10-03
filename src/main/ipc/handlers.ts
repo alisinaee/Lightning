@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { stat, statfs } from 'node:fs/promises'
 import {
   app,
   clipboard,
@@ -12,9 +12,15 @@ import {
 } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { IpcContract } from '../../shared/ipc-contract'
-import type { InitialState, ThemeSource } from '../../shared/types'
+import {
+  DEFAULT_SLOW_MODE_SPEED,
+  DOWNLOADS_AT_ONCE,
+  type InitialState,
+  type ThemeSource
+} from '../../shared/types'
 import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
+import { listHistory } from '../download/history'
 import { probeUrl } from '../download/probe'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
@@ -57,6 +63,15 @@ function handle<K extends keyof IpcContract>(
 
 const DESTINATION_CHECK_MS = 300
 
+async function freeSpace(dir: string): Promise<number | null> {
+  try {
+    const stats = await statfs(dir)
+    return stats.bavail * stats.bsize
+  } catch {
+    return null
+  }
+}
+
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): DownloadManager {
   // The main process keeps the network list, for downloads and the window alike.
   const networks = new NetworkMonitor((list) => {
@@ -92,6 +107,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
       nativeTheme.themeSource = patch.themeSource
     }
     await saveSettings(patch)
+    // Read back rather than taken from the patch: what was saved is what passed the checks.
+    manager.applySettings(await loadSettings())
   })
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
@@ -116,6 +133,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         downloadsDir: getDefaultDownloadsDir(),
         themeSource: currentThemeSource(),
         networkPreferences: settings.networkPreferences ?? {},
+        downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
+        speedLimit: settings.speedLimit,
+        slowMode: settings.slowMode ?? false,
+        slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -125,7 +146,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         homeDir: '',
         downloadsDir: '',
         themeSource: currentThemeSource(),
-        networkPreferences: {}
+        networkPreferences: {},
+        downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
+        slowMode: false,
+        slowModeSpeed: DEFAULT_SLOW_MODE_SPEED
       } satisfies InitialState
     }
   })
@@ -168,7 +192,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('startDownload', async (_event, request) => manager.start(request))
 
-  handle('getCurrentDownload', async () => manager.getCurrentDownload())
+  handle('listDownloads', async () => manager.listDownloads())
+
+  handle('listHistory', async () => listHistory())
+
+  handle('clearHistory', async () => manager.clearHistory())
+
+  handle('networkUsage', async () => manager.limits.usedThisMonth())
+
+  handle('freeSpace', async (_event, dir) => freeSpace(dir))
 
   handle('torrentFiles', async (_event, id) => manager.torrentFiles(id))
 
@@ -179,6 +211,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('resumeDownload', async (_event, id) => {
     manager.resume(id)
   })
+
+  handle('relinkDownload', async (_event, id, url) => manager.relink(id, url))
 
   handle('setDownloadNetwork', async (_event, id, networkId, enabled) => {
     await manager.setNetworkEnabled(id, networkId, enabled)

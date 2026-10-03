@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { Notification, type BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 
 // Links the OS hands Plexo — a magnet link clicked in a browser, a .torrent opened from the file
@@ -32,26 +32,15 @@ export function linkFromArgs(argv: readonly string[]): string | null {
 
 /**
  * Hands `link` to the window: it's kept until the window takes it (takePendingLink), so one that
- * arrives before the window is ready isn't lost. The window is brought forward. While a download
- * is under way the link waits on the start screen for it to end, and a notification says so.
+ * arrives before the window is ready isn't lost. The window is brought forward.
  */
-export function offerLink(
-  link: string,
-  window: BrowserWindow | null,
-  options: { busy: boolean; notify: boolean }
-): void {
+export function offerLink(link: string, window: BrowserWindow | null): void {
   pending = link
   if (!window || window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
   window.show()
   window.focus()
   window.webContents.send(IpcChannels.linkReceived)
-  if (options.busy && options.notify && Notification.isSupported()) {
-    new Notification({
-      title: 'Plexo is busy',
-      body: 'The link is waiting on the start screen for the current download to end.'
-    }).show()
-  }
 }
 
 /** The link handed over, once: whoever takes it puts it in the link field. */

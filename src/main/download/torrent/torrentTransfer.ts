@@ -298,7 +298,25 @@ export class TorrentTransfer implements Transfer {
     }
     socket.once('connect', settle)
     socket.once('close', settle)
+    this.limit(socket, networkId)
     return socket
+  }
+
+  /** Puts what a peer sends through the speed and data limits (see Limits). push() is where
+   * the socket's bytes come in, whoever is reading them: a 'data' listener here would set it
+   * flowing before webtorrent is ready to read. */
+  private limit(socket: Socket, networkId: string): void {
+    const push = socket.push.bind(socket)
+    socket.push = (chunk: Buffer | null, encoding?: BufferEncoding): boolean => {
+      const wait = chunk ? this.host.limits.take(networkId, chunk.length) : 0
+      if (wait > 0) {
+        // ponytail: webtorrent's pipe resumes the socket when its wire drains, which can cut a
+        // wait short; the debt it leaves only lengthens the next one, so the rate still holds.
+        socket.pause()
+        setTimeout(() => socket.resume(), wait)
+      }
+      return push(chunk, encoding)
+    }
   }
 
   /** A peer dialling in: it's on the network whose address it reached. One that reached no
@@ -310,7 +328,9 @@ export class TorrentTransfer implements Transfer {
       this.host.networks.find(entry.id)?.addresses.some((address) => address.address === local)
     )
     // As webtorrent names an incoming peer: the address as the socket gives it, no brackets.
-    if (network) this.chosen.set(`${socket.remoteAddress}:${socket.remotePort}`, network.id)
+    if (!network) return
+    this.chosen.set(`${socket.remoteAddress}:${socket.remotePort}`, network.id)
+    this.limit(socket, network.id)
   }
 
   private onWire(wire: Wire, address: string): void {

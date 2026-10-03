@@ -172,19 +172,59 @@ test.describe('edge cases', () => {
     expect(Date.now() - started).toBeLessThan(10_000)
   })
 
-  test('starting a second download while one is active is refused @smoke', async ({
+  test('a link that expired mid-download carries on from a fresh one, not one to another file', async ({
     plexo,
     serve
   }) => {
-    const origin = await serve({ size: 10 * BLOCK })
-    const reached = origin.hold(BLOCK)
-    await plexo.start(origin.url(), origin.sha256)
-    await reached
-
-    const other = await serve({ size: BLOCK, seed: 3 })
-    await expect(plexo.start(other.url(), other.sha256)).rejects.toThrow(/already in progress/)
-
+    const origin = await serve({ size: 16 * BLOCK, seed: 7 })
+    const held = origin.hold(4 * BLOCK)
+    const id = await plexo.start(origin.url(), origin.sha256)
+    await held
+    origin.setRule(() => ({ status: 403 }))
     origin.release()
+    const failed = await plexo.waitUntil((state) => state.status === 'error', 30_000)
+    expect(failed.error).toMatch(/status 403/)
+    const kept = failed.bytesDownloaded
+    expect(kept).toBeGreaterThan(0)
+
+    const other = await serve({ size: 8 * BLOCK, seed: 8 })
+    await expect(plexo.api.relinkDownload(id, other.url())).rejects.toThrow(/different file/)
+
+    const fresh = await serve({ size: 16 * BLOCK, seed: 7 })
+    await plexo.api.relinkDownload(id, fresh.url())
     await plexo.waitForHttpStatus('completed')
+    // Only what was missing came from the fresh link.
+    const fetched = fresh.chunkRequests().reduce((sum, entry) => sum + entry.bytesSent, 0)
+    expect(fetched).toBeLessThanOrEqual(16 * BLOCK - kept + 4 * BLOCK)
+  })
+
+  test('past two at once, downloads wait in the queue and start as room frees @smoke', async ({
+    plexo,
+    serve
+  }) => {
+    const origins = await Promise.all([1, 2, 3].map((seed) => serve({ size: 4 * BLOCK, seed })))
+    const held = origins.map((origin) => origin.hold(BLOCK))
+    const ids: string[] = []
+    for (const origin of origins) ids.push(await plexo.start(origin.url(), origin.sha256))
+    await Promise.all(held.slice(0, 2))
+    const status = async (index: number): Promise<string | undefined> =>
+      (await plexo.byId(ids[index]))?.status
+    expect(await status(2)).toBe('queued')
+
+    // A pause makes room: the queued one starts.
+    await plexo.api.pauseDownload(ids[0])
+    await held[2]
+    expect(await status(2)).toBe('downloading')
+    // Resumed while two run, it waits, first in line, for the next to finish.
+    await plexo.api.resumeDownload(ids[0])
+    await expect.poll(() => status(0)).toBe('queued')
+    origins[1].release()
+    await expect.poll(() => status(1)).toBe('completed')
+    await expect.poll(() => status(0)).not.toBe('queued')
+
+    for (const origin of origins) origin.release()
+    for (let index = 0; index < 3; index++) {
+      await expect.poll(() => status(index), { timeout: 20_000 }).toBe('completed')
+    }
   })
 })

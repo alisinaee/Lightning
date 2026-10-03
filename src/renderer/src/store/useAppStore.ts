@@ -3,6 +3,7 @@ import type {
   AppSettings,
   DownloadState,
   DownloadUpdate,
+  FinishedDownload,
   NetworkInterfaceInfo,
   NetworkPreference,
   NetworkPreferences,
@@ -13,19 +14,8 @@ import { create } from 'zustand'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-const SPEED_HISTORY_LENGTH = 60
-const SPEED_SAMPLE_INTERVAL_MS = 1000
-// The peak is the best speed held this many samples (seconds): longer than a start's burst (an
-// ISP's burst allowance, every connection ramping up at once), which isn't the line's speed.
-const PEAK_SAMPLES = 5
-
-// Throttling cadence lives outside the store's own state — it's bookkeeping for how often to
-// sample, not something a component should ever read or re-render on.
-let lastSpeedSampleAt = 0
-// The best PEAK_SAMPLES-sample average so far, for the current download.
-let sustainedPeak = 0
-// The best combined speed it has shown: its peak if it completes before it has held one.
-let bestSeen = 0
+/** What the window shows: the list of downloads, the start screen, or one download. */
+export type View = { name: 'list' } | { name: 'new' } | { name: 'download'; id: string }
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -45,16 +35,17 @@ interface AppStore {
   homeDir: string
   downloadsDir: string
 
-  /** Plexo focuses on one download at a time — this is it. */
-  currentDownload: DownloadState | null
-  speedHistory: number[]
-  /** Same rolling window as speedHistory, split by physical network — for the stacked
-   * per-network throughput chart, keyed by interface id. */
-  speedHistoryByInterface: Record<string, number[]>
-  /** The best combined speed held for PEAK_SAMPLES seconds this download, so it only ever rises;
-   * null until it has run that long. A download done sooner gets the best speed it showed. Kept
-   * as a running max: the history window would lose it once it ages out. */
-  peakSpeedBytesPerSec: number | null
+  /** Every download that isn't finished, by id — running, queued, paused or failed. */
+  downloads: Record<string, DownloadState>
+  /** Finished downloads, newest first (see main/download/history.ts). */
+  history: FinishedDownload[]
+  view: View
+  /** Persisted — how many downloads run at once; the rest wait in the queue. */
+  downloadsAtOnce: number
+  /** Persisted — the speed limits (see AppSettings). */
+  speedLimit: number | undefined
+  slowMode: boolean
+  slowModeSpeed: number
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
   draftUrl: string
@@ -69,9 +60,18 @@ interface AppStore {
   setThemeSource: (source: ThemeSource) => void
   checkForUpdate: () => Promise<void>
   dismissUpdate: () => void
-  /** A snapshot or an update of the current download, from the main process. */
+  /** A snapshot or an update of a download, from the main process. */
   receiveDownloadUpdate: (update: DownloadUpdate) => void
-  clearCurrentDownload: () => void
+  /** Finished downloads as main lists them; any that finished leave `downloads`. */
+  receiveHistory: (history: FinishedDownload[]) => void
+  /** Removes a download (cancelling one under way), or forgets a finished one. */
+  removeDownload: (id: string) => void
+  setView: (view: View) => void
+  setDownloadsAtOnce: (count: number) => void
+  /** Each one applies at once, to every download (see main/network/limits.ts). */
+  setSpeedLimit: (bytesPerSec: number | undefined) => void
+  setSlowMode: (on: boolean) => void
+  setSlowModeSpeed: (bytesPerSec: number) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
 }
@@ -98,10 +98,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   homeDir: initial.homeDir,
   downloadsDir: initial.downloadsDir,
 
-  currentDownload: null,
-  speedHistory: [],
-  speedHistoryByInterface: {},
-  peakSpeedBytesPerSec: null,
+  downloads: {},
+  history: [],
+  view: { name: 'list' },
+  downloadsAtOnce: initial.downloadsAtOnce,
+  speedLimit: initial.speedLimit,
+  slowMode: initial.slowMode,
+  slowModeSpeed: initial.slowModeSpeed,
 
   draftUrl: '',
   destinationDir: initial.destinationDir ?? initial.downloadsDir,
@@ -165,59 +168,49 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   receiveDownloadUpdate: (update) => {
-    const previous = get().currentDownload
+    const { downloads, history } = get()
+    // Finished already: an update that arrives late mustn't bring it back.
+    if (history.some((entry) => entry.id === update.state.id)) return
+    const previous = downloads[update.state.id] ?? null
     const download = applyDownloadUpdate(previous, update)
     if (!download || download === previous) return
-    const isNewDownload = !previous || previous.id !== download.id
-
-    let speedHistory = isNewDownload ? [] : get().speedHistory
-    let speedHistoryByInterface = isNewDownload ? {} : get().speedHistoryByInterface
-    let peakSpeedBytesPerSec = isNewDownload ? null : get().peakSpeedBytesPerSec
-    if (isNewDownload) {
-      lastSpeedSampleAt = 0
-      sustainedPeak = 0
-      bestSeen = 0
-    }
-
-    if (download.status === 'downloading') {
-      const now = Date.now()
-      if (now - lastSpeedSampleAt >= SPEED_SAMPLE_INTERVAL_MS) {
-        lastSpeedSampleAt = now
-        speedHistory = [...speedHistory, download.speedBytesPerSec].slice(-SPEED_HISTORY_LENGTH)
-        if (speedHistory.length >= PEAK_SAMPLES) {
-          const held = speedHistory.slice(-PEAK_SAMPLES)
-          sustainedPeak = Math.max(
-            sustainedPeak,
-            held.reduce((sum, speed) => sum + speed, 0) / PEAK_SAMPLES
-          )
-        }
-
-        const nextByInterface: Record<string, number[]> = {}
-        for (const network of download.networks) {
-          const previousSeries = speedHistoryByInterface[network.id] ?? []
-          nextByInterface[network.id] = [...previousSeries, network.speedBytesPerSec].slice(
-            -SPEED_HISTORY_LENGTH
-          )
-        }
-        speedHistoryByInterface = nextByInterface
-      }
-      bestSeen = Math.max(bestSeen, download.speedBytesPerSec)
-      if (speedHistory.length >= PEAK_SAMPLES) peakSpeedBytesPerSec = sustainedPeak
-    } else if (download.status === 'completed' && peakSpeedBytesPerSec === null && bestSeen > 0) {
-      // Done before it held a speed for long: the best it showed.
-      peakSpeedBytesPerSec = bestSeen
-    }
-
-    set({ currentDownload: download, speedHistory, speedHistoryByInterface, peakSpeedBytesPerSec })
+    set({ downloads: { ...downloads, [download.id]: download } })
   },
 
-  clearCurrentDownload: () =>
-    set({
-      currentDownload: null,
-      speedHistory: [],
-      speedHistoryByInterface: {},
-      peakSpeedBytesPerSec: null
-    }),
+  receiveHistory: (history) => {
+    const downloads = { ...get().downloads }
+    for (const entry of history) delete downloads[entry.id]
+    set({ history, downloads })
+  },
+
+  removeDownload: (id) => {
+    const { [id]: removed, ...downloads } = get().downloads
+    void removed
+    set({ downloads, history: get().history.filter((entry) => entry.id !== id) })
+    void window.plexo.removeDownload(id).catch(() => {})
+  },
+
+  setView: (view) => set({ view }),
+
+  setDownloadsAtOnce: (downloadsAtOnce) => {
+    set({ downloadsAtOnce })
+    persist({ downloadsAtOnce })
+  },
+
+  setSpeedLimit: (speedLimit) => {
+    set({ speedLimit })
+    persist({ speedLimit })
+  },
+
+  setSlowMode: (slowMode) => {
+    set({ slowMode })
+    persist({ slowMode })
+  },
+
+  setSlowModeSpeed: (slowModeSpeed) => {
+    set({ slowModeSpeed })
+    persist({ slowModeSpeed })
+  },
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),
   setDestinationDir: (destinationDir) => {

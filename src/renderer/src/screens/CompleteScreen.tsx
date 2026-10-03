@@ -1,4 +1,4 @@
-import type { DownloadState } from '@shared/types'
+import type { DownloadState, FinishedDownload } from '@shared/types'
 import { HeroBand } from '../components/HeroBand'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { ThroughputChart } from '../components/ThroughputChart'
@@ -22,13 +22,13 @@ export function CompleteScreen({
   download,
   onNewDownload
 }: {
-  download: DownloadState
+  /** Just finished, or as history keeps it. */
+  download: DownloadState | FinishedDownload
   onNewDownload: () => void
 }): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
-  const peakSpeedBytesPerSec = useAppStore((store) => store.peakSpeedBytesPerSec)
-  const speedHistoryByInterface = useAppStore((store) => store.speedHistoryByInterface)
   const networkVisual = useNetworkVisuals()
+  const missing = 'missing' in download && download.missing === true
 
   const finalSize = wantedBytes(download) || download.bytesDownloaded
   const totalPausedMs = download.totalPausedMs ?? 0
@@ -49,9 +49,12 @@ export function CompleteScreen({
   const isTorrent = download.kind === 'torrent'
   // "Chunks" in the block grid means byte ranges, not parallel connections. A torrent's are its
   // pieces, those its chosen files needed.
-  const totalChunkCount = isTorrent
-    ? download.pieces.filter((piece) => piece.status !== 'skipped').length
-    : download.totalBlocks
+  const totalChunkCount =
+    'unitsWritten' in download
+      ? download.unitsWritten
+      : download.kind === 'torrent'
+        ? download.pieces.filter((piece) => piece.status !== 'skipped').length
+        : download.totalBlocks
   const files = isTorrent && download.files.total > 1 ? download.files : null
 
   const handleReveal = (): void => void window.plexo.revealInFolder(download.destinationPath)
@@ -82,7 +85,9 @@ export function CompleteScreen({
             <div className="mt-[5px] truncate font-mono text-[11.5px] leading-[1.3] text-muted-foreground">
               {files && `${describeFileCount(files.chosen, files.total)} · `}
               {formatBytes(finalSize)} ·{' '}
-              {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
+              {missing
+                ? 'moved or deleted since'
+                : toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
             </div>
           </div>
           <div className="flex flex-col items-end gap-[5px]">
@@ -107,7 +112,10 @@ export function CompleteScreen({
           { label: 'Time', value: formatDuration(elapsedSeconds) },
           {
             label: 'Peak',
-            value: peakSpeedBytesPerSec === null ? '—' : formatSpeed(peakSpeedBytesPerSec)
+            value:
+              download.peakSpeedBytesPerSec === undefined
+                ? '—'
+                : formatSpeed(download.peakSpeedBytesPerSec)
           },
           { label: 'Networks', value: String(groups.length) },
           // The most it ran at once: streams that didn't make it faster were closed along the way.
@@ -136,7 +144,7 @@ export function CompleteScreen({
         <h2 className={sectionHeaderClass}>Speed over the download</h2>
         <ThroughputChart
           order={groups.map((g, i) => ({ interfaceId: g.id, solid: visuals[i].solid }))}
-          historyByInterface={speedHistoryByInterface}
+          historyByInterface={download.speedHistory ?? {}}
         />
       </div>
 
@@ -185,7 +193,7 @@ export function CompleteScreen({
         <Button type="button" variant="secondary" onClick={onNewDownload}>
           New Download
         </Button>
-        <Button type="button" onClick={handleReveal}>
+        <Button type="button" onClick={handleReveal} disabled={missing}>
           {window.plexo.platform === 'darwin' ? 'Reveal in Finder' : 'Show in folder'}
         </Button>
       </ScreenFooter>

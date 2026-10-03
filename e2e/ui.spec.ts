@@ -194,8 +194,10 @@ test.describe('UI journeys @smoke', () => {
   test('a completed download is shown again after a restart', async ({ plexo, serve }) => {
     const origin = await serve({ size: SIZE })
     await plexo.start(origin.url(), origin.sha256)
-    await plexo.waitForStatus('completed')
+    const { fileName } = await plexo.waitForStatus('completed')
     await plexo.relaunch()
+    // Listed under Finished; opened, it shows as it did when it finished.
+    await plexo.page.getByRole('button', { name: `Open ${fileName}` }).click()
     await expect(
       plexo.page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
     ).toBeVisible()

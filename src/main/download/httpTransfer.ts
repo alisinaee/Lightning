@@ -626,6 +626,7 @@ export class HttpTransfer implements Transfer {
         signal: AbortSignal.any([self.controller.signal, attempt.abort.signal]),
         acceptedVersions: this.acceptedVersions,
         onResponse: (info) => (attempt.response = info),
+        throttle: (bytes) => this.host.limits.take(attempt.networkId, bytes),
         onNetworkProgress: (bytesThisRun) => {
           const delta = bytesThisRun - attempt.networkReceived
           if (delta > 0) {

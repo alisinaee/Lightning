@@ -37,10 +37,15 @@ const plexoApi = {
   revealInFolder: (filePath: string) => invoke('revealInFolder', filePath),
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>
     invoke('startDownload', request),
-  getCurrentDownload: () => invoke('getCurrentDownload'),
+  listDownloads: () => invoke('listDownloads'),
+  listHistory: () => invoke('listHistory'),
+  clearHistory: () => invoke('clearHistory'),
+  networkUsage: () => invoke('networkUsage'),
+  freeSpace: (dir: string) => invoke('freeSpace', dir),
   torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),
   resumeDownload: (downloadId: string) => invoke('resumeDownload', downloadId),
+  relinkDownload: (downloadId: string, url: string) => invoke('relinkDownload', downloadId, url),
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
@@ -59,6 +64,13 @@ const plexoApi = {
     const listener = (_event: IpcRendererEvent, update: DownloadUpdate): void => callback(update)
     ipcRenderer.on(IpcChannels.downloadUpdated, listener)
     return () => ipcRenderer.removeListener(IpcChannels.downloadUpdated, listener)
+  },
+
+  /** A download was added to the finished ones or forgotten: listHistory() has them. */
+  onHistoryChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.historyChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.historyChanged, listener)
   },
 
   onNetworksChanged: (callback: (networks: NetworkInterfaceInfo[]) => void): (() => void) => {

@@ -63,7 +63,10 @@ export interface TorrentFileEntry {
   chosen: boolean
 }
 
-export type DownloadStatus = 'downloading' | 'paused' | 'completed' | 'error' | 'cancelled'
+/** `queued`: waiting for one of the downloads running at once to end (see
+ * AppSettings.downloadsAtOnce). */
+export type DownloadStatus =
+  'queued' | 'downloading' | 'paused' | 'completed' | 'error' | 'cancelled'
 
 /** An HTTP stream's state. `pending` means it is waiting for work: it holds no block, either because
  * none is free for it right now or because it hasn't started. `downloading` always means it is
@@ -150,8 +153,10 @@ export type DownloadUnitState = HttpBlockState | TorrentPieceState
  *   trying, and the rest follow once it gets through.
  * - failed: the server kept refusing requests over it (`error` says how). Switching it off and
  *   on, reconnecting it, or resuming tries again.
+ * - limit: it has used up its data for the month (NetworkPreference.dataLimit). It's used again
+ *   once the month ends or the limit is raised.
  */
-export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed'
+export type NetworkStatus = 'on' | 'off' | 'offline' | 'unreachable' | 'failed' | 'limit'
 
 /** A network as one download sees it: whether the user has it on, and how it is doing. */
 interface DownloadNetworkBase {
@@ -198,9 +203,17 @@ interface DownloadStateBase {
    * thrown away, e.g. the file changed on the server. */
   resumable?: boolean
   startedAt: number
+  /** While queued: its place in the queue, lowest first. */
+  queuedAt?: number
   pausedAt?: number
   totalPausedMs?: number
   completedAt?: number
+  /** Each network's speed, by network id, sampled once a second over the last minute it ran.
+   * Every series is as long as the others, so they line up in time. */
+  speedHistory?: Record<string, number[]>
+  /** The best combined speed held for a few seconds, so it only ever rises; unset until it has
+   * run that long. A download done sooner gets the best speed it showed. */
+  peakSpeedBytesPerSec?: number
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }
@@ -234,6 +247,17 @@ export interface TorrentDownloadState extends DownloadStateBase {
 
 export type DownloadState = HttpDownloadState | TorrentDownloadState
 
+/** A finished download as history keeps it: its state without the work units and connections,
+ * which only a running download needs. */
+export type FinishedDownload = (
+  Omit<HttpDownloadState, 'blocks' | 'streams'> | Omit<TorrentDownloadState, 'pieces' | 'peers'>
+) & {
+  /** The blocks or pieces it was written in (a torrent's: those its chosen files needed). */
+  unitsWritten: number
+  /** Set when listed: its file or folder is no longer where it was saved. */
+  missing?: boolean
+}
+
 /** What the main process sends as a download changes: everything but its blocks, and only the
  * blocks that changed since it last sent. A download can have tens of thousands of blocks, and
  * copying every one several times a second would cost the process that carries every byte. A
@@ -260,6 +284,14 @@ export interface NetworkPreference {
   /** One of the app's curated swatch ids (see NETWORK_COLOR_SWATCHES) — not a raw hex, so every
    * swatch is guaranteed to have a legible on-solid text color already picked out for it. */
   colorId?: string
+  /** Left out of new downloads by default (see the title bar's networks). A download can still
+   * be started on it. */
+  off?: boolean
+  /** Bytes a second all downloads together may take over it. */
+  speedLimit?: number
+  /** Bytes it may receive a calendar month, counted from what Plexo receives over it; once used
+   * up, downloads stop using it until the month ends or the limit is raised. */
+  dataLimit?: number
 }
 
 export type NetworkPreferences = Record<string, NetworkPreference>
@@ -282,7 +314,17 @@ export interface AppSettings {
   destinationDir?: string
   /** User customizations (name/color) per network interface id. */
   networkPreferences?: NetworkPreferences
+  /** How many downloads run at once; the rest wait in the queue. */
+  downloadsAtOnce?: number
+  /** Bytes a second every download together may take, over every network; unset: no limit. */
+  speedLimit?: number
+  /** While on, slowModeSpeed stands in for speedLimit: a one-click lower limit for calls. */
+  slowMode?: boolean
+  slowModeSpeed?: number
 }
+
+export const DOWNLOADS_AT_ONCE = { default: 2, min: 1, max: 8 }
+export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
 
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
@@ -291,6 +333,10 @@ export interface InitialState {
   downloadsDir: string
   themeSource: ThemeSource
   networkPreferences: NetworkPreferences
+  downloadsAtOnce: number
+  speedLimit?: number
+  slowMode: boolean
+  slowModeSpeed: number
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

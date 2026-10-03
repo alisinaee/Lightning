@@ -130,7 +130,12 @@ export function IdleScreen(): React.JSX.Element {
 
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' })
   // Tracks deselections rather than selections, so a newly-detected interface starts selected.
-  const [deselectedInterfaceIds, setDeselectedInterfaceIds] = useState<string[]>([])
+  // Starts from the default networks: the ones switched off in the title bar's list.
+  const [deselectedInterfaceIds, setDeselectedInterfaceIds] = useState<string[]>(() =>
+    Object.entries(useAppStore.getState().networkPreferences)
+      .filter(([, preference]) => preference.off)
+      .map(([id]) => id)
+  )
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [fileNameOverride, setFileNameOverride] = useState<string | null>(null)
@@ -296,7 +301,7 @@ export function IdleScreen(): React.JSX.Element {
         etag: probe.result.etag,
         lastModified: probe.result.lastModified
       }
-      await window.plexo.startDownload(
+      const id = await window.plexo.startDownload(
         probe.result.kind === 'torrent'
           ? {
               ...common,
@@ -312,6 +317,7 @@ export function IdleScreen(): React.JSX.Element {
       )
       // Started: the link is spent, so the next download starts from an empty one.
       setUrl('')
+      useAppStore.getState().setView({ name: 'download', id })
     } catch (error) {
       setStartError(describeError(error))
     } finally {

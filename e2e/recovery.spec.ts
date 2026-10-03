@@ -88,7 +88,7 @@ test.describe('persisted state on disk @smoke', () => {
     await plexo.waitForHttpStatus('completed')
   })
 
-  test('two saved downloads: only the newest is restored, the other is removed', async ({
+  test('two saved downloads of one partial file: only the newest is restored', async ({
     plexo,
     serve,
     dirs

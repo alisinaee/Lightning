@@ -28,10 +28,7 @@ let quitAfterSuspending = false
 function offer(candidate: string): void {
   const link = acceptedLink(candidate)
   if (!link) return
-  offerLink(link, mainWindow, {
-    busy: downloadManager?.hasActiveDownload() ?? false,
-    notify: !testKnobs.userDataDir
-  })
+  offerLink(link, mainWindow)
 }
 
 app.on('second-instance', (_event, argv) => {

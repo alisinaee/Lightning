@@ -152,11 +152,16 @@ export class PlexoApp {
     const updates: DownloadUpdate[] = []
     this.sessions.push(session)
     this.updates.push(updates)
-    // Kept whole, the way the window puts them together.
+    // Kept whole, the way the window puts them together: each download from its own last state.
+    const latest = new Map<string, DownloadState>()
     await this.page.exposeFunction('__plexoRecord', (update: DownloadUpdate) => {
       updates.push(update)
-      const state = applyDownloadUpdate(session.at(-1) ?? null, update)
-      if (state && state !== session.at(-1)) session.push(state)
+      const previous = latest.get(update.state.id) ?? null
+      const state = applyDownloadUpdate(previous, update)
+      if (state && state !== previous) {
+        latest.set(state.id, state)
+        session.push(state)
+      }
     })
     await this.page.evaluate(() => {
       const w = window as unknown as { __plexoRecord: (s: unknown) => void }
@@ -260,9 +265,32 @@ export class PlexoApp {
 
   nextDownload: Tracked | null = null
 
+  /** Every download, running or finished, oldest first. A finished one comes from history, so it
+   * has no work units left. */
+  async all(): Promise<DownloadState[]> {
+    const running = (await this.api.listDownloads()).map((snapshot) =>
+      applyDownloadUpdate(null, snapshot)!
+    )
+    // As the window was last sent it, when this launch saw it finish: blocks and all.
+    const seen = this.sessions.at(-1) ?? []
+    const finished = (await this.api.listHistory()).map((entry): DownloadState => {
+      const last = seen.findLast((state) => state.id === entry.id)
+      if (last?.status === 'completed') return last
+      return entry.kind === 'http'
+        ? { ...entry, blocks: [], streams: [] }
+        : { ...entry, pieces: [], peers: [] }
+    })
+    return [...running, ...finished].sort((a, b) => a.startedAt - b.startedAt)
+  }
+
+  /** The download started last. */
   async current(): Promise<DownloadState | null> {
-    const snapshot = await this.api.getCurrentDownload()
-    return snapshot && applyDownloadUpdate(null, snapshot)
+    return (await this.all()).at(-1) ?? null
+  }
+
+  /** One download by id, wherever it is. */
+  async byId(id: string): Promise<DownloadState | null> {
+    return (await this.all()).find((state) => state.id === id) ?? null
   }
 
   async waitForStatus(
@@ -331,11 +359,13 @@ export class PlexoApp {
 // --- invariants --------------------------------------------------------------------------------
 
 const ALLOWED_NEXT: Record<DownloadStatus, DownloadStatus[]> = {
+  queued: ['queued', 'downloading', 'paused', 'cancelled'],
   downloading: ['downloading', 'paused', 'completed', 'error', 'cancelled'],
-  paused: ['paused', 'downloading', 'error', 'cancelled'],
+  // Resumed: at once, or into the queue when it's full.
+  paused: ['paused', 'downloading', 'queued', 'error', 'cancelled'],
   completed: ['completed'],
-  // Resumed.
-  error: ['error', 'downloading'],
+  // Resumed, or removed by the user.
+  error: ['error', 'downloading', 'queued', 'cancelled'],
   cancelled: ['cancelled']
 }
 
@@ -480,35 +510,51 @@ async function openFilesUnder(pid: number, roots: string[]): Promise<string[]> {
  * exactly right. The one that matters most: `completed` never means wrong bytes.
  */
 export async function checkFinalState(app: PlexoApp): Promise<void> {
-  const state = await app.current()
-  if (!state) return
-  const tracked = app.tracked.get(state.id) ?? app.nextDownload
-  const terminal = ['completed', 'error', 'cancelled'].includes(state.status)
-  if (!tracked || !terminal) return
-  // A failed download keeps its progress to be resumed until the user moves on, as the window's
-  // New Download does: after that, nothing may be left.
-  if (state.status === 'error') await app.api.removeDownload(state.id)
+  const states = await app.all()
+  const latest = states.at(-1)
+  const checked = states.flatMap((state) => {
+    const tracked = app.tracked.get(state.id) ?? (state === latest ? app.nextDownload : null)
+    return tracked ? [{ state, tracked }] : []
+  })
+  // Any still under way: there's no final state to check yet.
+  const terminal = (status: DownloadStatus): boolean =>
+    ['completed', 'error', 'cancelled'].includes(status)
+  if (checked.length === 0 || !checked.every(({ state }) => terminal(state.status))) return
 
-  if (state.status === 'completed') {
-    expect(await shaOfPath(state.destinationPath), 'completed download matches its source').toBe(
-      tracked.expectedSha
-    )
-  } else {
-    expect(existsSync(state.destinationPath), 'no file left at the destination').toBe(false)
+  for (const { state, tracked } of checked) {
+    // A failed download keeps its progress to be resumed until the user moves on, as the
+    // window's New Download does: after that, nothing may be left.
+    if (state.status === 'error') await app.api.removeDownload(state.id)
+
+    if (state.status === 'completed') {
+      expect(await shaOfPath(state.destinationPath), 'completed download matches its source').toBe(
+        tracked.expectedSha
+      )
+    } else {
+      expect(existsSync(state.destinationPath), 'no file left at the destination').toBe(false)
+    }
+
+    const stagingPath = `${state.destinationPath}.plexo`
+    await expect
+      .poll(() => existsSync(stagingPath), { message: 'staging file cleaned up', timeout: 5000 })
+      .toBe(false)
   }
 
-  const destAfter = existsSync(tracked.destinationDir) ? await readdir(tracked.destinationDir) : []
-  const added = destAfter.filter((name) => !tracked.destBefore.includes(name))
-  const expectedAdded =
-    state.status === 'completed' ? [state.destinationPath.split(/[\\/]/).pop()] : []
-  expect(added, 'no stray files (placeholders, partials) in the destination folder').toEqual(
-    expectedAdded
-  )
-
-  const stagingPath = `${state.destinationPath}.plexo`
-  await expect
-    .poll(() => existsSync(stagingPath), { message: 'staging file cleaned up', timeout: 5000 })
-    .toBe(false)
+  // Each folder gains exactly the downloads that completed into it, and nothing else.
+  for (const destinationDir of new Set(checked.map(({ tracked }) => tracked.destinationDir))) {
+    const into = checked.filter(({ tracked }) => tracked.destinationDir === destinationDir)
+    // As the folder was before the first of them started (later ones saw the earlier ones' files).
+    const before = new Set(into[0].tracked.destBefore)
+    const destAfter = existsSync(destinationDir) ? await readdir(destinationDir) : []
+    const added = destAfter.filter((name) => !before.has(name)).sort()
+    const expectedAdded = into
+      .filter(({ state }) => state.status === 'completed')
+      .map(({ state }) => state.destinationPath.split(/[\\/]/).pop())
+      .sort()
+    expect(added, 'no stray files (placeholders, partials) in the destination folder').toEqual(
+      expectedAdded
+    )
+  }
 
   const pid = app.electronApp.process().pid
   if (pid) {

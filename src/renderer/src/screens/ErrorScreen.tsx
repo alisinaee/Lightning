@@ -1,6 +1,7 @@
 import type { DownloadState } from '@shared/types'
 import { Folder } from 'lucide-react'
 import { useState } from 'react'
+import { FixLinkDialog } from '../components/FixLinkDialog'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
@@ -9,6 +10,7 @@ import {
   fileExtensionBadge,
   formatBytes,
   isFolder,
+  linkExpired,
   wantedBytes
 } from '../utils/format'
 
@@ -23,6 +25,9 @@ export function ErrorScreen({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const [resuming, setResuming] = useState(false)
+  const [fixing, setFixing] = useState(false)
+  // Its link stopped working: a fresh one carries on from here, rather than Resume asking again.
+  const expired = linkExpired(download)
   const cancelled = download.status === 'cancelled'
   // What it downloaded is still there to pick up from.
   const resumable = !cancelled && download.resumable !== false && download.bytesDownloaded > 0
@@ -144,7 +149,12 @@ export function ErrorScreen({
 
           {/* Action Buttons in Center */}
           <div className="mt-1 flex w-full justify-center gap-2.5">
-            {resumable && (
+            {expired && (
+              <Button type="button" onClick={() => setFixing(true)}>
+                Paste New Link
+              </Button>
+            )}
+            {resumable && !expired && (
               <Button
                 type="button"
                 disabled={resuming}
@@ -185,6 +195,7 @@ export function ErrorScreen({
           {copied ? 'Copied' : 'Copy URL'}
         </button>
       </ScreenFooter>
+      <FixLinkDialog download={fixing ? download : null} onClose={() => setFixing(false)} />
     </div>
   )
 }

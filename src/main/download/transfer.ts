@@ -10,6 +10,7 @@ import type {
   TorrentPieceState
 } from '../../shared/types'
 import type { NetworkMonitor } from '../network/interfaces'
+import type { Limits } from '../network/limits'
 import type { DownloadFile } from './downloadFile'
 
 /**
@@ -63,6 +64,8 @@ export type TransferTarget = HttpTransferTarget | TorrentTransferTarget
 /** What a transfer asks of the manager. */
 export interface TransferHost {
   networks: NetworkMonitor
+  /** Every byte received goes through it (see Limits.take). */
+  limits: Limits
   /** The manager's reconcile: networks first, then the transfer's own. */
   reconcile(): void
   failDownload(message: string, discard?: boolean): void

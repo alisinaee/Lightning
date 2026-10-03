@@ -23,7 +23,8 @@ const STATUS_TEXT: Record<Exclude<NetworkStatus, 'on'>, string> = {
   off: 'Off',
   offline: 'Not connected',
   unreachable: 'Can’t reach server',
-  failed: 'Failed'
+  failed: 'Failed',
+  limit: 'Data limit reached'
 }
 
 const rowClass = 'col-span-full grid grid-cols-subgrid items-center gap-3'

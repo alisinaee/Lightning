@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
 const LATENCY_POLL_MS = 5000
@@ -25,4 +25,31 @@ export function useLatencyPolling(): void {
     const interval = setInterval(refreshLatencies, LATENCY_POLL_MS)
     return () => clearInterval(interval)
   }, [refreshLatencies])
+}
+
+const USAGE_POLL_MS = 2000
+
+/** What each network has received this month, by id, kept fresh while `active` (a screen that
+ * shows data limits is open). */
+export function useNetworkUsage(active: boolean): Record<string, number> {
+  const [usage, setUsage] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (!active) return
+    let disposed = false
+    const load = (): void => {
+      void window.plexo
+        .networkUsage()
+        .then((next) => !disposed && setUsage(next))
+        .catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, USAGE_POLL_MS)
+    return () => {
+      disposed = true
+      clearInterval(interval)
+    }
+  }, [active])
+
+  return usage
 }

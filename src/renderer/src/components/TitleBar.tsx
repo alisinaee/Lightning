@@ -3,10 +3,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { UpdateIndicator } from './UpdateIndicator'
 
 export type TitleBarStatus =
-  | { kind: 'none' }
-  | { kind: 'combined'; networkCount: number }
-  | { kind: 'paused'; networkCount: number }
-  | { kind: 'offline' }
+  { kind: 'none' } | { kind: 'combined'; networkCount: number } | { kind: 'offline' }
 
 const isMac = window.plexo.platform === 'darwin'
 
@@ -45,17 +42,6 @@ export function TitleBar({ status }: { status: TitleBarStatus }): React.JSX.Elem
             className={`${pillDotClass} bg-[var(--color-wifi)] animate-[plexo-glow_2s_ease-in-out_infinite]`}
           />
           {status.networkCount} {status.networkCount === 1 ? 'network' : 'networks'} combined
-        </ColorBadge>
-      )}
-      {status.kind === 'paused' && (
-        <ColorBadge
-          bg="var(--color-usb-bg)"
-          border="var(--color-usb-border)"
-          text="var(--color-usb-text)"
-          className={pillClass}
-        >
-          <div className={`${pillDotClass} bg-[var(--color-usb)]`} />
-          {status.networkCount} {status.networkCount === 1 ? 'network' : 'networks'} · Paused
         </ColorBadge>
       )}
       {status.kind === 'offline' && (
