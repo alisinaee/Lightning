@@ -15,10 +15,15 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 const SPEED_HISTORY_LENGTH = 60
 const SPEED_SAMPLE_INTERVAL_MS = 1000
+// The peak is the best speed held this many samples (seconds): longer than a start's burst (an
+// ISP's burst allowance, every connection ramping up at once), which isn't the line's speed.
+const PEAK_SAMPLES = 5
 
 // Throttling cadence lives outside the store's own state — it's bookkeeping for how often to
 // sample, not something a component should ever read or re-render on.
 let lastSpeedSampleAt = 0
+// The best PEAK_SAMPLES-sample average so far, for the current download.
+let sustainedPeak = 0
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -165,15 +170,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
     let speedHistory = isNewDownload ? [] : get().speedHistory
     let speedHistoryByInterface = isNewDownload ? {} : get().speedHistoryByInterface
     let peakSpeedBytesPerSec = isNewDownload ? 0 : get().peakSpeedBytesPerSec
-    if (isNewDownload) lastSpeedSampleAt = 0
+    if (isNewDownload) {
+      lastSpeedSampleAt = 0
+      sustainedPeak = 0
+    }
 
     if (download.status === 'downloading') {
-      peakSpeedBytesPerSec = Math.max(peakSpeedBytesPerSec, download.speedBytesPerSec)
-
       const now = Date.now()
       if (now - lastSpeedSampleAt >= SPEED_SAMPLE_INTERVAL_MS) {
         lastSpeedSampleAt = now
         speedHistory = [...speedHistory, download.speedBytesPerSec].slice(-SPEED_HISTORY_LENGTH)
+        if (speedHistory.length >= PEAK_SAMPLES) {
+          const held = speedHistory.slice(-PEAK_SAMPLES)
+          sustainedPeak = Math.max(
+            sustainedPeak,
+            held.reduce((sum, speed) => sum + speed, 0) / PEAK_SAMPLES
+          )
+        }
 
         const nextByInterface: Record<string, number[]> = {}
         for (const network of download.networks) {
@@ -184,6 +197,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
         speedHistoryByInterface = nextByInterface
       }
+      peakSpeedBytesPerSec =
+        speedHistory.length >= PEAK_SAMPLES
+          ? sustainedPeak
+          : // Too short to have held a speed yet: the best seen, until it has.
+            Math.max(peakSpeedBytesPerSec, download.speedBytesPerSec)
     }
 
     set({ currentDownload: download, speedHistory, speedHistoryByInterface, peakSpeedBytesPerSec })
