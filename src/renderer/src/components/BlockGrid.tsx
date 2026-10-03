@@ -1,5 +1,6 @@
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { cn } from 'cn'
+import { useCallback, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { formatBytes, type NetworkGroup } from '../utils/format'
 
@@ -168,28 +169,13 @@ export function BlockGrid({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
-  const pointerInside = useRef(false)
+  // How far the grid is scrolled: which rows are in view, for the way to what's active (below).
+  const [scrollTop, setScrollTop] = useState(0)
 
   const fittedCols = Math.floor((gridWidth + CELL_GAP_PX) / (TARGET_CELL_PX + CELL_GAP_PX))
   // Squares keep their size and the grid wraps; how many rows that takes is the file's business,
   // not the window's. Only the width decides the wrap, exactly like a paragraph reflowing.
   const cols = Math.min(blocks?.length ?? 0, Math.max(MIN_COLS, fittedCols))
-
-  // A grid taller than its viewport follows the download: the first chunk in flight (or, paused,
-  // the first not started) stays in view, a row of what's done above it. Not while the pointer is
-  // over the grid, so it never scrolls from under someone reading or scrolling it.
-  const inFlight = blocks?.findIndex((block) => block.status === 'downloading') ?? -1
-  const next = inFlight >= 0 ? inFlight : (blocks?.findIndex((b) => b.status === 'pending') ?? -1)
-  const followTop =
-    next >= 0 && cols > 0
-      ? Math.max(0, Math.floor(next / cols) - 1) * (CELL_HEIGHT_PX + CELL_GAP_PX)
-      : null
-  const follow = useCallback(() => {
-    if (followTop === null || pointerInside.current) return
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    scrollerRef.current?.scrollTo({ top: followTop, behavior: reduce ? 'auto' : 'smooth' })
-  }, [followTop])
-  useEffect(follow, [follow])
 
   // A callback ref rather than useEffect: the measured node only exists on the grid branch
   // below, so this has to re-observe whenever that node mounts or unmounts.
@@ -221,6 +207,33 @@ export function BlockGrid({
     // that could be mistaken for a shorter square.
     const gridMaxHeight =
       visibleRows * CELL_HEIGHT_PX + (visibleRows - 1) * CELL_GAP_PX + GRID_INSET_PX * 2
+
+    // The grid stays where it's scrolled: following the work moved it from under the reader, and
+    // a torrent's work is all over the file. When none of what's in flight is in view, a pill
+    // points the way to the nearest of it, and goes there.
+    const rowHeight = CELL_HEIGHT_PX + CELL_GAP_PX
+    const firstInView = Math.round(scrollTop / rowHeight)
+    const lastInView = firstInView + visibleRows - 1
+    const activeRows = blocks.flatMap((block, index) =>
+      block.status === 'downloading' ? [Math.floor(index / cols)] : []
+    )
+    const nearestActive =
+      rows <= MAX_VISIBLE_ROWS || activeRows.some((row) => row >= firstInView && row <= lastInView)
+        ? null
+        : activeRows.reduce<number | null>((nearest, row) => {
+            const distance = (r: number): number =>
+              r < firstInView ? firstInView - r : r - lastInView
+            return nearest === null || distance(row) < distance(nearest) ? row : nearest
+          }, null)
+    const goToActive = (): void => {
+      if (nearestActive === null) return
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      scrollerRef.current?.scrollTo({
+        // A row of what's before it above, for context.
+        top: Math.max(0, nearestActive - 1) * rowHeight,
+        behavior: reduce ? 'auto' : 'smooth'
+      })
+    }
 
     // Hovering reads out into the legend line rather than a native `title` tooltip: the grid
     // re-renders on every progress push, which resets Chromium's tooltip timer so it never
@@ -269,110 +282,123 @@ export function BlockGrid({
           )}
         </div>
 
-        <div
-          ref={scrollerRef}
-          onMouseEnter={() => (pointerInside.current = true)}
-          onMouseLeave={() => {
-            pointerInside.current = false
-            setHoveredIndex(null)
-            follow()
-          }}
-          style={{
-            maxHeight: gridMaxHeight,
-            // gridMaxHeight is measured including the inset padding, so say so rather than
-            // leaning on the global reset — a content-box here would cut a half-row.
-            boxSizing: 'border-box',
-            overflowY: rows > MAX_VISIBLE_ROWS ? 'auto' : 'visible',
-            // The scrollbar takes width from the grid, and the ResizeObserver sits on the grid
-            // itself rather than this scroller, so the column count already accounts for it.
-            padding: GRID_INSET_PX,
-            margin: -GRID_INSET_PX
-          }}
-        >
+        <div className="relative">
+          {nearestActive !== null && (
+            <button
+              type="button"
+              onClick={goToActive}
+              aria-label="Show the chunks in progress"
+              className={cn(
+                'absolute right-4 z-10 cursor-pointer rounded-full border-[0.5px] border-[var(--border-strong)] bg-card px-2 py-[3px] font-mono text-[10px] leading-none font-medium text-[var(--text-secondary)] shadow-sm hover:text-foreground',
+                nearestActive < firstInView ? '-top-1' : '-bottom-1'
+              )}
+            >
+              {nearestActive < firstInView ? '↑' : '↓'} Active
+            </button>
+          )}
           <div
-            ref={measureGrid}
+            ref={scrollerRef}
+            onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+            onMouseLeave={() => setHoveredIndex(null)}
             style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-              gap: CELL_GAP_PX,
-              width: '100%',
-              minHeight: CELL_HEIGHT_PX
+              maxHeight: gridMaxHeight,
+              // gridMaxHeight is measured including the inset padding, so say so rather than
+              // leaning on the global reset — a content-box here would cut a half-row.
+              boxSizing: 'border-box',
+              overflowY: rows > MAX_VISIBLE_ROWS ? 'auto' : 'visible',
+              // The scrollbar takes width from the grid, and the ResizeObserver sits on the grid
+              // itself rather than this scroller, so the column count already accounts for it.
+              padding: GRID_INSET_PX,
+              margin: -GRID_INSET_PX
             }}
           >
-            {cells.map((cell, index) => {
-              const visual = cell.interfaceId
-                ? visualByInterfaceId.get(cell.interfaceId)
-                : undefined
+            <div
+              ref={measureGrid}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                gap: CELL_GAP_PX,
+                width: '100%',
+                minHeight: CELL_HEIGHT_PX
+              }}
+            >
+              {cells.map((cell, index) => {
+                const visual = cell.interfaceId
+                  ? visualByInterfaceId.get(cell.interfaceId)
+                  : undefined
 
-              // Base track uses theme-aware tokens (not hardcoded white-based rgba) so a
-              // mostly-pending bucket stays visible in light theme, not just dark.
-              let background = 'var(--track-bg)'
-              let border = '0.5px solid var(--border-strong)'
-              let boxShadow = 'none'
-              let opacity = 1
-              const fillColor = visual?.solid || UNATTRIBUTED_SOLID
+                // Base track uses theme-aware tokens (not hardcoded white-based rgba) so a
+                // mostly-pending bucket stays visible in light theme, not just dark.
+                let background = 'var(--track-bg)'
+                let border = '0.5px solid var(--border-strong)'
+                let boxShadow = 'none'
+                let opacity = 1
+                const fillColor = visual?.solid || UNATTRIBUTED_SOLID
 
-              if (cell.status === 'downloading') {
-                background = visual?.bg || UNATTRIBUTED_BG
-                border = `1px solid ${visual?.solid || UNATTRIBUTED_SOLID}`
-                boxShadow = isPaused ? 'none' : `0 0 7px ${visual?.solid || UNATTRIBUTED_SOLID}`
-                opacity = isPaused ? 0.6 : 1
-              } else if (cell.status === 'completed') {
-                border = 'none'
-                opacity = 0.92
-              } else if (cell.status === 'skipped') {
-                // None of the files chosen needs it: there, but not this download's.
-                border = '0.5px dashed var(--border-strong)'
-                opacity = 0.3
-              }
+                if (cell.status === 'downloading') {
+                  background = visual?.bg || UNATTRIBUTED_BG
+                  border = `1px solid ${visual?.solid || UNATTRIBUTED_SOLID}`
+                  boxShadow = isPaused ? 'none' : `0 0 7px ${visual?.solid || UNATTRIBUTED_SOLID}`
+                  opacity = isPaused ? 0.6 : 1
+                } else if (cell.status === 'completed') {
+                  border = 'none'
+                  opacity = 0.92
+                } else if (cell.status === 'skipped') {
+                  // None of the files chosen needs it: there, but not this download's.
+                  border = '0.5px dashed var(--border-strong)'
+                  opacity = 0.3
+                }
 
-              const rawFillPercent = Math.min(1, Math.max(0, cell.fillRatio)) * 100
-              // A square is only ~12px wide, so the first bytes of a chunk round to nothing —
-              // floor a started chunk to a visible sliver rather than 0 width.
-              const fillPercent = rawFillPercent > 0 ? Math.max(6, Math.round(rawFillPercent)) : 0
+                const rawFillPercent = Math.min(1, Math.max(0, cell.fillRatio)) * 100
+                // A square is only ~12px wide, so the first bytes of a chunk round to nothing —
+                // floor a started chunk to a visible sliver rather than 0 width.
+                const fillPercent = rawFillPercent > 0 ? Math.max(6, Math.round(rawFillPercent)) : 0
 
-              return (
-                <div
-                  key={index}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  style={{
-                    position: 'relative',
-                    height: CELL_HEIGHT_PX,
-                    borderRadius: 2.5,
-                    background,
-                    border,
-                    boxShadow,
-                    opacity,
-                    outline: hoveredIndex === index ? '1.5px solid var(--text-secondary)' : 'none',
-                    outlineOffset: 1,
-                    overflow: 'hidden',
-                    transition: 'opacity 0.3s, box-shadow 0.15s',
-                    // A multi-GB file can mean thousands of cells; skip layout/paint work for the
-                    // ones scrolled out of view (MAX_VISIBLE_ROWS caps what's visible, not what's
-                    // rendered) rather than hand-rolling a virtualized list for a fixed-size grid.
-                    contentVisibility: 'auto',
-                    containIntrinsicSize: `${TARGET_CELL_PX}px ${CELL_HEIGHT_PX}px`
-                  }}
-                >
-                  {/* One square, one color: the network that actually delivered most of this
+                return (
+                  <div
+                    key={index}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    style={{
+                      position: 'relative',
+                      height: CELL_HEIGHT_PX,
+                      borderRadius: 2.5,
+                      background,
+                      border,
+                      boxShadow,
+                      opacity,
+                      outline:
+                        hoveredIndex === index ? '1.5px solid var(--text-secondary)' : 'none',
+                      outlineOffset: 1,
+                      overflow: 'hidden',
+                      transition: 'opacity 0.3s, box-shadow 0.15s',
+                      // A multi-GB file can mean thousands of cells; skip layout/paint work for the
+                      // ones scrolled out of view (MAX_VISIBLE_ROWS caps what's visible, not what's
+                      // rendered) rather than hand-rolling a virtualized list for a fixed-size grid.
+                      contentVisibility: 'auto',
+                      containIntrinsicSize: `${TARGET_CELL_PX}px ${CELL_HEIGHT_PX}px`
+                    }}
+                  >
+                    {/* One square, one color: the network that actually delivered most of this
                     square's bytes. The full per-network breakdown is still exact underneath —
                     hovering reads it out — but the grid itself stays a glanceable map of which
                     network owns which stretch of the file rather than a stack of gradients. */}
-                  {fillPercent > 0 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: `${fillPercent}%`,
-                        background: fillColor,
-                        opacity: cell.provisionalBytes > 0 && cell.bytesDownloaded === 0 ? 0.55 : 1,
-                        transition: 'width 0.15s, background 0.15s'
-                      }}
-                    />
-                  )}
-                </div>
-              )
-            })}
+                    {fillPercent > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: `${fillPercent}%`,
+                          background: fillColor,
+                          opacity:
+                            cell.provisionalBytes > 0 && cell.bytesDownloaded === 0 ? 0.55 : 1,
+                          transition: 'width 0.15s, background 0.15s'
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
