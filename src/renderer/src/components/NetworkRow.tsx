@@ -204,7 +204,15 @@ function PeerRows({
             key={peer.id}
             className={`${rowClass} border-[var(--border-subtle)] bg-card py-[6px] font-mono text-[11px] leading-[1.2] ${index === 0 ? 'border-t-[0.5px] pt-[9px]' : ''} ${index === group.peers.length - 1 ? 'border-b-[0.5px] pb-[11px]' : ''}`}
           >
-            <div role="cell" />
+            <div role="cell" className="flex justify-center pl-5">
+              <div
+                className="size-[5px] rounded-full"
+                style={{
+                  background: receiving ? visual.solid : 'var(--icon-muted)',
+                  opacity: receiving ? 1 : 0.4
+                }}
+              />
+            </div>
             <div role="cell" className="flex min-w-0 items-center gap-[6px]">
               <span className="font-medium whitespace-nowrap text-foreground">
                 Peer #{index + 1}
@@ -218,41 +226,37 @@ function PeerRows({
                 {receiving ? 'RECEIVING' : 'CONNECTED'}
               </ColorBadge>
             </div>
-            <div role="cell" />
-            <div role="cell" />
+            <div role="cell" className="text-[10px] text-muted-foreground">
+              Peer connection
+            </div>
+            <div role="cell" className="text-right text-muted-foreground">
+              —
+            </div>
             <div
               role="cell"
               className="text-right font-mono text-[10px] leading-[1.35] whitespace-nowrap tabular-nums"
             >
-              {receiving && (
-                <div style={{ color: visual.text }}>
-                  <span aria-hidden>↓ </span>
-                  {formatSpeed(peer.speedBytesPerSec)}
-                </div>
-              )}
-              {peer.uploadSpeedBytesPerSec > 0 && (
-                <div className="text-muted-foreground">
-                  <span aria-hidden>↑ </span>
-                  {formatSpeed(peer.uploadSpeedBytesPerSec)}
-                </div>
-              )}
+              <div style={{ color: receiving ? visual.text : 'var(--text-tertiary)' }}>
+                <span aria-hidden>↓ </span>
+                {formatSpeed(peer.speedBytesPerSec)}
+              </div>
+              <div className="text-muted-foreground">
+                <span aria-hidden>↑ </span>
+                {formatSpeed(peer.uploadSpeedBytesPerSec)}
+              </div>
             </div>
             <div
               role="cell"
               className="pr-5 text-right font-mono text-[10px] leading-[1.35] text-[var(--text-secondary)] tabular-nums"
             >
-              {peer.bytesDownloaded > 0 && (
-                <div>
-                  <span aria-hidden>↓ </span>
-                  {formatBytes(peer.bytesDownloaded)}
-                </div>
-              )}
-              {peer.bytesUploaded > 0 && (
-                <div>
-                  <span aria-hidden>↑ </span>
-                  {formatBytes(peer.bytesUploaded)}
-                </div>
-              )}
+              <div>
+                <span aria-hidden>↓ </span>
+                {formatBytes(peer.bytesDownloaded)}
+              </div>
+              <div>
+                <span aria-hidden>↑ </span>
+                {formatBytes(peer.bytesUploaded)}
+              </div>
             </div>
           </div>
         )
