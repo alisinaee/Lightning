@@ -87,6 +87,9 @@ export interface HttpStreamState {
  * several pieces, and several peers may contribute to one piece. */
 export interface TorrentPeerState {
   id: number
+  /** Its number on its network, from 1 in the order its peers connected: kept while it stays
+   * connected, never handed to another peer. */
+  number: number
   interfaceId: string
   status: 'connected' | 'receiving'
   bytesDownloaded: number

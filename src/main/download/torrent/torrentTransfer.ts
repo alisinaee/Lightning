@@ -54,6 +54,8 @@ export class TorrentTransfer implements Transfer {
   private ended: Promise<void> | null = null
   private peers = new Map<Wire, Peer>()
   private nextPeerId = 0
+  /** By network: the number its next peer gets (see TorrentPeerState.number). Restarts each run. */
+  private nextPeerNumber = new Map<string, number>()
   /** The network each peer was dialled through, by webtorrent's address for it. */
   private chosen = new Map<string, string>()
   /** Dials in flight, by network. */
@@ -124,6 +126,7 @@ export class TorrentTransfer implements Transfer {
     this.chosen.clear()
     this.dialling.clear()
     this.reach.clear()
+    this.nextPeerNumber.clear()
     // webtorrent drops what it had of unfinished pieces with its client.
     this.unverified.clear()
     for (const piece of this.runtime.pieces) {
@@ -308,8 +311,11 @@ export class TorrentTransfer implements Transfer {
     reach.answeredAt = Date.now()
     if (network.status === 'unreachable') network.status = 'on'
 
+    const number = (this.nextPeerNumber.get(network.id) ?? 0) + 1
+    this.nextPeerNumber.set(network.id, number)
     const peerState: TorrentPeerState = {
       id: this.nextPeerId++,
+      number,
       interfaceId: network.id,
       status: 'connected',
       bytesDownloaded: 0,

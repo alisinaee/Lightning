@@ -58,11 +58,14 @@ test.describe('a torrent through the UI', () => {
         .filter({ hasText: /Peer #\d+/ })
         .first()
       await expect(peerRow).toBeVisible()
-      await expect(peerRow).toContainText(/RECEIVING|CONNECTED/)
+      // Only what isn't the usual gets a word: no badge for a peer that's sending.
+      await expect(peerRow).not.toContainText(/RECEIVING|CONNECTED|ACTIVE/)
       await expect(peerRow).not.toContainText('Peer connection')
-      // Each direction read out in words, not only shown as an arrow.
+      // Its share of what its network's peers have sent.
+      await expect(peerRow).toContainText(/\d+%/)
+      // Read out in words, not only shown as an arrow; upload only once something was sent.
       await expect(peerRow).toContainText('Receiving at')
-      await expect(peerRow).toContainText('Sending at')
+      await expect(peerRow).not.toContainText('Sending at')
       await expect(peerRow.getByRole('cell')).toHaveCount(6)
       await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
       const networks = page.getByRole('table', { name: 'Networks' })
@@ -76,10 +79,11 @@ test.describe('a torrent through the UI', () => {
       ).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
-      // Its upload, as a whole; peer/network rows show directional transfer telemetry.
+      // Its upload, as a whole. Nothing has been sent here, so the rows carry no upload line,
+      // and no arrows: a lone download figure needs none.
       await expect(page.getByText(/^Uploading at .+\/s$/).first()).toBeVisible()
-      await expect(peerRow).toContainText('↑')
-      await expect(peerRow).toContainText('↓')
+      await expect(peerRow).not.toContainText('↑')
+      await expect(peerRow).not.toContainText('↓')
 
       // Done: two of its three files, with what fetched them.
       await expect(
