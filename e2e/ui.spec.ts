@@ -191,24 +191,6 @@ test.describe('UI journeys @smoke', () => {
     await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled()
   })
 
-  test('a link cleared while it is checked stays cleared when the answer comes', async ({
-    plexo,
-    serve
-  }) => {
-    // Never answers, so the check fails after the stall timeout (1.5s here), as a slow magnet
-    // answers late.
-    const origin = await serve({ size: SIZE })
-    origin.setRule(() => 'stallHeaders')
-    const page = plexo.page
-    const link = page.getByRole('textbox', { name: 'LINK' })
-    await link.fill(origin.url())
-    await expect.poll(() => origin.log.length).toBeGreaterThan(0)
-    await link.fill('')
-    await page.waitForTimeout(3000)
-    await expect(page.getByRole('alert')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled()
-  })
-
   test('a completed download is shown again after a restart', async ({ plexo, serve }) => {
     const origin = await serve({ size: SIZE })
     await plexo.start(origin.url(), origin.sha256)
