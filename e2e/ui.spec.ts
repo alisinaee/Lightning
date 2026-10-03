@@ -67,7 +67,9 @@ test.describe('a torrent through the UI', () => {
       await expect(peerRow).toContainText('Receiving at')
       await expect(peerRow).not.toContainText('Sending at')
       await expect(peerRow.getByRole('cell')).toHaveCount(6)
-      await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
+      // What it runs, and how much of the torrent it has: the swarm's seeders have all of it.
+      await expect(peerRow).toContainText('WebTorrent')
+      await expect(peerRow.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
       const networks = page.getByRole('table', { name: 'Networks' })
       await expect(networks.getByRole('columnheader', { name: 'Verified' })).toHaveCount(0)
       await expect(

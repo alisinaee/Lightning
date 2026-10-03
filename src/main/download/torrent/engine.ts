@@ -11,6 +11,21 @@ function loadWebTorrent(): Promise<typeof WebTorrent> {
   return loaded
 }
 
+let peerIdParser: Promise<(peerId: string) => string | null> | null = null
+
+/** Names the client a peer runs from its peer id ("qBittorrent 4.6.2"), or null when unknown. */
+export function loadClientNamer(): Promise<(peerId: string) => string | null> {
+  peerIdParser ??= import('bittorrent-peerid').then(({ default: peerid }) => (peerId) => {
+    try {
+      const { client, version } = peerid(peerId)
+      return client === 'unknown' ? null : [client, version].filter(Boolean).join(' ')
+    } catch {
+      return null
+    }
+  })
+  return peerIdParser
+}
+
 /**
  * A webtorrent client set up for Plexo:
  * - uTP is off: its UDP sockets can't be pinned to a network the way `connect` pins TCP ones.

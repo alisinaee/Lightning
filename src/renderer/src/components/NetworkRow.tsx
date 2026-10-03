@@ -1,4 +1,9 @@
-import type { HttpBlockState, HttpStreamState, NetworkStatus } from '@shared/types'
+import type {
+  HttpBlockState,
+  HttpStreamState,
+  NetworkStatus,
+  TorrentPeerState
+} from '@shared/types'
 import { useState } from 'react'
 import { DANGER, type NetworkVisual } from '../theme'
 import type { HttpNetworkGroup, NetworkGroup, TorrentNetworkGroup } from '../utils/format'
@@ -16,6 +21,8 @@ interface NetworkRowProps {
   sharePercent: number
   totalBytes?: number | null
   blocks?: HttpBlockState[]
+  /** A torrent's: how many pieces it has, for each peer's share of them. */
+  totalPieces?: number
   onSwitch: (enabled: boolean) => void
 }
 
@@ -227,13 +234,17 @@ function TwoWay({
 
 function PeerRows({
   group,
-  visual
+  visual,
+  totalPieces
 }: {
   group: TorrentNetworkGroup
   visual: NetworkVisual
+  totalPieces: number
 }): React.JSX.Element {
   // What the network's peers have sent between them: each one's share of it.
   const received = group.peers.reduce((sum, peer) => sum + peer.bytesDownloaded, 0)
+  const held = (peer: TorrentPeerState): number =>
+    totalPieces > 0 ? Math.min(100, (peer.piecesHeld / totalPieces) * 100) : 0
   return (
     <>
       {group.peers.map((peer, index) => {
@@ -258,12 +269,23 @@ function PeerRows({
               <span className="font-medium whitespace-nowrap text-foreground">
                 Peer #{peer.number}
               </span>
+              {/* The client it runs, as a stream shows its chunk. */}
+              {peer.client && (
+                <span className="min-w-0 truncate rounded-[3px] border-[0.5px] border-border bg-secondary px-[4.5px] py-[1.5px] text-[9px] leading-none whitespace-nowrap text-muted-foreground">
+                  {peer.client}
+                </span>
+              )}
               {/* A lit dot and a speed say it's sending; only a peer that isn't says so. */}
               {!receiving && <span className="text-[9.5px] text-muted-foreground">Idle</span>}
             </div>
-            {/* A peer has no progress of its own: a piece counts once verified, and several
-                peers may send parts of one. The cell stays, for the columns to line up. */}
-            <div role="cell" />
+            {/* How much of the torrent the peer has: a full bar is a seeder. (What it has sent
+                this download is its share, and its Transferred.) */}
+            <ProgressBar
+              className="h-[5px]"
+              label={`Peer #${peer.number} has ${Math.round(held(peer))}% of the torrent`}
+              percent={held(peer)}
+              color={visual.solid}
+            />
             <div
               role="cell"
               className="text-right font-mono text-[11px] leading-none font-medium tabular-nums"
@@ -307,6 +329,7 @@ export function NetworkRow({
   sharePercent,
   totalBytes,
   blocks,
+  totalPieces = 0,
   onSwitch
 }: NetworkRowProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
@@ -426,7 +449,7 @@ export function NetworkRow({
         (group.transfer === 'http' ? (
           <HttpStreamRows group={group} visual={visual} blocks={blocks} />
         ) : (
-          <PeerRows group={group} visual={visual} />
+          <PeerRows group={group} visual={visual} totalPieces={totalPieces} />
         ))}
     </>
   )

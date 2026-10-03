@@ -39,6 +39,10 @@ declare module 'webtorrent' {
   export interface Wire extends EventEmitter {
     destroy(): void
     unchoke(): void
+    /** The remote peer's id, hex: set once it has shaken hands. */
+    peerId: string | null
+    /** The pieces the remote peer has. Emits 'have', 'bitfield' and 'have-all' as that changes. */
+    peerPieces: { buffer: Uint8Array; get(index: number): boolean }
   }
 
   export interface Torrent extends EventEmitter {
@@ -71,6 +75,11 @@ declare module 'webtorrent' {
     address(): { address: string; family: string; port: number }
     destroy(callback?: (error?: Error) => void): void
   }
+}
+
+declare module 'bittorrent-peerid' {
+  /** The client a peer id names, e.g. { client: 'qBittorrent', version: '4.6.2' }. */
+  export default function peerid(peerId: string | Buffer): { client: string; version?: string }
 }
 
 declare module 'parse-torrent' {

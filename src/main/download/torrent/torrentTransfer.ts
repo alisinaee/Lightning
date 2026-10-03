@@ -13,7 +13,7 @@ import {
   type TransferHost,
   type TorrentTransferTarget
 } from '../transfer'
-import { createClient } from './engine'
+import { createClient, loadClientNamer } from './engine'
 import { bitfieldOf, creditPiece, pickNetwork } from './peers'
 
 /** Peers each network in use may have at once (webtorrent's maxConns is this times the networks). */
@@ -29,6 +29,25 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
  * an address. */
 const addressOf = (host: string, port: number): string =>
   isIP(host) === 6 ? `[${host}]:${port}` : `${host}:${port}`
+
+/** Set bits in each byte value, for counting a bitfield's pieces a byte at a time. */
+const BITS_SET = Uint8Array.from({ length: 256 }, (_, byte) => {
+  let count = 0
+  for (let value = byte; value; value >>= 1) count += value & 1
+  return count
+})
+
+/** How many of `total` pieces a peer's bitfield holds. A peer that said "have all" (BEP 6) has
+ * an empty bitfield that answers yes to every piece. */
+function piecesHeld(
+  bits: { buffer: Uint8Array; get(index: number): boolean },
+  total: number
+): number {
+  if (bits.buffer.length === 0) return total > 0 && bits.get(0) ? total : 0
+  let count = 0
+  for (const byte of bits.buffer) count += BITS_SET[byte]
+  return Math.min(count, total)
+}
 
 interface Peer {
   state: TorrentPeerState
@@ -56,6 +75,8 @@ export class TorrentTransfer implements Transfer {
   private nextPeerId = 0
   /** By network: the number its next peer gets (see TorrentPeerState.number). Restarts each run. */
   private nextPeerNumber = new Map<string, number>()
+  /** Names a peer's client from its peer id; loaded with the first run. */
+  private nameClient: ((peerId: string) => string | null) | null = null
   /** The network each peer was dialled through, by webtorrent's address for it. */
   private chosen = new Map<string, string>()
   /** Dials in flight, by network. */
@@ -150,6 +171,7 @@ export class TorrentTransfer implements Transfer {
   private async run(): Promise<void> {
     const stop = this.runtime.stop.signal
     try {
+      this.nameClient ??= await loadClientNamer()
       const client = await createClient({
         connect: (options) => this.connect(options),
         maxConns: PEERS_PER_NETWORK * Math.max(1, this.usable().length)
@@ -321,10 +343,24 @@ export class TorrentTransfer implements Transfer {
       bytesDownloaded: 0,
       speedBytesPerSec: 0,
       bytesUploaded: 0,
-      uploadSpeedBytesPerSec: 0
+      uploadSpeedBytesPerSec: 0,
+      client: wire.peerId ? (this.nameClient?.(wire.peerId) ?? null) : null,
+      piecesHeld: piecesHeld(wire.peerPieces, this.runtime.pieces.length)
     }
     const peer: Peer = { state: peerState, received: 0 }
     this.peers.set(wire, peer)
+    // What it has, as it says: all at once (bitfield, have-all), then a piece at a time.
+    const total = this.runtime.pieces.length
+    const recount = (): void => {
+      peerState.piecesHeld = piecesHeld(wire.peerPieces, total)
+      this.host.scheduleUpdate()
+    }
+    wire.on('bitfield', recount)
+    wire.on('have-all', recount)
+    wire.on('have', () => {
+      peerState.piecesHeld = Math.min(total, peerState.piecesHeld + 1)
+      this.host.scheduleUpdate()
+    })
     const { state } = this.runtime
     state.peers.push(peerState)
     state.peakPeers = Math.max(state.peakPeers, state.peers.length)

@@ -92,6 +92,10 @@ export interface TorrentPeerState {
   number: number
   interfaceId: string
   status: 'connected' | 'receiving'
+  /** The client it runs, as its peer id names it ("qBittorrent 4.6.2"); null when unknown. */
+  client: string | null
+  /** How many of the torrent's pieces it has: all of them for a seeder. */
+  piecesHeld: number
   bytesDownloaded: number
   speedBytesPerSec: number
   bytesUploaded: number

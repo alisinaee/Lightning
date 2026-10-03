@@ -403,6 +403,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 }
                 totalBytes={wantedBytes(download)}
                 blocks={download.kind === 'http' ? download.blocks : undefined}
+                totalPieces={download.kind === 'torrent' ? download.totalPieces : undefined}
                 onSwitch={(enabled) =>
                   void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
                 }
