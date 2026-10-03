@@ -151,7 +151,8 @@ test.describe('getting a torrent in', () => {
       timeout: 15_000
     })
     await expect(files.getByRole('checkbox', { name: 'All files' })).toHaveCount(0)
-    await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toHaveValue('clip.mov')
+    // Its files name it: no SAVE AS to repeat them.
+    await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toBeHidden()
     await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeEnabled()
     // A torrent's connections are its peers: there's no stream count to pick.
     await expect(plexo.page.getByText('STREAMS')).toBeHidden()

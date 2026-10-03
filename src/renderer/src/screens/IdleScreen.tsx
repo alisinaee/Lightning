@@ -393,7 +393,9 @@ export function IdleScreen(): React.JSX.Element {
         <div
           className={cn(
             'flex h-9 items-center gap-[9px] rounded-[9px] border px-3',
-            ready ? 'border-border opacity-100' : 'border-dashed border-border opacity-50'
+            ready ? 'border-border opacity-100' : 'border-dashed border-border opacity-50',
+            // A torrent names its own files, listed above; the footer says how much is chosen.
+            torrent && 'hidden'
           )}
         >
           <div id="idle-saveas-label" className={fieldLabelClass}>
@@ -404,7 +406,6 @@ export function IdleScreen(): React.JSX.Element {
             value={ready ? (fileNameOverride ?? ready.suggestedFileName) : ''}
             onChange={(event) => setFileNameOverride(event.target.value)}
             disabled={!ready}
-            readOnly={!!torrent}
             placeholder="—"
             aria-labelledby="idle-saveas-label"
             className="min-w-0 flex-1 rounded-[3px] border-none bg-transparent font-mono text-[12.5px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
