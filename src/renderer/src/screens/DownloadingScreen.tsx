@@ -229,13 +229,6 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 <InlineStat label="AVG" value={formatSpeed(avgSpeedBytesPerSec)} />
                 <Dot />
                 <InlineStat label="PEAK" value={formatSpeed(peakSpeedBytesPerSec)} />
-                {/* Always, so it's plain that a torrent uploads: the rows show it once there is any. */}
-                {isTorrent && (
-                  <>
-                    <Dot />
-                    <InlineStat label="UP" value={formatSpeed(download.uploadSpeedBytesPerSec)} />
-                  </>
-                )}
               </div>
               {isPaused || waiting
                 ? (download.error || waiting) && (

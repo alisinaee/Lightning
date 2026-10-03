@@ -421,7 +421,8 @@ export function NetworkRow({
           <TwoWay
             down={isActive ? formatSpeed(group.speedBytesPerSec) : '—'}
             up={formatSpeed(group.transfer === 'torrent' ? group.uploadSpeedBytesPerSec : 0)}
-            showUp={group.transfer === 'torrent' && group.bytesUploaded > 0}
+            // Always for a torrent, so it's plain each network uploads too.
+            showUp={group.transfer === 'torrent'}
             labels={['Downloading at', 'Uploading at']}
           />
         </div>

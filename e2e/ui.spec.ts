@@ -91,10 +91,10 @@ test.describe('a torrent through the UI', () => {
       ).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
-      // Its upload, as a whole, even before anything is sent. Nothing has been here, so the rows
-      // carry no upload line, and no arrows: a lone download figure needs none.
-      await expect(page.getByText(/^UP \d/)).toBeVisible()
-      await expect(page.getByText(/Uploading at/)).toHaveCount(0)
+      // Each network's upload, even before anything is sent; nothing at the top. A peer that has
+      // sent nothing carries no upload line, and no arrows: a lone download figure needs none.
+      await expect(page.getByText(/^UP \d/)).toHaveCount(0)
+      await expect(networks.getByText(/Uploading at/).first()).toBeAttached()
       await expect(peerRow).not.toContainText('↑')
       await expect(peerRow).not.toContainText('↓')
 
