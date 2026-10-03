@@ -50,6 +50,17 @@ app.on('open-file', (event, path) => {
 const launchLink = linkFromArgs(process.argv)
 if (launchLink) offer(launchLink)
 
+/** The Windows/Linux window controls, in the title bar's colors (main.css's --bg-secondary and
+ * --text) for the theme in use, at its height. */
+function titleBarOverlay(): Electron.TitleBarOverlayOptions {
+  const dark = nativeTheme.shouldUseDarkColors
+  return {
+    color: dark ? '#202325' : '#fafafa',
+    symbolColor: dark ? '#eae7e2' : '#1d1d1f',
+    height: 44
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 760,
@@ -64,12 +75,13 @@ function createWindow(): void {
     // (which briefly exposes the raw window background) doesn't flash white.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
     ...(process.platform !== 'darwin' ? { icon } : {}),
-    // Design v2 draws its own logo + status readout where the title normally sits — on macOS,
-    // keep the real traffic lights (still native, still draggable) but let the renderer's own
-    // title bar occupy the rest of the strip instead of an OS-drawn title.
+    // One title bar on every OS: the renderer's own strip (see TitleBar.tsx), with the OS's
+    // window controls over it — macOS's traffic lights, or the minimize/maximize/close that
+    // Windows and Linux draw over the strip's right end.
+    titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } }
-      : {}),
+      ? { trafficLightPosition: { x: 16, y: 16 } }
+      : { titleBarOverlay: titleBarOverlay() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // A hidden e2e window would otherwise have its timers throttled.
@@ -120,6 +132,7 @@ app.whenReady().then(async () => {
 
   nativeTheme.on('updated', () => {
     mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
+    if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 
   createWindow()

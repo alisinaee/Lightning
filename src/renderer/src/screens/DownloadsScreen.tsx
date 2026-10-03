@@ -1,10 +1,13 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { ChevronRight, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
 import { ScreenFooter } from '../components/ScreenFooter'
+import { ThemeToggle } from '../components/ThemeToggle'
+import { UpdateIndicator } from '../components/UpdateIndicator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -81,6 +84,7 @@ export function DownloadsScreen(): React.JSX.Element {
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const setView = useAppStore((store) => store.setView)
+  const openNewDownload = useAppStore((store) => store.openNewDownload)
   const removeDownload = useAppStore((store) => store.removeDownload)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fixing, setFixing] = useState<DownloadState | null>(null)
@@ -137,7 +141,7 @@ export function DownloadsScreen(): React.JSX.Element {
         </div>
         <div className="flex-1" />
         <NetworksMenu onOpenLimits={() => setLimitsOpen(true)} />
-        <Button type="button" onClick={() => setView({ name: 'new' })}>
+        <Button type="button" onClick={() => openNewDownload()}>
           <Plus data-icon="inline-start" />
           New download
         </Button>
@@ -184,6 +188,7 @@ export function DownloadsScreen(): React.JSX.Element {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+        {groups.length === 0 && <EmptyState />}
         {groups.map((group) => {
           const ids = group.items.map((item) => item.id)
           const all = ids.every((id) => selected.has(id))
@@ -258,6 +263,66 @@ export function DownloadsScreen(): React.JSX.Element {
   )
 }
 
+// Colors are irrelevant here — the diagram is rendered `muted`, which overrides them all to
+// var(--icon-muted) — these are just three placeholder rows to draw the illustration with.
+const PLACEHOLDER_NETWORKS = [
+  { solid: 'var(--icon-muted)', label: 'Wi-Fi' },
+  { solid: 'var(--icon-muted)', label: 'USB' },
+  { solid: 'var(--icon-muted)', label: 'Ethernet' }
+]
+const PASTE_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
+const NEW_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘N' : 'Ctrl+N'
+
+/** Nothing listed yet: how to start one — or, with no network connected, how to get one. */
+function EmptyState(): React.JSX.Element {
+  const noNetworks = useAppStore(
+    (store) => store.interfacesStatus === 'ready' && store.interfaces.length === 0
+  )
+  const loadInterfaces = useAppStore((store) => store.loadInterfaces)
+  const openNewDownload = useAppStore((store) => store.openNewDownload)
+
+  return (
+    <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
+      <CombineDiagram networks={PLACEHOLDER_NETWORKS} muted />
+      {noNetworks ? (
+        <>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">
+            No networks to combine
+          </div>
+          <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+            Plexo needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
+            connect an iPhone over USB with Personal Hotspot enabled.
+          </div>
+          <div className="mt-1 flex gap-2">
+            <Button type="button" variant="secondary" onClick={() => loadInterfaces()}>
+              Scan Again
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => window.plexo.openNetworkSettings()}
+            >
+              Network Settings…
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">No downloads yet</div>
+          <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+            Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.
+          </div>
+          <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
+            <Plus data-icon="inline-start" />
+            New download
+            <span className="ml-1 font-mono text-[11px] opacity-70">{NEW_SHORTCUT}</span>
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
 const FREE_SPACE_POLL_MS = 30_000
 
 /** Along the bottom: how fast everything is going and under what limit, the queue, the slow
@@ -306,6 +371,8 @@ function StatusBar({ downloads }: { downloads: DownloadState[] }): React.JSX.Ele
         <Switch checked={slowMode} onCheckedChange={setSlowMode} />
       </label>
       {free !== null && <span>{formatBytes(free)} free</span>}
+      <UpdateIndicator />
+      <ThemeToggle />
     </ScreenFooter>
   )
 }

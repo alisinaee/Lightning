@@ -7,22 +7,11 @@ import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
 import { NetworkRow } from '../components/NetworkRow'
-import { ScreenFooter } from '../components/ScreenFooter'
+import { DetailFooter } from '../components/DetailFooter'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
 import { TruncatedText } from '../components/TruncatedText'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from '../components/ui/alert-dialog'
-import { Button, buttonVariants } from '../components/ui/button'
+import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
@@ -159,9 +148,6 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
     } else {
       void window.plexo.pauseDownload(download.id)
     }
-  }
-  const handleConfirmCancel = (): void => {
-    void window.plexo.cancelDownload(download.id)
   }
 
   const effectiveSpeed = isPaused ? 0 : download.speedBytesPerSec
@@ -369,6 +355,26 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 </ColorBadge>
               )}
             </div>
+            <div className="mt-1 flex min-w-0 items-center gap-[7px] font-mono text-[11px] leading-[1.4] text-muted-foreground">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="truncate">
+                      Saving to {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
+                    </span>
+                  }
+                />
+                <TooltipContent>Saving to: {download.destinationPath}</TooltipContent>
+              </Tooltip>
+              {totalRetries > 0 && (
+                <>
+                  <Dot shrink />
+                  <span className="shrink-0 text-[var(--color-usb)]">
+                    {totalRetries} {totalRetries === 1 ? 'retry' : 'retries'}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         {download.kind === 'torrent' && filesOpen && (
@@ -457,30 +463,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
         </div>
       </div>
 
-      {/* Footer is always pinned at the bottom, never scrolled off-screen */}
-      <ScreenFooter>
-        <div className="flex min-w-0 flex-1 items-center gap-[7px] overflow-hidden font-mono text-[11px] leading-[1.4] text-muted-foreground">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span className="shrink-0 whitespace-nowrap">
-                  Saving to {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
-                </span>
-              }
-            />
-            <TooltipContent>Saving to: {download.destinationPath}</TooltipContent>
-          </Tooltip>
-          <Dot shrink />
-          <span className="shrink-0">Resumable</span>
-          {totalRetries > 0 && (
-            <>
-              <Dot shrink />
-              <span className="shrink-0 text-[var(--color-usb)]">
-                {totalRetries} {totalRetries === 1 ? 'retry' : 'retries'}
-              </span>
-            </>
-          )}
-        </div>
+      <DetailFooter download={download}>
         <Button
           type="button"
           variant={isPaused && !isQueued ? 'default' : 'secondary'}
@@ -489,31 +472,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
         >
           {pauseResumeLabel}
         </Button>
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button type="button" variant="destructive">
-                Cancel
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Cancel this download?</AlertDialogTitle>
-              <AlertDialogDescription>Progress will be lost.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep downloading</AlertDialogCancel>
-              <AlertDialogAction
-                className={buttonVariants({ variant: 'destructive', size: 'sm' })}
-                onClick={handleConfirmCancel}
-              >
-                Cancel download
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </ScreenFooter>
+      </DetailFooter>
     </div>
   )
 }

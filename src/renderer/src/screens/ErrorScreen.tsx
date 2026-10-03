@@ -2,7 +2,7 @@ import type { DownloadState } from '@shared/types'
 import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { FixLinkDialog } from '../components/FixLinkDialog'
-import { ScreenFooter } from '../components/ScreenFooter'
+import { DetailFooter } from '../components/DetailFooter'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
 import {
@@ -13,16 +13,18 @@ import {
   linkExpired,
   wantedBytes
 } from '../utils/format'
+import { useAppStore } from '../store/useAppStore'
 
-export function ErrorScreen({
-  download,
-  onNewDownload,
-  onDownloadAgain
-}: {
-  download: DownloadState
-  onNewDownload: () => void
-  onDownloadAgain: () => void
-}): React.JSX.Element {
+export function ErrorScreen({ download }: { download: DownloadState }): React.JSX.Element {
+  const removeDownload = useAppStore((store) => store.removeDownload)
+  const openNewDownload = useAppStore((store) => store.openNewDownload)
+  const setView = useAppStore((store) => store.setView)
+  // Nothing of it can be kept: it goes, and its link waits in New download to start over.
+  const handleDownloadAgain = (): void => {
+    removeDownload(download.id)
+    setView({ name: 'list' })
+    openNewDownload(download.url)
+  }
   const [copied, setCopied] = useState(false)
   const [resuming, setResuming] = useState(false)
   const [fixing, setFixing] = useState(false)
@@ -147,54 +149,45 @@ export function ErrorScreen({
             </div>
           </div>
 
-          {/* Action Buttons in Center */}
-          <div className="mt-1 flex w-full justify-center gap-2.5">
-            {expired && (
-              <Button type="button" onClick={() => setFixing(true)}>
-                Paste New Link
-              </Button>
-            )}
-            {resumable && !expired && (
-              <Button
-                type="button"
-                disabled={resuming}
-                onClick={() => {
-                  setResuming(true)
-                  void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
-                }}
-              >
-                {resuming ? 'Resuming…' : 'Resume'}
-              </Button>
-            )}
-            <Button
+          <div className="flex w-full min-w-0 items-center gap-2 border-t-[0.5px] border-border pt-3">
+            <div className="min-w-0 flex-1 text-left font-mono text-[11px] leading-none text-muted-foreground">
+              <TruncatedText text={download.url} />
+            </div>
+            <button
               type="button"
-              variant={resumable ? 'secondary' : 'default'}
-              onClick={onDownloadAgain}
+              onClick={handleCopyUrl}
+              className={`min-h-6 shrink-0 border-none bg-transparent px-1 py-0.5 font-mono text-[11px] leading-none ${
+                copied ? 'text-[var(--color-success)]' : 'text-primary'
+              }`}
             >
-              Download Again
-            </Button>
-            <Button type="button" variant="secondary" onClick={onNewDownload}>
-              New Download
-            </Button>
+              {copied ? 'Copied' : 'Copy URL'}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Footer with properly constrained, non-overflowing URL */}
-      <ScreenFooter className="min-w-0">
-        <div className="min-w-0 flex-1 font-mono text-[11px] leading-none text-muted-foreground">
-          <TruncatedText text={download.url} />
-        </div>
-        <button
-          type="button"
-          onClick={handleCopyUrl}
-          className={`min-h-6 shrink-0 border-none bg-transparent px-1 py-0.5 font-mono text-[11px] leading-none ${
-            copied ? 'text-[var(--color-success)]' : 'text-primary'
-          }`}
-        >
-          {copied ? 'Copied' : 'Copy URL'}
-        </button>
-      </ScreenFooter>
+      <DetailFooter download={download}>
+        {expired ? (
+          <Button type="button" onClick={() => setFixing(true)}>
+            Fix link
+          </Button>
+        ) : resumable ? (
+          <Button
+            type="button"
+            disabled={resuming}
+            onClick={() => {
+              setResuming(true)
+              void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
+            }}
+          >
+            {resuming ? 'Resuming…' : 'Resume'}
+          </Button>
+        ) : (
+          <Button type="button" onClick={handleDownloadAgain}>
+            Download again
+          </Button>
+        )}
+      </DetailFooter>
       <FixLinkDialog download={fixing ? download : null} onClose={() => setFixing(false)} />
     </div>
   )

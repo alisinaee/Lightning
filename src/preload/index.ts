@@ -49,7 +49,8 @@ const plexoApi = {
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
-  removeDownload: (downloadId: string) => invoke('removeDownload', downloadId),
+  removeDownload: (downloadId: string, options?: { trashFile?: boolean }) =>
+    invoke('removeDownload', downloadId, options),
   checkForUpdate: () => invoke('checkForUpdate'),
   takePendingLink: () => invoke('takePendingLink'),
 

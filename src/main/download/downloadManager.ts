@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { app, Notification, powerSaveBlocker } from 'electron'
+import { app, Notification, powerSaveBlocker, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
 import {
   DOWNLOADS_AT_ONCE,
@@ -28,7 +28,7 @@ import {
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
-import { addToHistory, removeFromHistory } from './history'
+import { addToHistory, listHistory, removeFromHistory } from './history'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { HttpTransfer, splittable } from './httpTransfer'
@@ -1102,7 +1102,10 @@ export class DownloadManager {
     this.pump()
   }
 
-  async remove(id: string): Promise<void> {
+  /** Removes a download, cancelling one under way. A finished one's file stays where it is,
+   * unless `trashFile`: then it goes to the Trash, where the user can still get it back. The
+   * path is the download's own, never one the window names. */
+  async remove(id: string, trashFile = false): Promise<void> {
     const runtime = this.runtimes.get(id)
     if (
       runtime &&
@@ -1114,10 +1117,18 @@ export class DownloadManager {
       await this.cancel(id)
     }
     this.runtimes.delete(id)
-    if (runtime) return this.removePersistedDownload(runtime)
-    // A finished one: forgotten, its file left where it is.
+    if (runtime) {
+      await this.removePersistedDownload(runtime)
+      if (trashFile && runtime.state.status === 'completed') {
+        await shell.trashItem(runtime.state.destinationPath).catch(() => {})
+      }
+      return
+    }
+    // A finished one, from history.
+    const entry = trashFile ? (await listHistory()).find((other) => other.id === id) : undefined
     await removeFromHistory([id])
     this.historyChanged()
+    if (entry && !entry.missing) await shell.trashItem(entry.destinationPath).catch(() => {})
   }
 
   async suspendAll(): Promise<void> {

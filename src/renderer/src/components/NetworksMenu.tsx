@@ -1,10 +1,11 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import { useNetworkUsage } from '../hooks/useNetworks'
+import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
 import { UsageBar } from './LimitsDialog'
+import { NetworkEditPopover } from './NetworkEditPopover'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Switch } from './ui/switch'
 
@@ -16,8 +17,10 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
   const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
   const downloads = useAppStore((store) => store.downloads)
   const networkVisual = useNetworkVisuals()
+  const latencies = useAppStore((store) => store.latencies)
   const [open, setOpen] = useState(false)
   const usage = useNetworkUsage(open)
+  useLatencyPolling(open)
 
   // Every running download's speed over each network, added up.
   const speeds = new Map<string, number>()
@@ -52,10 +55,16 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
             />
           ))}
         </span>
-        {on.length} {on.length === 1 ? 'network' : 'networks'}
-        <span className="font-mono text-[11.5px] text-muted-foreground">
-          {total > 0 ? formatSpeed(total) : 'idle'}
-        </span>
+        {interfaces.length === 0 ? (
+          <span className="text-[var(--color-danger)]">No network</span>
+        ) : (
+          <>
+            {on.length} {on.length === 1 ? 'network' : 'networks'}
+            <span className="font-mono text-[11.5px] text-muted-foreground">
+              {total > 0 ? formatSpeed(total) : 'idle'}
+            </span>
+          </>
+        )}
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[340px] gap-0 p-0">
@@ -84,13 +93,27 @@ export function NetworksMenu({ onOpenLimits }: { onOpenLimits: () => void }): Re
                   style={{ background: visual.solid }}
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="truncate text-[13.5px] font-medium">{visual.name}</div>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
+                    <NetworkEditPopover
+                      interfaceId={iface.id}
+                      interfaceKind={iface.kind}
+                      osName={iface.displayName}
+                    />
+                  </div>
                   <div
                     className={`font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
                   >
                     {reached
                       ? 'Data limit reached · paused'
-                      : `${iface.displayName} · ${speed > 0 ? formatSpeed(speed) : 'idle'}`}
+                      : [
+                          iface.displayName,
+                          speed > 0 ? formatSpeed(speed) : 'idle',
+                          typeof latencies[iface.id] === 'number' &&
+                            `${Math.round(latencies[iface.id]!)} ms`
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                   </div>
                 </div>
                 <Switch

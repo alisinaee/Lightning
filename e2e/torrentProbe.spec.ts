@@ -139,23 +139,21 @@ test.describe('getting a torrent in', () => {
     })
   })
 
-  test('the start screen shows the torrent, ready to start', async ({ plexo }) => {
+  test('New download shows the torrent, ready to start', async ({ plexo }) => {
     const { client, torrent } = await seed([named(seededBytes(200_000, 7), 'clip.mov')])
     clients.push(client)
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
-    await plexo.page.getByRole('textbox', { name: 'LINK' }).fill(magnet)
+    await (await plexo.newDownload()).fill(magnet)
     // Its files, to choose from: one here, so no tick for all of them.
     const files = plexo.page.getByRole('group', { name: 'Files' })
     await expect(files.getByRole('checkbox', { name: /clip\.mov/ })).toBeChecked({
       timeout: 15_000
     })
     await expect(files.getByRole('checkbox')).toHaveCount(1)
-    // Its files name it: no SAVE AS to repeat them.
-    await expect(plexo.page.getByRole('textbox', { name: 'SAVE AS' })).toBeHidden()
-    await expect(plexo.page.getByRole('button', { name: 'Start' })).toBeEnabled()
-    // A torrent's connections are its peers: there's no stream count to pick.
-    await expect(plexo.page.getByText('STREAMS')).toBeHidden()
+    // Its files name it: no file name to repeat them.
+    await expect(plexo.page.getByRole('textbox', { name: 'File name' })).toBeHidden()
+    await expect(plexo.page.getByRole('button', { name: 'Download' })).toBeEnabled()
   })
 
   test('a torrent of several files lists them, each ticked to be downloaded', async ({ plexo }) => {
@@ -169,9 +167,9 @@ test.describe('getting a torrent in', () => {
     )
     clients.push(client)
     const { page } = plexo
-    await page
-      .getByRole('textbox', { name: 'LINK' })
-      .fill(`${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`)
+    await (
+      await plexo.newDownload()
+    ).fill(`${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`)
 
     // Its folder, by name, ticks them all.
     const all = page.getByRole('checkbox', { name: 'Pack', exact: true })
@@ -181,11 +179,11 @@ test.describe('getting a torrent in', () => {
     // Untick everything: nothing to download, nothing to start.
     await all.click()
     await expect(page.getByRole('checkbox', { name: /two\.bin/ })).not.toBeChecked()
-    await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
 
-    // Tick one: the footer counts it, and only its size.
+    // Tick one: it's counted, and only its size.
     await page.getByRole('checkbox', { name: /two\.bin/ }).click()
     await expect(page.getByText('1 of 3 files · 2.0 KB')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Start' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Download' })).toBeEnabled()
   })
 })

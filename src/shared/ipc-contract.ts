@@ -43,7 +43,9 @@ export interface IpcContract {
   relinkDownload: { args: [id: string, url: string]; result: void }
   setDownloadNetwork: { args: [id: string, networkId: string, enabled: boolean]; result: void }
   cancelDownload: { args: [id: string]; result: void }
-  removeDownload: { args: [id: string]; result: void }
+  /** Removes a download, cancelling one under way. A finished one's file stays, unless
+   * `trashFile`: then it goes to the Trash. */
+  removeDownload: { args: [id: string, options?: { trashFile?: boolean }]; result: void }
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
   takePendingLink: { args: []; result: string | null }

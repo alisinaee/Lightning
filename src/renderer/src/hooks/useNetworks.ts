@@ -16,15 +16,16 @@ export function useNetworkEvents(): void {
   }, [loadInterfaces, receiveInterfaces])
 }
 
-/** Keeps each network's latency readout fresh while a screen that shows it is mounted. */
-export function useLatencyPolling(): void {
+/** Keeps each network's latency readout fresh while `active` (something showing it is open). */
+export function useLatencyPolling(active: boolean): void {
   const refreshLatencies = useAppStore((store) => store.refreshLatencies)
 
   useEffect(() => {
+    if (!active) return
     void refreshLatencies()
     const interval = setInterval(refreshLatencies, LATENCY_POLL_MS)
     return () => clearInterval(interval)
-  }, [refreshLatencies])
+  }, [active, refreshLatencies])
 }
 
 const USAGE_POLL_MS = 2000

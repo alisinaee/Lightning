@@ -1,6 +1,6 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { HeroBand } from '../components/HeroBand'
-import { ScreenFooter } from '../components/ScreenFooter'
+import { DetailFooter } from '../components/DetailFooter'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -19,12 +19,10 @@ const sectionHeaderClass =
   'font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
 
 export function CompleteScreen({
-  download,
-  onNewDownload
+  download
 }: {
   /** Just finished, or as history keeps it. */
   download: DownloadState | FinishedDownload
-  onNewDownload: () => void
 }): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
   const networkVisual = useNetworkVisuals()
@@ -176,10 +174,7 @@ export function CompleteScreen({
             </div>
           ))}
         </div>
-      </div>
-
-      <ScreenFooter>
-        <div className="shrink-0 font-mono text-[11px] leading-[1.4] whitespace-nowrap text-muted-foreground">
+        <div className="mt-auto pt-3 font-mono text-[11px] leading-[1.4] text-muted-foreground">
           {[
             `written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'}`,
             // What its peers got from it while it downloaded.
@@ -189,14 +184,13 @@ export function CompleteScreen({
             .filter(Boolean)
             .join(' · ')}
         </div>
-        <div className="flex-1" />
-        <Button type="button" variant="secondary" onClick={onNewDownload}>
-          New Download
-        </Button>
+      </div>
+
+      <DetailFooter download={download}>
         <Button type="button" onClick={handleReveal} disabled={missing}>
-          {window.plexo.platform === 'darwin' ? 'Reveal in Finder' : 'Show in folder'}
+          {window.plexo.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
         </Button>
-      </ScreenFooter>
+      </DetailFooter>
     </div>
   )
 }

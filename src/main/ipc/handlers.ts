@@ -220,7 +220,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('cancelDownload', async (_event, id) => manager.cancel(id))
 
-  handle('removeDownload', async (_event, id) => manager.remove(id))
+  handle('removeDownload', async (_event, id, options) =>
+    manager.remove(id, options?.trashFile === true)
+  )
 
   // Kicked off once at startup, not per-call — later renderer calls (e.g. a remount) just await
   // the same in-flight/settled check instead of re-hitting the GitHub API.

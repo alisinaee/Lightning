@@ -10,6 +10,7 @@ import {
   expect,
   test as base,
   type ElectronApplication,
+  type Locator,
   type Page
 } from '@playwright/test'
 import type { IpcContract } from '../src/shared/ipc-contract'
@@ -264,6 +265,15 @@ export class PlexoApp {
   }
 
   nextDownload: Tracked | null = null
+
+  /** Opens New download as its button does, and gives its link field. */
+  async newDownload(): Promise<Locator> {
+    const link = this.page.getByRole('textbox', { name: 'Link' })
+    if (!(await link.isVisible())) {
+      await this.page.getByRole('button', { name: 'New download' }).first().click()
+    }
+    return link
+  }
 
   /** Every download, running or finished, oldest first. A finished one comes from history, so it
    * has no work units left. */

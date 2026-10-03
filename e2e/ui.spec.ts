@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { BLOCK, expect, interfacesEnv, NETWORKS, test, treeSha } from './fixtures'
 import { seededBytes } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
@@ -38,15 +38,17 @@ test.describe('a torrent through the UI', () => {
       await stubNativeUi(plexo, dirs.dest)
       const page = plexo.page
 
-      await page.getByRole('button', { name: 'Browse…' }).click()
-      await page.getByRole('textbox', { name: 'LINK' }).fill(await torrentFileOnDisk(torrent))
+      const link = await plexo.newDownload()
+      await page.getByRole('button', { name: 'Change…' }).click()
+      await link.fill(await torrentFileOnDisk(torrent))
       await page.getByRole('checkbox', { name: /b\.bin/ }).click()
       await plexo.expectNextDownload(
         treeSha(
           [files[0], files[2]].map((data) => ({ path: (data as { name?: string }).name!, data }))
         )
       )
-      await page.getByRole('button', { name: 'Start' }).click()
+      await page.getByRole('button', { name: 'Download' }).click()
+      await page.getByRole('button', { name: 'Open Trio' }).click()
 
       // Running: its connections are peers, and its blocks pieces.
       const peers = page.getByRole('button', { name: /^\d+ peers?/ }).first()
@@ -99,9 +101,9 @@ test.describe('a torrent through the UI', () => {
       await expect(peerRow).not.toContainText('↓')
 
       // Done: two of its three files, with what fetched them.
-      await expect(
-        page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
-      ).toBeVisible({ timeout: 60_000 })
+      await expect(page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeVisible({
+        timeout: 60_000
+      })
       await expect(page.getByText(/^2 of 3 files · /)).toBeVisible()
       await expect(page.getByText('Peers', { exact: true })).toBeVisible()
       await expect(page.getByText(/^written in \d+ pieces · uploaded /)).toBeVisible()
@@ -121,15 +123,18 @@ test.describe('UI journeys @smoke', () => {
     await stubNativeUi(plexo, dirs.dest)
     const page = plexo.page
 
-    await page.getByRole('button', { name: 'Browse…' }).click()
-    await page.getByRole('textbox', { name: 'LINK' }).fill(origin.url())
-    const start = page.getByRole('button', { name: 'Start' })
+    const link = await plexo.newDownload()
+    await page.getByRole('button', { name: 'Change…' }).click()
+    await link.fill(origin.url())
+    const start = page.getByRole('button', { name: 'Download' })
     await expect(start).toBeEnabled()
 
     const reached = origin.hold(6 * BLOCK)
     await plexo.expectNextDownload(origin.sha256)
     await start.click()
     await reached
+    // Added to the list; its own screen is a click away.
+    await page.getByRole('button', { name: /^Open / }).click()
 
     await page.getByRole('button', { name: 'Pause' }).click()
     await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
@@ -140,7 +145,7 @@ test.describe('UI journeys @smoke', () => {
     origin.release()
     await page.getByRole('button', { name: 'Resume' }).click()
 
-    const reveal = page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
+    const reveal = page.getByRole('button', { name: /Show in (Finder|folder)/ })
     await expect(reveal).toBeVisible()
     await expect(page.getByText('Streams', { exact: true })).toBeVisible()
     await expect(page.getByText(/^written in \d+ chunks/)).toBeVisible()
@@ -153,7 +158,7 @@ test.describe('UI journeys @smoke', () => {
       .toEqual([destinationPath])
   })
 
-  test('cancel through the confirmation dialog, then "Download Again"', async ({
+  test('delete through the confirmation dialog, then download it again', async ({
     plexo,
     serve,
     dirs
@@ -161,34 +166,37 @@ test.describe('UI journeys @smoke', () => {
     const origin = await serve({ size: SIZE })
     await stubNativeUi(plexo, dirs.dest)
     const page = plexo.page
-    await page.getByRole('button', { name: 'Browse…' }).click()
-    await page.getByRole('textbox', { name: 'LINK' }).fill(origin.url())
+    let link = await plexo.newDownload()
+    await page.getByRole('button', { name: 'Change…' }).click()
+    await link.fill(origin.url())
 
     const reached = origin.hold(6 * BLOCK)
-    await page.getByRole('button', { name: 'Start' }).click()
+    await page.getByRole('button', { name: 'Download' }).click()
     await reached
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-    await page.getByRole('button', { name: 'Cancel download' }).click()
+    await page.getByRole('button', { name: /^Open / }).click()
+    await page.getByRole('button', { name: 'Delete…' }).click()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
     origin.release()
+    // Gone, with what it had downloaded.
+    await expect(page.getByText('No downloads yet')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Download Again' }).click()
+    link = await plexo.newDownload()
+    await link.fill(origin.url())
     await plexo.expectNextDownload(origin.sha256)
-    await page.getByRole('button', { name: 'Start' }).click({ timeout: 5000 })
-    await expect(
-      page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
-    ).toBeVisible()
+    await page.getByRole('button', { name: 'Download' }).click({ timeout: 5000 })
+    await plexo.waitForStatus('completed')
   })
 
-  test('a link the server rejects shows the error and keeps Start disabled', async ({
+  test('a link the server rejects shows the error and keeps Download disabled', async ({
     plexo,
     serve
   }) => {
     const origin = await serve({ size: SIZE })
     origin.setRule(() => ({ status: 404 }))
     const page = plexo.page
-    await page.getByRole('textbox', { name: 'LINK' }).fill(origin.url())
+    await (await plexo.newDownload()).fill(origin.url())
     await expect(page.getByText(/could not be found/)).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
   })
 
   test('a completed download is shown again after a restart', async ({ plexo, serve }) => {
@@ -198,9 +206,7 @@ test.describe('UI journeys @smoke', () => {
     await plexo.relaunch()
     // Listed under Finished; opened, it shows as it did when it finished.
     await plexo.page.getByRole('button', { name: `Open ${fileName}` }).click()
-    await expect(
-      plexo.page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })
-    ).toBeVisible()
+    await expect(plexo.page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeVisible()
   })
 })
 
@@ -224,26 +230,39 @@ test.describe('settings @smoke', () => {
       await themeToggle.click()
 
       await stubNativeUi(plexo, dirs.dest)
-      await page().getByRole('button', { name: 'Browse…' }).click()
-
+      await plexo.newDownload()
+      await page().getByRole('button', { name: 'Change…' }).click()
+      await page().keyboard.press('Escape')
+      // A function: the window, and so the page, is a new one after a relaunch.
+      const networksMenu = (): Locator =>
+        page()
+          .getByRole('button', { name: /network/ })
+          .first()
+          .first()
+      await networksMenu().click()
       await page().getByRole('button', { name: 'Edit network' }).first().click()
       await page().getByRole('textbox', { name: 'Name' }).fill('Office fibre')
       await page().getByRole('button', { name: 'Violet' }).click()
       await page().getByRole('button', { name: 'Done' }).click()
+      await page().keyboard.press('Escape')
 
       const expectAllKept = async (): Promise<void> => {
-        // Waiting on the titlebar indicator first means the update check has answered, so the
-        // dialog's absence below is a real "stayed dismissed", not "not checked yet".
+        // Waiting on the status bar's indicator first means the update check has answered, so
+        // the dialog's absence below is a real "stayed dismissed", not "not checked yet".
         await expect(page().getByRole('link', { name: 'Update available: 9.9.9' })).toBeVisible()
         await expect(page().getByRole('alertdialog')).toBeHidden()
         await expect(page().getByRole('button', { name: labelAfterSwitch })).toBeVisible()
+        await plexo.newDownload()
         await expect(page().getByText(dirs.dest)).toBeVisible()
+        await page().keyboard.press('Escape')
+        await networksMenu().click()
         await expect(page().getByText('Office fibre')).toBeVisible()
         await page().getByRole('button', { name: 'Edit network' }).first().click()
         await expect(page().getByRole('button', { name: 'Violet' })).toHaveAttribute(
           'aria-pressed',
           'true'
         )
+        await page().keyboard.press('Escape')
         await page().keyboard.press('Escape')
       }
 
@@ -260,10 +279,14 @@ test.describe('settings @smoke', () => {
     dirs
   }) => {
     const settingsPath = join(dirs.userData, 'app-settings.json')
-    // The TO row, as the user sees it — compared whole, so no platform's idea of the default
-    // folder is baked into the test.
-    const choices = (): Promise<string> =>
-      plexo.page.getByText('TO', { exact: true }).locator('..').innerText()
+    // New download's "Save to" row, as the user sees it — compared whole, so no platform's idea
+    // of the default folder is baked into the test.
+    const choices = async (): Promise<string> => {
+      await plexo.newDownload()
+      const row = await plexo.page.getByText('Save to', { exact: true }).locator('..').innerText()
+      await plexo.page.keyboard.press('Escape')
+      return row
+    }
     const fresh = await choices()
 
     await plexo.quit()
@@ -281,7 +304,7 @@ test.describe('settings @smoke', () => {
 test.describe('no networks', () => {
   test.use({ appEnv: { PLEXO_E2E_INTERFACES: '' } })
 
-  test('a network appearing takes you back to the start screen @smoke', async ({ plexo }) => {
+  test('a network appearing makes the list ready for downloads @smoke', async ({ plexo }) => {
     await expect(plexo.page.getByText('No networks to combine')).toBeVisible()
     await plexo.evaluateMain(
       (_electron, value) => {
@@ -290,6 +313,6 @@ test.describe('no networks', () => {
       interfacesEnv({ a: NETWORKS['a'] })
     )
     await plexo.page.getByRole('button', { name: 'Scan Again' }).click()
-    await expect(plexo.page.getByRole('textbox', { name: 'LINK' })).toBeVisible()
+    await expect(plexo.page.getByText('No downloads yet')).toBeVisible()
   })
 })

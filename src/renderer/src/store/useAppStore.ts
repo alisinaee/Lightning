@@ -14,8 +14,8 @@ import { create } from 'zustand'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** What the window shows: the list of downloads, the start screen, or one download. */
-export type View = { name: 'list' } | { name: 'new' } | { name: 'download'; id: string }
+/** What the window shows: the list of downloads, or one download. */
+export type View = { name: 'list' } | { name: 'download'; id: string }
 
 interface AppStore {
   interfaces: NetworkInterfaceInfo[]
@@ -40,6 +40,8 @@ interface AppStore {
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
   view: View
+  /** The New download dialog, over whatever the window shows. */
+  newDownloadOpen: boolean
   /** Persisted — how many downloads run at once; the rest wait in the queue. */
   downloadsAtOnce: number
   /** Persisted — the speed limits (see AppSettings). */
@@ -65,8 +67,11 @@ interface AppStore {
   /** Finished downloads as main lists them; any that finished leave `downloads`. */
   receiveHistory: (history: FinishedDownload[]) => void
   /** Removes a download (cancelling one under way), or forgets a finished one. */
-  removeDownload: (id: string) => void
+  removeDownload: (id: string, options?: { trashFile?: boolean }) => void
   setView: (view: View) => void
+  /** Opens New download, with `link` in its link field when one is given. */
+  openNewDownload: (link?: string) => void
+  closeNewDownload: () => void
   setDownloadsAtOnce: (count: number) => void
   /** Each one applies at once, to every download (see main/network/limits.ts). */
   setSpeedLimit: (bytesPerSec: number | undefined) => void
@@ -101,6 +106,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   downloads: {},
   history: [],
   view: { name: 'list' },
+  newDownloadOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,
   speedLimit: initial.speedLimit,
   slowMode: initial.slowMode,
@@ -183,14 +189,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ history, downloads })
   },
 
-  removeDownload: (id) => {
+  removeDownload: (id, options) => {
     const { [id]: removed, ...downloads } = get().downloads
     void removed
     set({ downloads, history: get().history.filter((entry) => entry.id !== id) })
-    void window.plexo.removeDownload(id).catch(() => {})
+    void window.plexo.removeDownload(id, options).catch(() => {})
   },
 
   setView: (view) => set({ view }),
+
+  openNewDownload: (link) =>
+    set(link === undefined ? { newDownloadOpen: true } : { newDownloadOpen: true, draftUrl: link }),
+
+  closeNewDownload: () => set({ newDownloadOpen: false }),
 
   setDownloadsAtOnce: (downloadsAtOnce) => {
     set({ downloadsAtOnce })

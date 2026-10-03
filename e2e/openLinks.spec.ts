@@ -6,7 +6,8 @@ import { seededBytes } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 // Links the OS hands Plexo — a magnet link clicked in a browser, a .torrent opened from the file
-// manager — land in the link field, for the user to look at and start; nothing starts on its own.
+// manager — open New download with it filled in, for the user to look at and start; nothing starts
+// on its own.
 
 const MAGNET = `magnet:?xt=urn:btih:${'cd'.repeat(20)}&dn=handed.over`
 
@@ -20,7 +21,7 @@ async function aTorrentFile(): Promise<string> {
   }
 }
 
-const linkField = (plexo: PlexoApp): Locator => plexo.page.getByRole('textbox', { name: 'LINK' })
+const linkField = (plexo: PlexoApp): Locator => plexo.page.getByRole('textbox', { name: 'Link' })
 
 test.describe('links handed over by the OS', () => {
   test('a .torrent on the command line (Windows, Linux) fills in the link', async ({ plexo }) => {
@@ -59,7 +60,8 @@ test.describe('links handed over by the OS', () => {
 
     await emit('open-url', 'https://example.com/not-a-torrent')
     await emit('open-file', '/no/such/file.torrent')
-    await expect(linkField(plexo)).toHaveValue('')
+    // Neither is taken: New download doesn't open for them.
+    await expect(linkField(plexo)).toBeHidden()
 
     await emit('open-url', MAGNET)
     await expect(linkField(plexo)).toHaveValue(MAGNET)
