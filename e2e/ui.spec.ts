@@ -67,9 +67,19 @@ test.describe('a torrent through the UI', () => {
       await expect(peerRow).toContainText('Receiving at')
       await expect(peerRow).not.toContainText('Sending at')
       await expect(peerRow.getByRole('cell')).toHaveCount(6)
-      // What it runs, and how much of the torrent it has: the swarm's seeders have all of it.
+      // What it runs. A peer has no progress of its own: a dash, not a bar.
       await expect(peerRow).toContainText('WebTorrent')
-      await expect(peerRow.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+      await expect(peerRow.getByRole('progressbar')).toHaveCount(0)
+      // Each peer's number is its own across the download: no two rows share one, whichever
+      // networks they're on.
+      for (const button of await page.getByRole('button', { name: /^\d+ peers?/ }).all()) {
+        if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click()
+      }
+      const numbers = (await page.getByText(/^Peer #\d+$/).allTextContents()).map((text) =>
+        text.trim()
+      )
+      expect(numbers.length).toBeGreaterThan(0)
+      expect(new Set(numbers).size).toBe(numbers.length)
       const networks = page.getByRole('table', { name: 'Networks' })
       await expect(networks.getByRole('columnheader', { name: 'Verified' })).toHaveCount(0)
       await expect(
@@ -81,9 +91,9 @@ test.describe('a torrent through the UI', () => {
       ).toHaveCount(0)
       await expect(peerRow).not.toContainText(/Piece #/)
       await expect(page.getByText(/^\d+ pieces · /)).toBeVisible()
-      // Its upload, as a whole. Nothing has been sent here, so the rows carry no upload line,
-      // and no arrows: a lone download figure needs none.
-      await expect(page.getByText(/^Uploading at .+\/s$/).first()).toBeVisible()
+      // Nothing has been sent here: no upload figure anywhere (it shows once there is some),
+      // and no arrows on the rows, a lone download figure needs none.
+      await expect(page.getByText(/Uploading at/)).toHaveCount(0)
       await expect(peerRow).not.toContainText('↑')
       await expect(peerRow).not.toContainText('↓')
 

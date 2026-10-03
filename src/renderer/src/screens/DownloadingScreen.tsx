@@ -300,12 +300,17 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   <span>
                     {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
                   </span>
-                  <Dot />
-                  <span>
-                    <span className="sr-only">Uploading at </span>
-                    <span aria-hidden="true">↑ </span>
-                    {formatSpeed(download.uploadSpeedBytesPerSec ?? 0)}
-                  </span>
+                  {/* Upload once there is any, as on the network rows. */}
+                  {download.bytesUploaded > 0 && (
+                    <>
+                      <Dot />
+                      <span>
+                        <span className="sr-only">Uploading at </span>
+                        <span aria-hidden="true">↑ </span>
+                        {formatSpeed(download.uploadSpeedBytesPerSec)}
+                      </span>
+                    </>
+                  )}
                 </>
               )}
               {!isPaused && knownSize && effectiveSpeed > 0 && (
@@ -403,7 +408,6 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 }
                 totalBytes={wantedBytes(download)}
                 blocks={download.kind === 'http' ? download.blocks : undefined}
-                totalPieces={download.kind === 'torrent' ? download.totalPieces : undefined}
                 onSwitch={(enabled) =>
                   void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
                 }

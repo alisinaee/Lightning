@@ -86,16 +86,12 @@ export interface HttpStreamState {
 /** A live BitTorrent peer connection. A peer does not own a piece: it may contribute blocks to
  * several pieces, and several peers may contribute to one piece. */
 export interface TorrentPeerState {
+  /** Unique in the download, in the order its peers connected: "Peer #(id + 1)". */
   id: number
-  /** Its number on its network, from 1 in the order its peers connected: kept while it stays
-   * connected, never handed to another peer. */
-  number: number
   interfaceId: string
   status: 'connected' | 'receiving'
   /** The client it runs, as its peer id names it ("qBittorrent 4.6.2"); null when unknown. */
   client: string | null
-  /** How many of the torrent's pieces it has: all of them for a seeder. */
-  piecesHeld: number
   bytesDownloaded: number
   speedBytesPerSec: number
   bytesUploaded: number

@@ -41,8 +41,6 @@ declare module 'webtorrent' {
     unchoke(): void
     /** The remote peer's id, hex: set once it has shaken hands. */
     peerId: string | null
-    /** The pieces the remote peer has. Emits 'have', 'bitfield' and 'have-all' as that changes. */
-    peerPieces: { buffer: Uint8Array; get(index: number): boolean }
   }
 
   export interface Torrent extends EventEmitter {
