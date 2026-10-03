@@ -167,7 +167,7 @@ function HttpStreamRows({
             </div>
             <div
               role="cell"
-              className="text-right font-mono text-[11px] leading-none font-medium tabular-nums"
+              className="text-right font-mono text-[11px] leading-none font-medium whitespace-nowrap tabular-nums"
               style={{ color: active ? visual.text : 'var(--text-tertiary)' }}
             >
               {active ? formatSpeed(stream.speedBytesPerSec) : '—'}
@@ -234,7 +234,7 @@ function PeerRows({
             </div>
             <div
               role="cell"
-              className="text-right font-mono text-[10px] leading-[1.35] tabular-nums"
+              className="text-right font-mono text-[10px] leading-[1.35] whitespace-nowrap tabular-nums"
             >
               <div style={{ color: receiving ? visual.text : 'var(--text-tertiary)' }}>
                 <span aria-hidden>↓ </span>
@@ -369,7 +369,7 @@ export function NetworkRow({
         </div>
         <div
           role="cell"
-          className="text-right font-mono text-[11px] leading-[1.35] font-semibold tabular-nums"
+          className="text-right font-mono text-[11px] leading-[1.35] font-semibold whitespace-nowrap tabular-nums"
           style={{ color: isActive ? visual.text : 'var(--text-tertiary)' }}
         >
           <div>

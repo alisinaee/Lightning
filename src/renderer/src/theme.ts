@@ -54,7 +54,10 @@ export const DANGER = 'var(--color-danger)'
 // the same column, which is routinely wider than the collapsed row's "<name> · N streams" — so
 // the track (and everything right of it) would jump wider the instant you expand. 190px already
 // covers that expanded content, so expanding never grows the track further.
-export const NETWORK_ROW_GRID_COLUMNS = '30px minmax(190px, max-content) 1fr 48px 78px 160px'
+// Keep a speed value and its unit together, including torrent direction arrows. Let unusually
+// long values grow the track rather than wrap or overflow into the adjacent byte totals.
+export const NETWORK_ROW_GRID_COLUMNS =
+  '30px minmax(190px, max-content) 1fr 48px minmax(104px, max-content) 160px'
 
 // A curated set of user-selectable network colors, distinct from (and in addition to) the
 // kind defaults above — each ships its own on-solid text color so it's legible without having
