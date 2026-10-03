@@ -1,7 +1,7 @@
 import type { ProbeResult, TorrentInfo } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, ClipboardPaste, FolderOpen, Info } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NetworkCard } from '../components/NetworkCard'
 import { ScreenFooter } from '../components/ScreenFooter'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
@@ -120,8 +120,6 @@ export function IdleScreen(): React.JSX.Element {
   // Auto unless the user picks a count for this download; not remembered for the next one.
   const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
 
-  const probeRequestId = useRef(0)
-
   useEffect(() => {
     const trimmed = url.trim()
     if (!trimmed) {
@@ -133,22 +131,27 @@ export function IdleScreen(): React.JSX.Element {
       return
     }
 
-    const requestId = ++probeRequestId.current
+    // Set once the link changes, cleared included: a magnet can take a while to answer, and its
+    // answer is no longer wanted then.
+    let stale = false
     setProbe({ status: 'probing' })
     setFileNameOverride(null)
     setSkippedFiles([])
     const timer = setTimeout(async () => {
       try {
         const result = await window.plexo.probeUrl(trimmed)
-        if (probeRequestId.current !== requestId) return
+        if (stale) return
         setProbe({ status: 'ready', result })
       } catch (error) {
-        if (probeRequestId.current !== requestId) return
+        if (stale) return
         setProbe({ status: 'error', message: describeError(error) })
       }
     }, PROBE_DEBOUNCE_MS)
 
-    return () => clearTimeout(timer)
+    return () => {
+      stale = true
+      clearTimeout(timer)
+    }
   }, [url])
 
   const ready = probe.status === 'ready' ? probe.result : null
