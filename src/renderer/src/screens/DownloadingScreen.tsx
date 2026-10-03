@@ -229,6 +229,13 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                 <InlineStat label="AVG" value={formatSpeed(avgSpeedBytesPerSec)} />
                 <Dot />
                 <InlineStat label="PEAK" value={formatSpeed(peakSpeedBytesPerSec)} />
+                {/* Always, so it's plain that a torrent uploads: the rows show it once there is any. */}
+                {isTorrent && (
+                  <>
+                    <Dot />
+                    <InlineStat label="UP" value={formatSpeed(download.uploadSpeedBytesPerSec)} />
+                  </>
+                )}
               </div>
               {isPaused || waiting
                 ? (download.error || waiting) && (
@@ -299,13 +306,6 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
                   <Dot />
                   <span>
                     {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
-                  </span>
-                  {/* Always, so it's plain that a torrent uploads: the rows show it once there is any. */}
-                  <Dot />
-                  <span>
-                    <span className="sr-only">Uploading at </span>
-                    <span aria-hidden="true">↑ </span>
-                    {formatSpeed(download.uploadSpeedBytesPerSec)}
                   </span>
                 </>
               )}
