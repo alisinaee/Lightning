@@ -56,9 +56,10 @@ if (launchLink) offer(launchLink)
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 760,
-    height: 560,
+    height: 640,
     minWidth: 720,
-    minHeight: 520,
+    // Room under the download screen's pinned block grid for a network row and a few of its rows.
+    minHeight: 620,
     show: false,
     autoHideMenuBar: true,
     title: 'Plexo',
