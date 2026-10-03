@@ -1,6 +1,7 @@
 import { isIP, Socket } from 'node:net'
+import { basename, dirname } from 'node:path'
 import type WebTorrent from 'webtorrent'
-import type { Torrent, Wire } from 'webtorrent'
+import type { Store, Torrent, Wire } from 'webtorrent'
 import type { TorrentDownloadNetwork, TorrentPeerState } from '../../../shared/types'
 import { connectRoute } from '../../network/deviceBinding'
 import { routesFor, type NetworkRoute } from '../../network/routes'
@@ -13,7 +14,7 @@ import {
   type TransferHost,
   type TorrentTransferTarget
 } from '../transfer'
-import { createClient, loadClientNamer } from './engine'
+import { createClient, loadClientNamer, storeNamed } from './engine'
 import { bitfieldOf, creditPiece, pickNetwork } from './peers'
 
 /** Peers each network in use may have at once (webtorrent's maxConns is this times the networks). */
@@ -54,6 +55,8 @@ export class TorrentTransfer implements Transfer {
   private ended: Promise<void> | null = null
   private peers = new Map<Wire, Peer>()
   private nextPeerId = 0
+  /** webtorrent's file store, writing under the download's name; loaded with the first run. */
+  private store: Store | null = null
   /** Names a peer's client from its peer id; loaded with the first run. */
   private nameClient: ((peerId: string) => string | null) | null = null
   /** The network each peer is on, by webtorrent's address for it: dialled through, or dialled in
@@ -74,8 +77,8 @@ export class TorrentTransfer implements Transfer {
     private readonly runtime: TorrentTransferTarget,
     private readonly host: TransferHost,
     private readonly torrentFile: Uint8Array,
-    /** Where webtorrent writes the torrent (StagingFolder.folder). */
-    private readonly folder: string
+    /** The download, in place: the torrent's folder or file (TorrentDestination.path). */
+    private readonly destination: string
   ) {}
 
   reconcile(): void {
@@ -151,6 +154,7 @@ export class TorrentTransfer implements Transfer {
     const stop = this.runtime.stop.signal
     try {
       this.nameClient ??= await loadClientNamer()
+      this.store ??= await storeNamed(basename(this.destination))
       const client = await createClient({
         connect: (options) => this.connect(options),
         maxConns: PEERS_PER_NETWORK * Math.max(1, this.usable().length)
@@ -228,7 +232,8 @@ export class TorrentTransfer implements Transfer {
   private add(client: WebTorrent): void {
     const chosen = this.runtime.requestPayload.selectedFiles
     const torrent = client.add(this.torrentFile, {
-      path: this.folder,
+      path: dirname(this.destination),
+      store: this.store!,
       // Trusted as done, bar a hash check of a piece or two per file (more if one fails).
       bitfield: bitfieldOf(this.runtime.pieces.map((block) => block.status === 'completed')),
       // Only the chosen files, once webtorrent is ready to be told which (below).

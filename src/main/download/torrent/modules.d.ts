@@ -20,8 +20,19 @@ declare module 'webtorrent' {
     connect?: (options: { host: string; port: number }) => Socket
   }
 
+  /** What webtorrent hands a store: the torrent's files, paths relative to `path`. */
+  export interface StoreOptions {
+    path: string
+    files: { path: string; length: number; offset: number }[]
+    [option: string]: unknown
+  }
+
+  export type Store = new (chunkLength: number, options: StoreOptions) => object
+
   export interface AddOptions {
     path?: string
+    /** Builds the torrent's storage; webtorrent's own is fs-chunk-store. */
+    store?: Store
     deselect?: boolean
     announce?: string[]
     skipVerify?: boolean
@@ -74,6 +85,14 @@ declare module 'webtorrent' {
     destroy(callback?: (error?: Error) => void): void
     /** Private: its listening server, where peers dial in. */
     _connPool: { tcpServer: import('node:net').Server } | null
+  }
+}
+
+declare module 'fs-chunk-store' {
+  import type { StoreOptions } from 'webtorrent'
+  /** webtorrent's default store: a torrent's files on disk, at `path` + each file's path. */
+  export default class FsChunkStore {
+    constructor(chunkLength: number, options: StoreOptions)
   }
 }
 

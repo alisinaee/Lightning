@@ -31,7 +31,7 @@ import { planBlocks, planDownload, planPieces } from './plan'
 import { restoreBlocks, restorePieces, saveBlocks, type SavedBlocks } from './savedProgress'
 import { chosenFiles, wantedPieces } from './torrent/files'
 import { describeTorrent, probedTorrentFile } from './torrent/metadata'
-import { StagingFolder } from './torrent/stagingFolder'
+import { TorrentDestination } from './torrent/torrentDestination'
 import { TorrentTransfer } from './torrent/torrentTransfer'
 import {
   clearSpeeds,
@@ -99,7 +99,7 @@ type PersistedState =
   Omit<HttpDownloadState, 'blocks' | 'streams'> | Omit<TorrentDownloadState, 'pieces' | 'peers'>
 
 type PersistedDownload = PersistedDownloadBase & {
-  version: 6
+  version: 7
   state: PersistedState
 } & SavedBlocks
 
@@ -158,7 +158,7 @@ function skipUnchosen(
   return skipped
 }
 
-/** Where the files not `chosen` are, inside the staging folder. */
+/** The files not `chosen`, as the torrent names them. */
 function unchosenPaths(torrent: TorrentInfo, chosen: Set<number> | null): string[] {
   return chosen
     ? torrent.files.filter((_, index) => !chosen.has(index)).map((file) => file.path)
@@ -171,7 +171,7 @@ const isNotFound = (error: unknown): boolean =>
 /** A manifest this version writes, for the download in folder `id`. */
 function isCurrentManifest(value: unknown, id: string): value is PersistedDownload {
   const manifest = value as Partial<PersistedDownload> | null
-  return manifest?.version === 6 && manifest.state?.id === id
+  return manifest?.version === 7 && manifest.state?.id === id
 }
 
 /**
@@ -298,7 +298,7 @@ export class DownloadManager {
   private newTorrentRuntime(
     state: TorrentDownloadState,
     requestPayload: StartTorrentDownloadRequest,
-    file: StagingFolder,
+    file: TorrentDestination,
     pieces: TorrentDownloadState['pieces'],
     torrentFile: Uint8Array
   ): TorrentDownloadRuntime {
@@ -319,7 +319,7 @@ export class DownloadManager {
     }
     const runtime: TorrentDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'torrent' as const,
-      transfer: new TorrentTransfer(target, host, torrentFile, file.folder)
+      transfer: new TorrentTransfer(target, host, torrentFile, file.path)
     })
     return runtime
   }
@@ -381,7 +381,7 @@ export class DownloadManager {
           published?.dev === current.publicationIdentity.dev &&
           published.ino === current.publicationIdentity.ino
         ) {
-          await current.file.discard().catch(() => {})
+          await current.file.discardLeftover().catch(() => {})
         }
       }
       this.runtimes.set(current.state.id, current)
@@ -426,7 +426,11 @@ export class DownloadManager {
       runtime = this.newTorrentRuntime(
         state,
         requestPayload,
-        new StagingFolder(persisted.partialPath, state.totalBytes, unchosenPaths(torrent, chosen)),
+        new TorrentDestination(
+          persisted.partialPath,
+          state.totalBytes,
+          unchosenPaths(torrent, chosen)
+        ),
         pieces,
         torrentFile
       )
@@ -477,7 +481,7 @@ export class DownloadManager {
         state.fileName = basename(publishedPath)
         state.error = undefined
         state.completedAt ??= persisted.savedAt
-        if (size >= 0) await file.discard()
+        if (size >= 0) await file.discardLeftover()
       } else if (size < 0) {
         state.status = 'error'
         state.error = 'The partial download file is missing. Remove this download and start again.'
@@ -568,23 +572,22 @@ export class DownloadManager {
       const pieces = planPieces(totalBytes, torrent.pieceLength)
       const skippedBytes = skipUnchosen(pieces, torrent, chosen)
       await ensureDiskSpace(requestPayload.destinationDir, totalBytes - skippedBytes)
-      const destinationPath = await reserveDestinationPath(
+      const folder = torrent.files[0].path.includes(sep)
+      const file = await TorrentDestination.create(
         requestPayload.destinationDir,
-        requestPayload.suggestedFileName
-      )
-      const file = await StagingFolder.create(
-        destinationPath,
-        torrent.files[0].path.split(sep)[0],
+        requestPayload.suggestedFileName,
+        folder,
         totalBytes,
         unchosenPaths(torrent, chosen)
       )
+      const destinationPath = file.path
       await ensureDirectory(this.downloadDir(id))
       await writeFile(this.torrentFilePath(id), torrentFile)
       const state: TorrentDownloadState = {
         id,
         kind: 'torrent',
         files: { chosen: chosen?.size ?? torrent.files.length, total: torrent.files.length },
-        folder: torrent.files[0].path.includes(sep),
+        folder,
         url: requestPayload.url,
         fileName: basename(destinationPath),
         destinationPath,
@@ -989,7 +992,7 @@ export class DownloadManager {
           (runtime.state.kind === 'torrent' ? runtime.state.skippedBytes : 0) ||
         runtime.state.bytesDownloaded
       await this.persistNow(runtime)
-      await runtime.file.discard().catch(() => {})
+      await runtime.file.discardLeftover().catch(() => {})
       this.notify('Download Complete', `${runtime.state.fileName} has finished downloading.`)
     } catch (error) {
       runtime.state.status = 'error'
@@ -1212,7 +1215,7 @@ export class DownloadManager {
           state = rest
         }
         const persisted: PersistedDownload = {
-          version: 6,
+          version: 7,
           savedAt: Date.now(),
           state: structuredClone(state),
           ...saveBlocks(unitsOf(runtime)),
@@ -1241,7 +1244,13 @@ export class DownloadManager {
     runtime.removed = true
     if (runtime.persistenceTimer) clearTimeout(runtime.persistenceTimer)
     await runtime.persistenceChain.catch(() => {})
-    if (discardPartial) await runtime.file.discard().catch(() => {})
+    // A finished download is the user's now: only what's left of it goes.
+    if (discardPartial) {
+      const file = runtime.file
+      await (runtime.state.status === 'completed' ? file.discardLeftover() : file.discard()).catch(
+        () => {}
+      )
+    }
     await rm(this.downloadDir(runtime.state.id), { recursive: true, force: true })
   }
 }

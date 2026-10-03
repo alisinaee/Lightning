@@ -1,5 +1,6 @@
+import { join } from 'node:path'
 import type WebTorrent from 'webtorrent'
-import type { ClientOptions } from 'webtorrent'
+import type { ClientOptions, Store, StoreOptions } from 'webtorrent'
 import { testKnobs } from '../../testKnobs'
 
 // The only file that loads webtorrent. It's ESM-only and main is bundled as CommonJS, so it comes
@@ -24,6 +25,27 @@ export function loadClientNamer(): Promise<(peerId: string) => string | null> {
     }
   })
   return peerIdParser
+}
+
+/**
+ * webtorrent's own file store, writing the torrent's top entry (its folder, or its one file) under
+ * `name` rather than the torrent's: a download claims a free name, "Name (1)" when the torrent's
+ * is taken.
+ */
+export async function storeNamed(name: string): Promise<Store> {
+  const { default: FsChunkStore } = await import('fs-chunk-store')
+  return class extends FsChunkStore {
+    constructor(chunkLength: number, options: StoreOptions) {
+      super(chunkLength, {
+        ...options,
+        files: options.files.map((file) => ({
+          path: join(name, ...file.path.split(/[\\/]/).slice(1)),
+          length: file.length,
+          offset: file.offset
+        }))
+      })
+    }
+  }
 }
 
 /**
