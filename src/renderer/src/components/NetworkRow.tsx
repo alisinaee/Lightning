@@ -226,9 +226,6 @@ function PeerRows({
                 {receiving ? 'RECEIVING' : 'CONNECTED'}
               </ColorBadge>
             </div>
-            <div role="cell" className="text-[10px] text-muted-foreground">
-              Peer connection
-            </div>
             <div role="cell" className="text-right text-muted-foreground">
               —
             </div>
@@ -350,16 +347,18 @@ export function NetworkRow({
             </Tooltip>
           )}
         </div>
-        <ProgressBar
-          className="h-1.5"
-          label={`${visual.name} progress`}
-          percent={
-            totalBytes && totalBytes > 0
-              ? Math.min(100, (group.bytesDownloaded / totalBytes) * 100)
-              : 0
-          }
-          color={visual.solid}
-        />
+        {group.transfer === 'http' && (
+          <ProgressBar
+            className="h-1.5"
+            label={`${visual.name} progress`}
+            percent={
+              totalBytes && totalBytes > 0
+                ? Math.min(100, (group.bytesDownloaded / totalBytes) * 100)
+                : 0
+            }
+            color={visual.solid}
+          />
+        )}
         <div
           role="cell"
           className="text-right font-mono text-[11.5px] leading-none font-medium tabular-nums"

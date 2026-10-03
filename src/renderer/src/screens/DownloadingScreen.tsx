@@ -24,7 +24,7 @@ import { Button, buttonVariants } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
-import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS } from '../theme'
+import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS, TORRENT_NETWORK_ROW_GRID_COLUMNS } from '../theme'
 import {
   dirnameOf,
   fileExtensionBadge,
@@ -333,6 +333,23 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             </div>
           </div>
         </div>
+        {isTorrent && wantedBytes(download) > 0 && (
+          <div
+            role="progressbar"
+            aria-label="Download progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--track-bg)]"
+          >
+            <div
+              className="h-full rounded-full bg-foreground transition-[width] duration-200 ease-out"
+              style={{
+                width: `${Math.min(100, Math.max(0, (download.bytesDownloaded / wantedBytes(download)) * 100))}%`
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Block grid + network table — share remaining flexible space, scroll internally */}
@@ -352,7 +369,11 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             role="table"
             aria-label="Networks"
             className="grid gap-x-3"
-            style={{ gridTemplateColumns: NETWORK_ROW_GRID_COLUMNS }}
+            style={{
+              gridTemplateColumns: isTorrent
+                ? TORRENT_NETWORK_ROW_GRID_COLUMNS
+                : NETWORK_ROW_GRID_COLUMNS
+            }}
           >
             <div
               role="row"
@@ -360,7 +381,7 @@ export function DownloadingScreen({ download }: { download: DownloadState }): Re
             >
               <div role="columnheader" aria-label="Status" />
               <div role="columnheader">Network</div>
-              <div role="columnheader">{isTorrent ? 'Verified' : 'Progress'}</div>
+              {!isTorrent && <div role="columnheader">Progress</div>}
               <div role="columnheader" className="text-right">
                 Share
               </div>

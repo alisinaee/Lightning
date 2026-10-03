@@ -56,6 +56,10 @@ export const DANGER = 'var(--color-danger)'
 // covers that expanded content, so expanding never grows the track further.
 export const NETWORK_ROW_GRID_COLUMNS = '30px minmax(190px, max-content) 1fr 48px 78px 160px'
 
+// Torrent completion belongs to the file summary; the network column takes the space that
+// HTTP uses for per-network progress. Peer rows share these same five tracks.
+export const TORRENT_NETWORK_ROW_GRID_COLUMNS = '30px minmax(190px, 1fr) 48px 78px 160px'
+
 // A curated set of user-selectable network colors, distinct from (and in addition to) the
 // kind defaults above — each ships its own on-solid text color so it's legible without having
 // to compute contrast for an arbitrary user-picked hue at runtime.
