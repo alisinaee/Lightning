@@ -72,6 +72,8 @@ declare module 'webtorrent' {
     ): Torrent
     address(): { address: string; family: string; port: number }
     destroy(callback?: (error?: Error) => void): void
+    /** Private: its listening server, where peers dial in. */
+    _connPool: { tcpServer: import('node:net').Server } | null
   }
 }
 

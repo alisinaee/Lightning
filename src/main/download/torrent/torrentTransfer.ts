@@ -56,7 +56,8 @@ export class TorrentTransfer implements Transfer {
   private nextPeerId = 0
   /** Names a peer's client from its peer id; loaded with the first run. */
   private nameClient: ((peerId: string) => string | null) | null = null
-  /** The network each peer was dialled through, by webtorrent's address for it. */
+  /** The network each peer is on, by webtorrent's address for it: dialled through, or dialled in
+   * on. */
   private chosen = new Map<string, string>()
   /** Dials in flight, by network. */
   private dialling = new Map<string, number>()
@@ -173,6 +174,7 @@ export class TorrentTransfer implements Transfer {
           this.host.failDownload(message(error))
           close()
         })
+        client._connPool?.tcpServer.on('connection', (socket: Socket) => this.onIncoming(socket))
         this.add(client)
       })
     } catch (error) {
@@ -294,11 +296,21 @@ export class TorrentTransfer implements Transfer {
     return socket
   }
 
+  /** A peer dialling in: it's on the network whose address it reached. One that reached no
+   * network in use isn't put on any, and onWire drops it. */
+  private onIncoming(socket: Socket): void {
+    // A dual-stack server sees IPv4 as IPv4-mapped IPv6.
+    const local = socket.localAddress?.replace(/^::ffff:/, '')
+    const network = this.usable().find((entry) =>
+      this.host.networks.find(entry.id)?.addresses.some((address) => address.address === local)
+    )
+    // As webtorrent names an incoming peer: the address as the socket gives it, no brackets.
+    if (network) this.chosen.set(`${socket.remoteAddress}:${socket.remotePort}`, network.id)
+  }
+
   private onWire(wire: Wire, address: string): void {
     const networkId = this.chosen.get(address)
     const network = this.runtime.state.networks.find((entry) => entry.id === networkId)
-    // A peer that dialled in came through whichever network the OS chose, which nothing here can
-    // tell: only peers this transfer dialled, each through its network, are kept.
     if (!network) {
       wire.destroy()
       return
