@@ -1,5 +1,14 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronRight, Pause, Play, Plus, RotateCw, X, type LucideIcon } from 'lucide-react'
+import {
+  ChevronRight,
+  ListPlus,
+  Pause,
+  Play,
+  Plus,
+  RotateCw,
+  X,
+  type LucideIcon
+} from 'lucide-react'
 import { cn } from 'cn'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
@@ -90,6 +99,7 @@ export function DownloadsScreen(): React.JSX.Element {
   const history = useAppStore((store) => store.history)
   const setView = useAppStore((store) => store.setView)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
+  const openMultiLinks = useAppStore((store) => store.openMultiLinks)
   const removeDownload = useAppStore((store) => store.removeDownload)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
@@ -243,6 +253,10 @@ export function DownloadsScreen(): React.JSX.Element {
               setLimitsOpen(true)
             }}
           />
+          <Button type="button" variant="secondary" onClick={() => openMultiLinks()}>
+            <ListPlus data-icon="inline-start" />
+            Add several links
+          </Button>
           <Button type="button" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             New download
@@ -515,6 +529,7 @@ function EmptyState(): React.JSX.Element {
   )
   const loadInterfaces = useAppStore((store) => store.loadInterfaces)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
+  const openMultiLinks = useAppStore((store) => store.openMultiLinks)
 
   return (
     <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
@@ -545,6 +560,10 @@ function EmptyState(): React.JSX.Element {
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
             Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.
           </div>
+          <Button type="button" variant="secondary" onClick={() => openMultiLinks()}>
+            <ListPlus data-icon="inline-start" />
+            Add several links
+          </Button>
           <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             New download

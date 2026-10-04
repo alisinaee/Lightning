@@ -46,6 +46,8 @@ interface AppStore {
   setDownloadFilter: (filter: DownloadFilter) => void
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
+  /** The Add several links dialog. */
+  multiLinksOpen: boolean
   /** Persisted — how many downloads run at once; the rest wait in the queue. */
   downloadsAtOnce: number
   /** Persisted — the speed limits (see AppSettings). */
@@ -78,6 +80,8 @@ interface AppStore {
   /** Opens New download, with `link` in its link field when one is given. */
   openNewDownload: (link?: string) => void
   closeNewDownload: () => void
+  openMultiLinks: () => void
+  closeMultiLinks: () => void
   setDownloadsAtOnce: (count: number) => void
   /** Each one applies at once, to every download (see main/network/limits.ts). */
   setSpeedLimit: (bytesPerSec: number | undefined) => void
@@ -115,6 +119,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   downloadFilter: 'all',
   setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
   newDownloadOpen: false,
+  multiLinksOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,
   speedLimit: initial.speedLimit,
   slowMode: initial.slowMode,
@@ -211,6 +216,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set(link === undefined ? { newDownloadOpen: true } : { newDownloadOpen: true, draftUrl: link }),
 
   closeNewDownload: () => set({ newDownloadOpen: false }),
+  openMultiLinks: () => set({ multiLinksOpen: true }),
+  closeMultiLinks: () => set({ multiLinksOpen: false }),
 
   setDownloadsAtOnce: (downloadsAtOnce) => {
     set({ downloadsAtOnce })

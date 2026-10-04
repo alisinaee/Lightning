@@ -1,6 +1,7 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { useEffect } from 'react'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
+import { MultiLinkDialog } from './components/MultiLinkDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
@@ -70,6 +71,7 @@ function App(): React.JSX.Element {
         </div>
         <StatusBar />
         <NewDownloadDialog />
+        <MultiLinkDialog />
         <UpdateDialog />
         <NetworkBindingDialog />
       </div>
