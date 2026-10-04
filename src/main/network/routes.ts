@@ -10,6 +10,7 @@ import { Agent as HttpsAgent, request as httpsRequest } from 'node:https'
 import { isIP, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
 import type { IpFamily, NetworkInterfaceInfo } from '../../shared/types'
+import { testInterfaces } from '../testKnobs'
 import { connectRoute } from './deviceBinding'
 
 export interface NetworkRoute {
@@ -306,7 +307,7 @@ export class StreamConnection {
 
   constructor(
     /** The network, or undefined while it isn't connected. */
-    network: () => NetworkInterfaceInfo | undefined,
+    private readonly network: () => NetworkInterfaceInfo | undefined,
     {
       timeoutMs,
       connectTimeoutMs = timeoutMs,
@@ -322,7 +323,7 @@ export class StreamConnection {
   ) {
     this.timeoutMs = timeoutMs
     const open: Open = async (options, secure) => {
-      const iface = network()
+      const iface = this.network()
       if (!iface) throw new Error('The network is not connected')
       return connectOnInterface(
         iface,
@@ -365,6 +366,13 @@ export class StreamConnection {
     this.https.destroy()
   }
 
+  /** Dev fake-network mode only (never packaged): every fake network shares 127.0.0.1, so the
+   * request names its network for scripts/fake-server.mjs to throttle each one separately. */
+  private tagged(headers: Record<string, string>): Record<string, string> {
+    const id = testInterfaces() ? this.network()?.id : undefined
+    return id ? { ...headers, 'X-Plexo-Network': id } : headers
+  }
+
   private send(
     target: URL,
     headers: Record<string, string>,
@@ -382,7 +390,7 @@ export class StreamConnection {
         hostname: targetHost(target),
         port: target.port || undefined,
         path: `${target.pathname}${target.search}`,
-        headers,
+        headers: this.tagged(headers),
         agent: secure ? this.https : this.http,
         connectSignal: signal
       }

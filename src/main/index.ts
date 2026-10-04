@@ -5,6 +5,7 @@ import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
+import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
 import type { DownloadManager } from './download/downloadManager'
 
@@ -19,6 +20,9 @@ if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
 // One Plexo at a time (per userData folder, so parallel e2e runs each have their own): a second
 // launch — a magnet link clicked, a .torrent opened — hands its link to the first and exits.
 if (!app.requestSingleInstanceLock()) app.exit(0)
+
+process.on('uncaughtException', (error) => log.error('process', 'uncaughtException', error))
+process.on('unhandledRejection', (reason) => log.error('process', 'unhandledRejection', reason))
 
 let mainWindow: BrowserWindow | null = null
 let downloadManager: DownloadManager | null = null
@@ -94,6 +98,19 @@ function createWindow(): void {
     if (!testKnobs.hideWindow) mainWindow?.show()
   })
 
+  // What the window says when it goes wrong (window.onerror and unhandled rejections reach the
+  // console as errors), and when its page dies.
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    // 2 = warning, 3 = error
+    if (level >= 2) log[level >= 3 ? 'error' : 'warn']('renderer', message, `${sourceId}:${line}`)
+  })
+  mainWindow.webContents.on('render-process-gone', (_event, details) =>
+    log.error('renderer', 'render-process-gone', details)
+  )
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, url) =>
+    log.error('renderer', 'did-fail-load', { code, description, url })
+  )
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -115,6 +132,11 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.plexo.app')
+  log.info('app', `Plexo ${app.getVersion()} on ${process.platform} ${process.arch}`, {
+    userData: app.getPath('userData'),
+    log: logFilePath(),
+    packaged: app.isPackaged
+  })
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
   await migrateLegacyNetworkPreferences().catch((error) =>

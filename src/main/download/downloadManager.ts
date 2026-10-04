@@ -54,6 +54,7 @@ import {
   type SpeedSample,
   type TorrentTransferTarget
 } from './transfer'
+import { log } from '../logger'
 import type { NetworkMonitor } from '../network/interfaces'
 import {
   compatibleInterfaces,
@@ -853,6 +854,10 @@ export class DownloadManager {
     const room = requestPayload.groupLane === true || this.runningCount() < this.downloadsAtOnce
     if (!room) this.enqueue(runtime, false)
     this.runtimes.set(id, runtime)
+    log.info('download', `start ${runtime.state.fileName} (${room ? 'running' : 'queued'})`, {
+      id,
+      networks: runtime.state.networks.filter((n) => n.enabled).map((n) => n.id)
+    })
     await this.persistNow(runtime)
     this.pushUpdate(runtime)
     if (room) this.launch(runtime)
@@ -879,6 +884,7 @@ export class DownloadManager {
 
     runtime.state.status = 'paused'
     runtime.state.pausedAt = Date.now()
+    log.info('download', `pause ${runtime.state.fileName}`, { id })
     clearSpeeds(runtime.state)
     if (runtime.kind === 'http') {
       for (const stream of runtime.state.streams) {
@@ -937,6 +943,7 @@ export class DownloadManager {
     const { status, resumable } = runtime.state
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
 
+    log.info('download', `resume ${runtime.state.fileName}`, { id })
     void this.resumeAfterVerifying(runtime, false)
   }
 
@@ -1055,6 +1062,10 @@ export class DownloadManager {
       for (const other of networks) other.enabled = false
     }
     network.enabled = enabled
+    log.info(
+      'download',
+      `${enabled ? 'enabled' : 'disabled'} ${networkId} for ${runtime.state.fileName}`
+    )
     if (!enabled) runtime.lastSwitchedOff = network.id
     if (wasLast && status === 'downloading') {
       runtime.pausedForNoNetwork = true
@@ -1337,6 +1348,7 @@ export class DownloadManager {
       runtime.state.fileName = basename(publishedPath)
       runtime.state.status = 'completed'
       runtime.state.completedAt = Date.now()
+      log.info('download', `complete ${runtime.state.fileName}`, { id: runtime.state.id })
       // Done before it held a speed for long: the best it showed.
       if (runtime.bestSpeedSeen > 0) runtime.state.peakSpeedBytesPerSec ??= runtime.bestSpeedSeen
       runtime.state.bytesDownloaded =
@@ -1349,6 +1361,7 @@ export class DownloadManager {
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
+      log.error('download', `error ${runtime.state.fileName}: ${runtime.state.error}`)
       this.notify(
         'Download failed',
         `${runtime.state.fileName}: ${describeError(runtime.state.error)}`
@@ -1372,6 +1385,7 @@ export class DownloadManager {
     if (runtime.state.status !== 'downloading') return
     runtime.state.status = 'error'
     runtime.state.error = message
+    log.error('download', `error ${runtime.state.fileName}: ${message}`)
     runtime.state.resumable = !discard
     this.notify('Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
     this.stopRun(runtime)

@@ -30,6 +30,7 @@ import { measureLatencies } from '../network/latency'
 import { NetworkMonitor } from '../network/interfaces'
 import { AutoScheduler } from '../groups/autoScheduler'
 import { GroupStore } from '../groups/groupStore'
+import { log } from '../logger'
 import { loadSettings, saveSettings } from '../settings'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
@@ -78,7 +79,14 @@ async function freeSpace(dir: string): Promise<number | null> {
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): DownloadManager {
   // The main process keeps the network list, for downloads and the window alike.
+  let known: string[] = []
   const networks = new NetworkMonitor((list) => {
+    const now = list.map(
+      (n) => `${n.id} (${n.kind}, ${n.addresses.map((a) => a.address).join('/')})`
+    )
+    for (const n of now.filter((n) => !known.includes(n))) log.info('network', `appeared: ${n}`)
+    for (const n of known.filter((n) => !now.includes(n))) log.info('network', `gone: ${n}`)
+    known = now
     manager.networksChanged()
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.networksChanged, list)
@@ -249,7 +257,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     await groups.loaded
     const created = groups.create({ ...input, fileCount: input.requests.length })
     const failed = await addToGroup(created.id, input.requests)
-    return { group: groups.get(created.id) ?? { ...created, pending: [] }, failed }
+    const group = groups.get(created.id)
+    if (!group) throw new Error('The group could not be created.')
+    return { group, failed }
   })
 
   handle('updateGroup', async (_event, id, patch) => {
