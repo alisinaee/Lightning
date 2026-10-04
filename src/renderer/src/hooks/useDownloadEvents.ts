@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 export function useDownloadEvents(): void {
   const receiveDownloadUpdate = useAppStore((store) => store.receiveDownloadUpdate)
   const receiveHistory = useAppStore((store) => store.receiveHistory)
+  const receiveGroups = useAppStore((store) => store.receiveGroups)
 
   useEffect(() => {
     let disposed = false
@@ -18,6 +19,14 @@ export function useDownloadEvents(): void {
     }
     // Subscribed before the snapshots are asked for, so nothing sent in between is missed; each
     // update carries a count, so whichever arrives late can't undo the other.
+    const loadGroups = (): void => {
+      void window.plexo
+        .listGroups()
+        .then((groups) => {
+          if (!disposed) receiveGroups(groups)
+        })
+        .catch(() => {})
+    }
     const unsubscribe = window.plexo.onDownloadUpdated(receiveDownloadUpdate)
     // A bulk removal changes history once per download: list it once they've settled, rather
     // than re-checking every entry's file after each one. The rows already went from the store.
@@ -27,6 +36,8 @@ export function useDownloadEvents(): void {
       reload = setTimeout(loadHistory, 150)
     })
 
+    const unsubscribeGroups = window.plexo.onGroupsChanged(loadGroups)
+
     void window.plexo
       .listDownloads()
       .then((snapshots) => {
@@ -34,12 +45,14 @@ export function useDownloadEvents(): void {
       })
       .catch(() => {})
     loadHistory()
+    loadGroups()
 
     return () => {
       disposed = true
       clearTimeout(reload)
       unsubscribe()
       unsubscribeHistory()
+      unsubscribeGroups()
     }
-  }, [receiveDownloadUpdate, receiveHistory])
+  }, [receiveDownloadUpdate, receiveHistory, receiveGroups])
 }

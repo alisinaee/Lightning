@@ -1,11 +1,15 @@
-import type { DownloadState, FinishedDownload } from '@shared/types'
+import type { DownloadState, FinishedDownload, GroupInfo } from '@shared/types'
 import {
+  ChevronDown,
   ChevronRight,
+  Folder,
   ListPlus,
   Pause,
+  Pencil,
   Play,
   Plus,
   RotateCw,
+  Trash2,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -27,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
+import { Badge } from '../components/ui/badge'
 import { Button, buttonVariants } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -43,38 +48,95 @@ import {
   isFolder,
   linkExpired,
   sourceOf,
+  toDisplayPath,
   wantedBytes
 } from '../utils/format'
 
 type Item = DownloadState | FinishedDownload
 
-interface Group {
-  label: string
+/** A download group's row, with its files (finished ones too) to show when it is opened. */
+interface GroupEntry {
+  group: GroupInfo
   items: Item[]
 }
 
-function filterOf(item: Item): Exclude<DownloadFilter, 'all'> {
-  if ('unitsWritten' in item || item.status === 'completed') return 'finished'
-  return item.status === 'error' ? 'failed' : 'progress'
+/** A heading in the list and what is listed under it: downloads on their own, and groups. */
+interface Section {
+  label: string
+  filter: Exclude<DownloadFilter, 'all'>
+  items: Item[]
+  groups: GroupEntry[]
 }
 
 const isFinished = (item: Item): item is FinishedDownload => 'unitsWritten' in item
 
-function groupsOf(downloads: DownloadState[], history: FinishedDownload[]): Group[] {
-  const byStatus = (status: DownloadState['status']): DownloadState[] =>
-    downloads.filter((download) => download.status === status)
-  return [
-    { label: 'Downloading', items: byStatus('downloading') },
-    {
-      label: 'Queued',
-      items: byStatus('queued').sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0))
-    },
-    { label: 'Paused', items: byStatus('paused') },
-    { label: 'Needs attention', items: byStatus('error') },
-    // Completed but not in history yet: on its way there, so listed with it.
-    { label: 'Finished', items: [...byStatus('completed'), ...history] }
-  ].filter((group) => group.items.length > 0)
+const SECTION_ORDER = ['downloading', 'queued', 'paused', 'error', 'completed'] as const
+type SectionStatus = (typeof SECTION_ORDER)[number]
+
+const SECTIONS: Record<SectionStatus, { label: string; filter: Exclude<DownloadFilter, 'all'> }> = {
+  downloading: { label: 'Downloading', filter: 'progress' },
+  queued: { label: 'Queued', filter: 'progress' },
+  paused: { label: 'Paused', filter: 'progress' },
+  error: { label: 'Needs attention', filter: 'failed' },
+  completed: { label: 'Finished', filter: 'finished' }
 }
+
+/** The most active state a group's files are in: it is listed under that heading. A file still
+ * waiting for a network counts as paused, or as needing attention if it couldn't start. */
+function statusOfGroup({ group, items }: GroupEntry): SectionStatus {
+  const found = new Set<SectionStatus>(
+    items.map((item) =>
+      isFinished(item) || item.status === 'completed'
+        ? 'completed'
+        : item.status === 'cancelled'
+          ? 'paused'
+          : item.status
+    )
+  )
+  for (const waiting of group.pending) found.add(waiting.error ? 'error' : 'paused')
+  return SECTION_ORDER.find((status) => found.has(status)) ?? 'completed'
+}
+
+function groupsOf(
+  downloads: DownloadState[],
+  history: FinishedDownload[],
+  groups: GroupInfo[]
+): Section[] {
+  // A group with nothing in it any more isn't listed.
+  const entries: GroupEntry[] = groups
+    .map((group) => ({
+      group,
+      items: [
+        ...downloads.filter((download) => download.groupId === group.id),
+        ...history.filter((entry) => entry.groupId === group.id)
+      ]
+    }))
+    .filter((entry) => entry.items.length > 0 || entry.group.pending.length > 0)
+  const grouped = new Set(entries.flatMap((entry) => entry.items.map((item) => item.id)))
+  const single = downloads.filter((download) => !grouped.has(download.id))
+  const byStatus = (status: DownloadState['status']): DownloadState[] =>
+    single.filter((download) => download.status === status)
+  const loose: Record<SectionStatus, Item[]> = {
+    downloading: byStatus('downloading'),
+    queued: byStatus('queued').sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0)),
+    paused: byStatus('paused'),
+    error: byStatus('error'),
+    // Completed but not in history yet: on its way there, so listed with it.
+    completed: [...byStatus('completed'), ...history.filter((entry) => !grouped.has(entry.id))]
+  }
+  return SECTION_ORDER.map((status) => ({
+    ...SECTIONS[status],
+    items: loose[status],
+    groups: entries
+      .filter((entry) => statusOfGroup(entry) === status)
+      .sort((a, b) => a.group.createdAt - b.group.createdAt)
+  })).filter((section) => section.items.length + section.groups.length > 0)
+}
+
+const itemsOfSection = (section: Section): Item[] => [
+  ...section.items,
+  ...section.groups.flatMap((entry) => entry.items)
+]
 
 /** "2 downloading · 1 queued", or "all done". */
 function summaryOf(downloads: DownloadState[]): string {
@@ -97,6 +159,7 @@ const groupLabelClass =
 export function DownloadsScreen(): React.JSX.Element {
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
+  const groupInfos = useAppStore((store) => store.groups)
   const setView = useAppStore((store) => store.setView)
   const openNewDownload = useAppStore((store) => store.openNewDownload)
   const openMultiLinks = useAppStore((store) => store.openMultiLinks)
@@ -123,19 +186,21 @@ export function DownloadsScreen(): React.JSX.Element {
   const downloads = Object.values(downloadsById)
     .filter((download) => download.status !== 'cancelled')
     .sort((a, b) => a.startedAt - b.startedAt)
-  const allGroups = groupsOf(downloads, history)
-  const allItems = allGroups.flatMap((group) => group.items)
+  const allGroups = groupsOf(downloads, history, groupInfos)
+  // A group counts as one, under the heading it is listed in.
   const counts: Record<DownloadFilter, number> = {
-    all: allItems.length,
+    all: 0,
     progress: 0,
     finished: 0,
     failed: 0
   }
-  for (const item of allItems) counts[filterOf(item)]++
-  const groups = allGroups.filter(
-    (group) => filter === 'all' || filterOf(group.items[0]) === filter
-  )
-  const items = groups.flatMap((group) => group.items)
+  for (const section of allGroups) {
+    const listed = section.items.length + section.groups.length
+    counts.all += listed
+    counts[section.filter] += listed
+  }
+  const groups = allGroups.filter((group) => filter === 'all' || group.filter === filter)
+  const items = groups.flatMap(itemsOfSection)
   // Only what's still listed counts: one that finished or went is no longer selected.
   const chosen = items.filter((item) => selected.has(item.id))
 
@@ -164,6 +229,21 @@ export function DownloadsScreen(): React.JSX.Element {
       openNewDownload(item.url)
     },
     [removeDownload, openNewDownload]
+  )
+
+  const renderItem = (item: Item): React.JSX.Element => (
+    <DownloadRow
+      key={item.id}
+      item={item}
+      now={now}
+      selected={selected.has(item.id)}
+      selecting={chosen.length > 0}
+      networkVisual={isFinished(item) || item.status === 'completed' ? undefined : networkVisual}
+      onSelect={selectRow}
+      onOpen={openRow}
+      onFix={fixRow}
+      onAgain={againRow}
+    />
   )
 
   const pausable = chosen.filter(
@@ -399,7 +479,7 @@ export function DownloadsScreen(): React.JSX.Element {
             </div>
           ))}
         {groups.map((group) => {
-          const ids = group.items.map((item) => item.id)
+          const ids = itemsOfSection(group).map((item) => item.id)
           const all = ids.every((id) => selected.has(id))
           const some = !all && ids.some((id) => selected.has(id))
           return (
@@ -421,7 +501,9 @@ export function DownloadsScreen(): React.JSX.Element {
                 />
                 <h2 className={groupLabelClass}>
                   {group.label}
-                  <span className="ml-2.5 tracking-normal">{group.items.length}</span>
+                  <span className="ml-2.5 tracking-normal">
+                    {group.items.length + group.groups.length}
+                  </span>
                 </h2>
                 <div className="flex-1" />
                 {group.label === 'Finished' && history.length > 0 && (
@@ -441,20 +523,16 @@ export function DownloadsScreen(): React.JSX.Element {
                   </Tooltip>
                 )}
               </div>
-              {group.items.map((item) => (
-                <DownloadRow
-                  key={item.id}
-                  item={item}
-                  now={now}
-                  selected={selected.has(item.id)}
+              {group.items.map((item) => renderItem(item))}
+              {group.groups.map((entry) => (
+                <GroupRow
+                  key={entry.group.id}
+                  entry={entry}
+                  selected={selected}
                   selecting={chosen.length > 0}
-                  networkVisual={
-                    isFinished(item) || item.status === 'completed' ? undefined : networkVisual
-                  }
-                  onSelect={selectRow}
-                  onOpen={openRow}
-                  onFix={fixRow}
-                  onAgain={againRow}
+                  networkVisual={networkVisual}
+                  onToggle={toggle}
+                  renderItem={renderItem}
                 />
               ))}
             </section>
@@ -571,6 +649,262 @@ function EmptyState(): React.JSX.Element {
           </Button>
         </>
       )}
+    </div>
+  )
+}
+
+/** A group of downloads as one row: its name, how far along it is, and, opened, its files. */
+function GroupRow({
+  entry,
+  selected,
+  selecting,
+  networkVisual,
+  onToggle,
+  renderItem
+}: {
+  entry: GroupEntry
+  selected: Set<string>
+  selecting: boolean
+  networkVisual: ResolveNetworkVisual
+  onToggle: (ids: string[], on: boolean) => void
+  renderItem: (item: Item) => React.JSX.Element
+}): React.JSX.Element {
+  const { group, items } = entry
+  const homeDir = useAppStore((store) => store.homeDir)
+  const editGroup = useAppStore((store) => store.editGroup)
+  const [open, setOpen] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const live = items.filter((item): item is DownloadState => !isFinished(item))
+  const running = live.filter((item) => item.status === 'downloading')
+  const pausable = live.filter((item) => item.status === 'downloading' || item.status === 'queued')
+  const paused = live.filter((item) => item.status === 'paused')
+  const waiting = group.pending.filter((item) => !item.error)
+  const done = items.filter((item) => isFinished(item) || item.status === 'completed').length
+  const fileCount = items.length + group.pending.length
+
+  const wanted =
+    items.reduce((sum, item) => sum + wantedBytes(item), 0) +
+    group.pending.reduce((sum, item) => sum + item.request.totalBytes, 0)
+  const received = items.reduce((sum, item) => sum + item.bytesDownloaded, 0)
+  const speed = running.reduce((sum, item) => sum + item.speedBytesPerSec, 0)
+  const segments = new Map<string, { share: number; color: string }>()
+  for (const item of items) {
+    for (const network of item.networks) {
+      if (network.bytesDownloaded <= 0) continue
+      const before = segments.get(network.id)?.share ?? 0
+      segments.set(network.id, {
+        share: before + network.bytesDownloaded / (wanted || 1),
+        color: networkVisual(network.id, network.kind, network.label).solid
+      })
+    }
+  }
+  const ids = items.map((item) => item.id)
+  const all = ids.length > 0 && ids.every((id) => selected.has(id))
+  const some = !all && ids.some((id) => selected.has(id))
+
+  const detail = [
+    `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`,
+    done > 0 && done < fileCount && `${done} finished`,
+    waiting.length > 0 && `${waiting.length} waiting`,
+    wanted > 0 && done < fileCount && `${formatPercent(received, wanted)}%`,
+    speed > 0 && formatSpeed(speed),
+    speed > 0 && wanted > 0 && formatEta(wanted - received, speed),
+    toDisplayPath(group.destinationDir, homeDir)
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const run = async (action: () => Promise<unknown>): Promise<void> => {
+    setError(null)
+    try {
+      await action()
+    } catch (caught) {
+      setError(describeError(caught))
+    }
+  }
+  const confirmRemoval = async (): Promise<void> => {
+    setRemoving(false)
+    await run(async () => {
+      await window.plexo.removeGroup(group.id)
+      useAppStore.setState((store) => ({
+        downloads: Object.fromEntries(
+          Object.entries(store.downloads).filter(([, download]) => download.groupId !== group.id)
+        ),
+        history: store.history.filter((entry) => entry.groupId !== group.id)
+      }))
+    })
+  }
+
+  const iconButton = (
+    label: string,
+    icon: React.JSX.Element,
+    onClick: () => void
+  ): React.JSX.Element => (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={`${label} ${group.name}`}
+            onClick={onClick}
+            className="text-muted-foreground group-hover/group-row:text-foreground"
+          >
+            {icon}
+          </Button>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'group/group-row my-0.5 -mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors',
+          'hover:bg-secondary focus-within:bg-secondary'
+        )}
+      >
+        <Checkbox
+          className={cn(
+            !selecting &&
+              !all &&
+              'opacity-0 group-focus-within/group-row:opacity-100 group-hover/group-row:opacity-100'
+          )}
+          aria-label={`Select all files in ${group.name}`}
+          checked={all}
+          indeterminate={some}
+          disabled={ids.length === 0}
+          onCheckedChange={(on) => onToggle(ids, on)}
+        />
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card text-muted-foreground">
+            <Folder className="size-5" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="truncate font-sans text-[14px] leading-tight font-medium">
+                      {group.name}
+                    </span>
+                  }
+                />
+                <TooltipContent className="max-w-[min(560px,90vw)] break-all">
+                  {group.name}
+                </TooltipContent>
+              </Tooltip>
+              <Badge variant="secondary">{group.mode === 'auto' ? 'Auto' : 'Manual'}</Badge>
+            </div>
+            {segments.size > 0 && (
+              <div
+                className={cn(
+                  'flex h-1 overflow-hidden rounded-full bg-muted',
+                  running.length === 0 && done < fileCount && 'opacity-40'
+                )}
+              >
+                {[...segments].map(([id, segment]) => (
+                  <div
+                    key={id}
+                    style={{
+                      width: `${Math.min(100, segment.share * 100)}%`,
+                      background: segment.color
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="truncate font-mono text-[11.5px] leading-none text-muted-foreground">
+              {detail}
+            </div>
+          </div>
+        </button>
+        {pausable.length > 0 &&
+          iconButton(
+            'Pause all in',
+            <Pause />,
+            () =>
+              void run(() =>
+                Promise.all(pausable.map((item) => window.plexo.pauseDownload(item.id)))
+              )
+          )}
+        {paused.length > 0 &&
+          pausable.length === 0 &&
+          iconButton(
+            'Resume all in',
+            <Play />,
+            () =>
+              void run(() =>
+                Promise.all(paused.map((item) => window.plexo.resumeDownload(item.id)))
+              )
+          )}
+        {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
+        {iconButton('Remove', <Trash2 />, () => setRemoving(true))}
+        <button
+          type="button"
+          aria-label={open ? `Hide files in ${group.name}` : `Show files in ${group.name}`}
+          onClick={() => setOpen((value) => !value)}
+          className="rounded-md p-1 text-muted-foreground transition-colors group-hover/group-row:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        </button>
+      </div>
+      {error && (
+        <div role="alert" className="pb-1 pl-9 text-[12px] text-destructive">
+          {error}
+        </div>
+      )}
+      {open && (
+        <div className="ml-5 border-l-[0.5px] border-border pl-3">
+          {items.map((item) => renderItem(item))}
+          {group.pending.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 py-2.5 text-[12.5px]">
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {item.request.suggestedFileName}
+              </span>
+              <span
+                className={cn(
+                  'shrink-0 font-mono text-[11.5px]',
+                  item.error ? 'text-[var(--color-danger)]' : 'text-muted-foreground'
+                )}
+              >
+                {item.error ? describeError(item.error) : 'Waiting for a network'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AlertDialog open={removing} onOpenChange={setRemoving}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {group.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This stops the files still downloading and deletes the parts already downloaded, then
+              removes the group from the list. Files that finished stay on your computer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive', size: 'sm' })}
+              onClick={() => void confirmRemoval()}
+            >
+              Remove group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

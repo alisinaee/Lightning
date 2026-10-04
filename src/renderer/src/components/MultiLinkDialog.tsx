@@ -1,49 +1,24 @@
-import type { ProbeResult } from '@shared/types'
+import type { GroupMode, ProbeResult } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { acceptedLink, describeError, formatBytes, toDisplayPath } from '../utils/format'
+import { describeError, formatBytes, toDisplayPath } from '../utils/format'
+import { folderNameOf, isSplittable, linksIn, probeLinks, requestFor } from '../utils/links'
+import { useNetworkOptions } from '../hooks/useNetworkOptions'
+import { ConnectionPicker } from './ConnectionPicker'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-
-/** Links checked at the same moment: enough to be quick, few enough not to hammer one host. */
-const PROBE_PARALLEL = 3
 
 type Row =
   | { url: string; status: 'checking' }
   | { url: string; status: 'ready'; result: ProbeResult }
   | { url: string; status: 'error'; message: string }
 
-/** The links in pasted text: one per line or separated by spaces, repeats dropped. */
-function linksIn(text: string): { links: string[]; skipped: number } {
-  const seen = new Set<string>()
-  const links: string[] = []
-  let skipped = 0
-  for (const piece of text.split(/\s+/)) {
-    if (!piece) continue
-    const link = acceptedLink(piece)
-    if (!link || seen.has(link)) {
-      skipped++
-      continue
-    }
-    seen.add(link)
-    links.push(link)
-  }
-  return { links, skipped }
-}
-
-/** A folder name that is one folder: no separators or characters a path can't hold. */
-function folderNameOf(text: string): string {
-  return text
-    .replace(/[\\/:*?"<>|]/g, '-')
-    .trim()
-    .replace(/^\.+$/, '')
-}
-
-/** Paste several links, tick the ones wanted, name a folder for them and start them together. */
+/** Paste several links, tick the ones wanted, name a folder for them and start them together as one group. */
 export function MultiLinkDialog(): React.JSX.Element {
   const open = useAppStore((store) => store.multiLinksOpen)
   const close = useAppStore((store) => store.closeMultiLinks)
@@ -65,6 +40,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const destinationDir = useAppStore((store) => store.destinationDir)
   const setDestinationDir = useAppStore((store) => store.setDestinationDir)
   const homeDir = useAppStore((store) => store.homeDir)
+  const networkOptions = useNetworkOptions()
 
   const [text, setText] = useState('')
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -73,6 +49,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [folder, setFolder] = useState('')
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  // Some files started, some didn't: starting again would repeat the ones that did.
+  const [started, setStarted] = useState(false)
+  const [mode, setMode] = useState<GroupMode>('auto')
+  // The networks picked for a file in manual mode, by link; left out: every enabled network.
+  const [connections, setConnections] = useState<Record<string, string[]>>({})
 
   // A link on the clipboard is most likely what this is for.
   useEffect(() => {
@@ -91,20 +72,13 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setSkipped(dropped)
     setUnticked([])
     setRows(links.map((url) => ({ url, status: 'checking' })))
-    let next = 0
-    const worker = async (): Promise<void> => {
-      while (next < links.length) {
-        const url = links[next++]
-        let row: Row
-        try {
-          row = { url, status: 'ready', result: await window.plexo.probeUrl(url) }
-        } catch (error) {
-          row = { url, status: 'error', message: describeError(error) }
-        }
-        setRows((current) => current?.map((entry) => (entry.url === url ? row : entry)) ?? null)
-      }
-    }
-    for (let i = 0; i < Math.min(PROBE_PARALLEL, links.length); i++) void worker()
+    probeLinks(links, window.plexo.probeUrl, (url, outcome) => {
+      const row: Row =
+        'result' in outcome
+          ? { url, status: 'ready', result: outcome.result }
+          : { url, status: 'error', message: describeError(outcome.error) }
+      setRows((current) => current?.map((entry) => (entry.url === url ? row : entry)) ?? null)
+    })
   }
 
   const ready = (rows ?? []).filter((row) => row.status === 'ready')
@@ -120,6 +94,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     .map((iface) => iface.id)
     .filter((id) => !useAppStore.getState().networkPreferences[id]?.off)
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
+  const connectionOf = (url: string): string[] => connections[url] ?? enabledIds
 
   const handleBrowse = async (): Promise<void> => {
     const picked = await window.plexo.chooseDestinationFolder(destinationDir)
@@ -130,48 +105,28 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     if (!canStart) return
     setStarting(true)
     setStartError(null)
-    const failed: string[] = []
-    for (const row of chosen) {
-      if (row.status !== 'ready') continue
-      const { result } = row
-      const supportsRanges = result.supportsRanges && result.totalBytes !== null
-      const interfaceIds = supportsRanges ? enabledIds : enabledIds.slice(0, 1)
-      try {
-        await window.plexo.startDownload(
-          result.kind === 'torrent'
-            ? {
-                kind: 'torrent',
-                url: result.finalUrl,
-                destinationDir: target,
-                suggestedFileName: result.suggestedFileName,
-                totalBytes: result.totalBytes ?? 0,
-                supportsRanges,
-                interfaceIds,
-                etag: result.etag,
-                lastModified: result.lastModified,
-                infoHash: result.torrent.infoHash
-              }
-            : {
-                kind: 'http',
-                url: result.finalUrl,
-                destinationDir: target,
-                suggestedFileName: result.suggestedFileName,
-                totalBytes: result.totalBytes ?? 0,
-                supportsRanges,
-                interfaceIds,
-                etag: result.etag,
-                lastModified: result.lastModified
-              }
-        )
-      } catch (error) {
-        failed.push(`${result.suggestedFileName}: ${describeError(error)}`)
+    const requests = chosen.flatMap((row) =>
+      row.status === 'ready'
+        ? [requestFor(row.result, target, mode === 'manual' ? connectionOf(row.url) : enabledIds)]
+        : []
+    )
+    try {
+      const { failed } = await window.plexo.createGroup({
+        name: folderName,
+        destinationDir: target,
+        mode,
+        interfaceIds: enabledIds,
+        requests
+      })
+      if (failed.length === 0) {
+        onDone()
+        return
       }
+      setStarted(failed.length < requests.length)
+      setStartError(`${failed.length} could not start. ${failed[0]}`)
+    } catch (error) {
+      setStartError(describeError(error))
     }
-    if (failed.length === 0) {
-      onDone()
-      return
-    }
-    setStartError(`${failed.length} could not start. ${failed[0]}`)
     setStarting(false)
   }
 
@@ -230,53 +185,99 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               </span>
             </label>
 
+            <div className="flex items-center gap-3 text-[12.5px]">
+              <span className="w-24 shrink-0 text-[var(--text-secondary)]">Connections</span>
+              <ToggleGroup
+                aria-label="How files are given networks"
+                value={[mode]}
+                onValueChange={(values) => {
+                  const next = values[0]
+                  if (next === 'auto' || next === 'manual') setMode(next)
+                }}
+                size="sm"
+                spacing={0.5}
+                className="bg-secondary p-0.5"
+              >
+                <ToggleGroupItem value="auto">Auto</ToggleGroupItem>
+                <ToggleGroupItem value="manual">Manual</ToggleGroupItem>
+              </ToggleGroup>
+              <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
+                {mode === 'auto'
+                  ? 'Each file gets a network of its own, matched to how fast it is.'
+                  : 'Pick the networks each file uses.'}
+              </span>
+            </div>
+
             <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {rows.map((row) => (
-                <label
+                <div
                   key={row.url}
                   className={cn(
                     'flex items-center gap-2 border-b-[0.5px] border-border px-3 py-2 text-[12.5px] last:border-b-0',
-                    row.status === 'ready' ? 'cursor-pointer' : 'opacity-70'
+                    row.status !== 'ready' && 'opacity-70'
                   )}
                 >
-                  <Checkbox
-                    disabled={row.status !== 'ready'}
-                    checked={row.status === 'ready' && !unticked.includes(row.url)}
-                    onCheckedChange={(checked) =>
-                      setUnticked((prev) =>
-                        checked ? prev.filter((u) => u !== row.url) : [...prev, row.url]
-                      )
-                    }
-                  />
-                  <div className="min-w-0 flex-1">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <div className="truncate font-medium">
-                            {row.status === 'ready' ? row.result.suggestedFileName : row.url}
-                          </div>
-                        }
-                      />
-                      <TooltipContent className="max-w-[min(560px,90vw)] break-all">
-                        {row.status === 'ready' ? row.result.suggestedFileName : row.url}
-                      </TooltipContent>
-                    </Tooltip>
-                    {row.status === 'checking' && (
-                      <div className="text-[11.5px] text-muted-foreground">Checking…</div>
+                  <label
+                    className={cn(
+                      'flex min-w-0 flex-1 items-center gap-2',
+                      row.status === 'ready' && 'cursor-pointer'
                     )}
-                    {row.status === 'error' && (
-                      <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-danger)]">
-                        <AlertTriangle aria-hidden className="size-3 shrink-0" />
-                        <span className="truncate">{row.message}</span>
-                      </div>
-                    )}
-                  </div>
+                  >
+                    <Checkbox
+                      disabled={row.status !== 'ready'}
+                      checked={row.status === 'ready' && !unticked.includes(row.url)}
+                      onCheckedChange={(checked) =>
+                        setUnticked((prev) =>
+                          checked ? prev.filter((u) => u !== row.url) : [...prev, row.url]
+                        )
+                      }
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <div className="truncate font-medium">
+                              {row.status === 'ready' ? row.result.suggestedFileName : row.url}
+                            </div>
+                          }
+                        />
+                        <TooltipContent className="max-w-[min(560px,90vw)] break-all">
+                          {row.status === 'ready' ? row.result.suggestedFileName : row.url}
+                        </TooltipContent>
+                      </Tooltip>
+                      {row.status === 'checking' && (
+                        <div className="text-[11.5px] text-muted-foreground">Checking…</div>
+                      )}
+                      {row.status === 'error' && (
+                        <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-danger)]">
+                          <AlertTriangle aria-hidden className="size-3 shrink-0" />
+                          <span className="truncate">{row.message}</span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                  {row.status === 'ready' &&
+                    (mode === 'manual' ? (
+                      <>
+                        <ConnectionPicker
+                          options={networkOptions}
+                          value={connectionOf(row.url)}
+                          single={!isSplittable(row.result)}
+                          label={row.result.suggestedFileName}
+                          onChange={(ids) =>
+                            setConnections((prev) => ({ ...prev, [row.url]: ids }))
+                          }
+                        />
+                      </>
+                    ) : (
+                      <span className="shrink-0 text-[11.5px] text-muted-foreground">Auto</span>
+                    ))}
                   {row.status === 'ready' && row.result.totalBytes !== null && (
                     <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">
                       {formatBytes(row.result.totalBytes)}
                     </span>
                   )}
-                </label>
+                </div>
               ))}
             </div>
 
@@ -320,16 +321,16 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
             type="button"
             variant="ghost"
             className="mr-auto"
-            disabled={starting}
+            disabled={starting || started}
             onClick={() => setRows(null)}
           >
             Back
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={onDone} disabled={starting}>
-          Cancel
+          {started ? 'Close' : 'Cancel'}
         </Button>
-        {rows ? (
+        {rows && !started ? (
           <Button type="submit" disabled={!canStart}>
             {starting
               ? 'Starting…'
@@ -338,9 +339,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 : `Download ${chosen.length} ${chosen.length === 1 ? 'file' : 'files'}`}
           </Button>
         ) : (
-          <Button type="submit" disabled={found.links.length === 0}>
-            Continue
-          </Button>
+          !started && (
+            <Button type="submit" disabled={found.links.length === 0}>
+              Continue
+            </Button>
+          )
         )}
       </div>
     </form>

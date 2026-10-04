@@ -4,6 +4,7 @@ import type {
   DownloadState,
   DownloadUpdate,
   FinishedDownload,
+  GroupInfo,
   NetworkInterfaceInfo,
   NetworkPreference,
   NetworkPreferences,
@@ -41,6 +42,10 @@ interface AppStore {
   downloads: Record<string, DownloadState>
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
+  /** Groups of downloads (see main/groups), with the files of an auto group still waiting. */
+  groups: GroupInfo[]
+  /** The group whose edit dialog is open. */
+  editingGroupId: string | null
   view: View
   downloadFilter: DownloadFilter
   setDownloadFilter: (filter: DownloadFilter) => void
@@ -74,6 +79,8 @@ interface AppStore {
   receiveDownloadUpdate: (update: DownloadUpdate) => void
   /** Finished downloads as main lists them; any that finished leave `downloads`. */
   receiveHistory: (history: FinishedDownload[]) => void
+  receiveGroups: (groups: GroupInfo[]) => void
+  editGroup: (id: string | null) => void
   /** Removes a download (cancelling one under way), or forgets a finished one. */
   removeDownload: (id: string, options?: { trashFile?: boolean }) => void
   setView: (view: View) => void
@@ -115,6 +122,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   downloads: {},
   history: [],
+  groups: [],
+  editingGroupId: null,
   view: { name: 'list' },
   downloadFilter: 'all',
   setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
@@ -202,6 +211,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     for (const entry of history) delete downloads[entry.id]
     set({ history, downloads })
   },
+
+  receiveGroups: (groups) => set({ groups }),
+  editGroup: (editingGroupId) => set({ editingGroupId }),
 
   removeDownload: (id, options) => {
     const { [id]: removed, ...downloads } = get().downloads
