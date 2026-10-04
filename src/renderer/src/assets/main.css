@@ -91,6 +91,41 @@
   --swatch-coral: #c4572a;
   --swatch-coral-onsolid: #ffffff;
 
+  /* The VPN layer: its own hue, used nowhere else, so it never reads as a connection. */
+  --color-vpn: #6d4fd1;
+  --color-vpn-bg: #f0ecfc;
+  --color-vpn-border: #d6cbf6;
+  --color-vpn-text: #4c34a8;
+  --color-vpn-onsolid: #ffffff;
+
+  /* One status vocabulary for the list and the detail screens. */
+  --status-downloading: #2563eb;
+  --status-paused: #d97706;
+  --status-queued: #6b7280;
+  --status-done: #1f8a70;
+  --status-failed: #dc2626;
+  --status-attention: #c2410c;
+
+  /* File kinds: a glyph colour and a soft tint behind it. */
+  --kind-video: #7c3aed;
+  --kind-video-bg: #f1eafe;
+  --kind-audio: #db2777;
+  --kind-audio-bg: #fde8f1;
+  --kind-archive: #d97706;
+  --kind-archive-bg: #fef0d4;
+  --kind-document: #2563eb;
+  --kind-document-bg: #e5eefd;
+  --kind-program: #16a34a;
+  --kind-program-bg: #e0f5e7;
+  --kind-image: #0d9488;
+  --kind-image-bg: #ddf4f1;
+  --kind-torrent: #dc2626;
+  --kind-torrent-bg: #fde6e6;
+  --kind-disk: #475569;
+  --kind-disk-bg: #e8ecf1;
+  --kind-other: #6b7280;
+  --kind-other-bg: #eeeff1;
+
   --color-accent: #d97706;
   --color-accent-onsolid: #ffffff;
   --color-success: #1f8a70;
@@ -210,6 +245,38 @@
     --swatch-coral: #d99168;
     --swatch-coral-onsolid: #241209;
 
+    --color-vpn: #a594e8;
+    --color-vpn-bg: #2a2540;
+    --color-vpn-border: #433a66;
+    --color-vpn-text: #c4b8f2;
+    --color-vpn-onsolid: #17131f;
+
+    --status-downloading: #6ea0f0;
+    --status-paused: #d8a44c;
+    --status-queued: #8d9196;
+    --status-done: #4ea89a;
+    --status-failed: #eda3a3;
+    --status-attention: #e9a06b;
+
+    --kind-video: #b79cf5;
+    --kind-video-bg: #2b2540;
+    --kind-audio: #ee8dbb;
+    --kind-audio-bg: #3a2231;
+    --kind-archive: #e0ac55;
+    --kind-archive-bg: #372b17;
+    --kind-document: #7fa9f2;
+    --kind-document-bg: #1f2b42;
+    --kind-program: #6fcb8c;
+    --kind-program-bg: #1c3125;
+    --kind-image: #5cc4b7;
+    --kind-image-bg: #1b3230;
+    --kind-torrent: #ee8f8f;
+    --kind-torrent-bg: #3a2020;
+    --kind-disk: #a3b0c2;
+    --kind-disk-bg: #262c35;
+    --kind-other: #9a9ea4;
+    --kind-other-bg: #2a2d30;
+
     --color-accent: #d8a44c;
     --color-accent-onsolid: #1b1408;
     --color-success: #4ea89a;
@@ -257,6 +324,12 @@
 @keyframes plexo-dash {
   to {
     stroke-dashoffset: -60;
+  }
+}
+
+@keyframes plexo-stripes {
+  to {
+    background-position: 16px 0;
   }
 }
 

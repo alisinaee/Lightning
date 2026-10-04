@@ -3,8 +3,7 @@ import { cn } from 'cn'
 import { AlertTriangle, Folder, FolderOpen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { defaultNetworkIds } from '@shared/networks'
-import { VpnBadge } from './VpnBadge'
+import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import {
   acceptedLink,
@@ -109,6 +108,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const interfaces = useAppStore((store) => store.interfaces)
   const networkPreferences = useAppStore((store) => store.networkPreferences)
   const useVpn = useAppStore((store) => store.useVpn)
+  const allInterfaces = useAppStore((store) => store.allInterfaces)
   const homeDir = useAppStore((store) => store.homeDir)
   const url = useAppStore((store) => store.draftUrl)
   const setUrl = useAppStore((store) => store.setDraftUrl)
@@ -194,14 +194,16 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
 
   const detectedIds = interfaces.map((iface) => iface.id)
-  const defaultIds = defaultNetworkIds(interfaces, networkPreferences, useVpn)
+  const defaultIds = defaultNetworkIds(interfaces, networkPreferences, false)
   const enabledIds = detectedIds.filter((id) => overrides[id] ?? defaultIds.includes(id))
   const selectedInterfaceIds = isSingleStreamOnly ? enabledIds.slice(0, 1) : enabledIds
 
+  // The VPN layer rides along when it is on; a VPN alone still lets a download start.
+  const startIds = withVpnLayer(selectedInterfaceIds, allInterfaces, useVpn)
   const canStart =
     probe.status === 'ready' &&
     (!torrent || chosenFiles.length > 0) &&
-    selectedInterfaceIds.length > 0 &&
+    startIds.length > 0 &&
     Boolean(destinationDir) &&
     !starting
   const startLabel = starting
@@ -264,7 +266,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         suggestedFileName: fileNameOverride?.trim() || probe.result.suggestedFileName,
         totalBytes: probe.result.totalBytes ?? 0,
         supportsRanges: multiChunkAllowed,
-        interfaceIds: selectedInterfaceIds,
+        interfaceIds: startIds,
         etag: probe.result.etag,
         lastModified: probe.result.lastModified
       }
@@ -445,7 +447,6 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 >
                   <span className="size-2 rounded-full" style={{ background: visual.solid }} />
                   {visual.name}
-                  {iface.kind === 'vpn' && <VpnBadge />}
                 </button>
               )
             })}

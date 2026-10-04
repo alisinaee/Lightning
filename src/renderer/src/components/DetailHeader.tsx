@@ -16,6 +16,7 @@ import {
 import { Button, buttonVariants } from './ui/button'
 import { describeError } from '../utils/format'
 import { Checkbox } from './ui/checkbox'
+import { VpnControl } from './VpnControl'
 
 /** The top of a download's own screen, laid out as the list's header is: the way back to the
  * list on the left; Remove… and what the download can do next (`children`, the main action
@@ -40,6 +41,7 @@ export function DetailHeader({
         Downloads
       </button>
       <div className="flex-1" />
+      <VpnControl />
       <RemoveButton download={download} />
       {children}
     </div>

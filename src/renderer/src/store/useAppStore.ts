@@ -1,4 +1,4 @@
-import { selectableNetworks } from '@shared/networks'
+import { connectionsOnly, isVpn } from '@shared/networks'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
 import type {
   AppSettings,
@@ -9,6 +9,7 @@ import type {
   NetworkInterfaceInfo,
   NetworkPreference,
   NetworkPreferences,
+  SettingsPush,
   ThemeSource,
   UpdateInfo
 } from '@shared/types'
@@ -38,9 +39,11 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type View = { name: 'list' } | { name: 'download'; id: string }
 
 interface AppStore {
-  /** What the UI offers as connections: VPN tunnels left out unless useVpn is on. */
+  /** The connections the UI lists: never a VPN tunnel (those are one separate layer). */
   interfaces: NetworkInterfaceInfo[]
-  /** Everything detected, VPN tunnels included. */
+  /** The VPN tunnels detected; shown only by the VPN control. */
+  vpnInterfaces: NetworkInterfaceInfo[]
+  /** Everything detected, VPN tunnels included. For colours and starting downloads only. */
   allInterfaces: NetworkInterfaceInfo[]
   interfacesStatus: LoadStatus
   interfacesError: string | null
@@ -82,6 +85,8 @@ interface AppStore {
   /** Persisted — whether VPN tunnels may be used as connections. */
   useVpn: boolean
   setUseVpn: (useVpn: boolean) => void
+  /** Settings changed from main (the Test lab), not by the window: shown, not saved again. */
+  receiveSettings: (settings: SettingsPush) => void
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
   draftUrl: string
@@ -143,6 +148,7 @@ function persist(patch: AppSettings): void {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   interfaces: [],
+  vpnInterfaces: [],
   allInterfaces: [],
   interfacesStatus: 'idle',
   interfacesError: null,
@@ -168,8 +174,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   slowMode: initial.slowMode,
   slowModeSpeed: initial.slowModeSpeed,
   useVpn: initial.useVpn,
+  receiveSettings: (settings) => set({ ...settings }),
   setUseVpn: (useVpn) => {
-    set({ useVpn, interfaces: selectableNetworks(get().allInterfaces, useVpn) })
+    set({ useVpn })
     persist({ useVpn })
   },
 
@@ -194,7 +201,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   receiveInterfaces: (allInterfaces) =>
     set({
       allInterfaces,
-      interfaces: selectableNetworks(allInterfaces, get().useVpn),
+      interfaces: connectionsOnly(allInterfaces),
+      vpnInterfaces: allInterfaces.filter(isVpn),
       interfacesStatus: 'ready',
       interfacesError: null
     }),

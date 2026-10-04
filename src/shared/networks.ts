@@ -31,3 +31,30 @@ export function defaultNetworkIds(
   const on = usable.filter((iface) => !isNetworkOff(iface, preferences))
   return (on.length > 0 ? on : usable).map((iface) => iface.id)
 }
+
+/** A VPN tunnel is not a connection. It is one layer over the real connections, switched by
+ * "Use VPN for downloads", so it never appears in a list of connections. */
+export function isVpn(item: { kind: NetworkInterfaceInfo['kind'] }): boolean {
+  return item.kind === 'vpn'
+}
+
+/** The real connections: everything but VPN tunnels. Every list of connections goes through this
+ * (the store keeps it as `interfaces`). */
+export function connectionsOnly<T extends { kind: NetworkInterfaceInfo['kind'] }>(
+  interfaces: T[]
+): T[] {
+  return interfaces.filter((item) => !isVpn(item))
+}
+
+/** The ids a download is started on: the chosen connections, plus the VPN tunnels when the VPN
+ * layer is on (or when a VPN is all there is, so a download can still start). */
+export function withVpnLayer(
+  connectionIds: string[],
+  all: Pick<NetworkInterfaceInfo, 'id' | 'kind'>[],
+  useVpn: boolean
+): string[] {
+  const tunnels = all.filter(isVpn).map((item) => item.id)
+  if (tunnels.length === 0) return connectionIds
+  if (useVpn || connectionIds.length === 0) return [...connectionIds, ...tunnels]
+  return connectionIds
+}

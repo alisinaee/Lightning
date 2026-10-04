@@ -2,7 +2,7 @@ import type { GroupMode, ProbeResult } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { defaultNetworkIds } from '@shared/networks'
+import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes, toDisplayPath } from '../utils/format'
 import { folderNameOf, isSplittable, linksIn, probeLinks, requestFor } from '../utils/links'
@@ -92,12 +92,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const target = folderName
     ? `${destinationDir.replace(/[\\/]+$/, '')}${separator}${folderName}`
     : destinationDir
-  const enabledIds = defaultNetworkIds(
-    interfaces,
-    useAppStore.getState().networkPreferences,
-    useAppStore.getState().useVpn
-  )
+  const enabledIds = defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences, false)
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
+  const layer = (ids: string[]): string[] =>
+    withVpnLayer(ids, useAppStore.getState().allInterfaces, useAppStore.getState().useVpn)
   const connectionOf = (url: string): string[] => connections[url] ?? enabledIds
 
   const handleBrowse = async (): Promise<void> => {
@@ -111,7 +109,13 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setStartError(null)
     const requests = chosen.flatMap((row) =>
       row.status === 'ready'
-        ? [requestFor(row.result, target, mode === 'manual' ? connectionOf(row.url) : enabledIds)]
+        ? [
+            requestFor(
+              row.result,
+              target,
+              layer(mode === 'manual' ? connectionOf(row.url) : enabledIds)
+            )
+          ]
         : []
     )
     try {
@@ -119,7 +123,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         name: folderName,
         destinationDir: target,
         mode,
-        interfaceIds: enabledIds,
+        interfaceIds: layer(enabledIds),
         requests
       })
       if (failed.length === 0) {

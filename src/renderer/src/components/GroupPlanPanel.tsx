@@ -27,7 +27,12 @@ export function GroupPlanPanel({
   const options = useNetworkOptions()
   const showLog = useAppStore((store) => store.groupUi[group.id]?.decisions ?? false)
   const toggle = useAppStore((store) => store.toggleGroupUi)
-  const { plan } = group
+  const tunnels = useAppStore((store) => store.vpnInterfaces)
+  // The VPN is a layer over the connections, not one of them: the plan lists connections only.
+  const plan = {
+    ...group.plan,
+    networks: group.plan.networks.filter((n) => !tunnels.some((tunnel) => tunnel.id === n.id))
+  }
   const nameOf = (id: string, fallback?: string): string =>
     options.find((option) => option.id === id)?.name ?? fallback ?? id
 
@@ -43,7 +48,7 @@ export function GroupPlanPanel({
   const helpers = new Set<string>()
   const mains = new Set<string>()
   for (const file of running) {
-    const on = file.networks.filter((n) => n.enabled)
+    const on = file.networks.filter((n) => n.enabled && n.kind !== 'vpn')
     const rank = [...on].sort(
       (a, b) =>
         (plan.networks.find((n) => n.id === b.id)?.baselineBps ?? 0) -

@@ -6,7 +6,7 @@ import {
   type NetworkPreference
 } from '@shared/types'
 import { Minus, Plus } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
@@ -23,8 +23,8 @@ import {
 } from './ui/alert-dialog'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
-import { Input } from './ui/input'
 import { VpnSwitch } from './VpnSwitch'
+import { DATA_UNITS, FieldValidityContext, GB, MB, SpeedInput, UnitField } from './LimitFields'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
@@ -42,97 +42,11 @@ const GENERAL_DEFAULTS = {
   downloadsAtOnce: DOWNLOADS_AT_ONCE.default
 } satisfies Partial<Draft>
 
-const KB = 1024
-const MB = 1024 ** 2
-const GB = 1024 ** 3
-
 const sectionClass = 'flex flex-col gap-2.5 border-t-[0.5px] border-border py-3'
 const headingClass = 'font-sans text-[14px] leading-none font-semibold'
 const hintClass = 'text-[12.5px] leading-snug text-[var(--text-secondary)]'
 const navLabelClass =
   'px-2.5 pt-3 pb-1.5 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase'
-
-/** A number of `unit`s typed in, as bytes; anything that isn't a positive number is ignored. */
-function NumberInput({
-  bytes,
-  unit,
-  unitBytes,
-  label,
-  disabled = false,
-  showUnit = true,
-  onChange
-}: {
-  bytes: number
-  unit: string
-  unitBytes: number
-  label: string
-  disabled?: boolean
-  showUnit?: boolean
-  onChange: (bytes: number) => void
-}): React.JSX.Element {
-  // Keep the draft as typed; changing units remounts it using the same byte value.
-  const [text, setText] = useState(() => String(bytes / unitBytes))
-  return (
-    <span className="flex items-center gap-2">
-      <Input
-        aria-label={label}
-        inputMode="decimal"
-        disabled={disabled}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value)
-          const value = Number(event.target.value)
-          const converted = Math.round(value * unitBytes)
-          if (Number.isSafeInteger(converted) && converted > 0) onChange(converted)
-        }}
-        className="w-20 text-right font-mono tabular-nums"
-      />
-      {showUnit && <span className="font-mono text-[12px] text-muted-foreground">{unit}</span>}
-    </span>
-  )
-}
-
-function SpeedInput({
-  bytes,
-  label,
-  disabled = false,
-  onChange
-}: {
-  bytes: number
-  label: string
-  disabled?: boolean
-  onChange: (bytes: number) => void
-}): React.JSX.Element {
-  const [unit, setUnit] = useState<'KB/s' | 'MB/s'>(() => (bytes < MB ? 'KB/s' : 'MB/s'))
-  return (
-    <div className="flex items-center gap-2">
-      <NumberInput
-        key={unit}
-        bytes={bytes}
-        unit={unit}
-        unitBytes={unit === 'KB/s' ? KB : MB}
-        label={`${label}, in ${unit}`}
-        disabled={disabled}
-        showUnit={false}
-        onChange={onChange}
-      />
-      <ToggleGroup
-        aria-label={`${label} unit`}
-        value={[unit]}
-        disabled={disabled}
-        onValueChange={(values) => {
-          if (values[0] === 'KB/s' || values[0] === 'MB/s') setUnit(values[0])
-        }}
-        size="sm"
-        spacing={0.5}
-        className="bg-secondary p-0.5"
-      >
-        <ToggleGroupItem value="KB/s">KB/s</ToggleGroupItem>
-        <ToggleGroupItem value="MB/s">MB/s</ToggleGroupItem>
-      </ToggleGroup>
-    </div>
-  )
-}
 
 /** No limit, or an editable limit. Turning it off retains the last value while open. */
 function LimitChoice({
@@ -140,7 +54,6 @@ function LimitChoice({
   value,
   fallback,
   unit,
-  unitBytes,
   onChange,
   children
 }: {
@@ -149,7 +62,6 @@ function LimitChoice({
   value: number | undefined
   fallback: number
   unit: string
-  unitBytes: number
   onChange: (bytes: number | undefined) => void
 }): React.JSX.Element {
   const name = useId()
@@ -194,12 +106,11 @@ function LimitChoice({
             onChange={changeValue}
           />
         ) : (
-          <NumberInput
+          <UnitField
             key={enabled ? 'on' : 'off'}
             bytes={value ?? lastValue}
-            unit={unit}
-            unitBytes={unitBytes}
-            label={`${label}, in ${unit}`}
+            label={label}
+            units={DATA_UNITS}
             disabled={!enabled}
             onChange={changeValue}
           />
@@ -242,7 +153,6 @@ function GeneralPage({
           value={speedLimit}
           fallback={20 * MB}
           unit="MB/s"
-          unitBytes={MB}
           onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
@@ -250,7 +160,8 @@ function GeneralPage({
       <section className={sectionClass}>
         <h4 className={headingClass}>Slow mode</h4>
         <p className={hintClass}>
-          Replaces the total speed limit while enabled. Useful during calls or streaming.
+          Replaces the total speed limit while enabled. Useful during calls or streaming. Also
+          editable from the status bar.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <SpeedInput
@@ -391,7 +302,6 @@ function NetworkPage({
           value={preference?.speedLimit}
           fallback={10 * MB}
           unit="MB/s"
-          unitBytes={MB}
           onChange={(speedLimit) => change({ speedLimit })}
         />
       </section>
@@ -406,7 +316,6 @@ function NetworkPage({
           value={dataLimit}
           fallback={5 * GB}
           unit="GB"
-          unitBytes={GB}
           onChange={(limit) => change({ dataLimit: limit })}
         >
           <span className="text-[12px] text-muted-foreground">per</span>
@@ -585,6 +494,17 @@ function LimitsEditor({
   })
   const change = (patch: Partial<Draft>): void =>
     setDraft((previous) => ({ ...previous, ...patch }))
+  // The speed and data fields holding something that isn't a number above 0 hold Save too.
+  const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set())
+  const reportInvalid = useCallback((key: string, invalid: boolean): void => {
+    setInvalidFields((previous) => {
+      if (previous.has(key) === invalid) return previous
+      const next = new Set(previous)
+      if (invalid) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }, [])
   const changeNetwork = (id: string, patch: NetworkPreference): void =>
     setDraft((previous) => ({
       ...previous,
@@ -644,7 +564,7 @@ function LimitsEditor({
   )
 
   return (
-    <>
+    <FieldValidityContext.Provider value={reportInvalid}>
       <div className="flex items-center border-b-[0.5px] border-border px-4 py-3">
         <DialogTitle className="text-[16px] font-semibold">Speed &amp; data limits</DialogTitle>
       </div>
@@ -690,11 +610,16 @@ function LimitsEditor({
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="button" onClick={save}>
+        {invalidFields.size > 0 && (
+          <span role="alert" className="mr-auto text-[12px] text-[var(--color-danger)]">
+            Enter a number above 0 in the highlighted field, or choose No limit.
+          </span>
+        )}
+        <Button type="button" onClick={save} disabled={invalidFields.size > 0}>
           Save
         </Button>
       </div>
-    </>
+    </FieldValidityContext.Provider>
   )
 }
 

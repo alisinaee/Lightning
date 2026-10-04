@@ -1,4 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
+import { ThroughVpn } from '../components/ThroughVpn'
 import { HeroBand } from '../components/HeroBand'
 import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
@@ -11,6 +12,8 @@ import {
   formatBytes,
   formatDuration,
   formatSpeed,
+  connectionsOf,
+  vpnShare,
   toDisplayPath,
   wantedBytes
 } from '../utils/format'
@@ -40,10 +43,14 @@ export function CompleteScreen({
   const [avgSpeedValue, avgSpeedUnit] = formatSpeed(avgSpeed).split(' ')
 
   // The networks that carried part of the file.
-  const groups = download.networks.filter((network) => network.bytesDownloaded > 0)
+  const groups = connectionsOf(download.networks).filter((network) => network.bytesDownloaded > 0)
+  const throughVpn = vpnShare(download)
   const visuals = groups.map((group) => networkVisual(group.id, group.kind, group.label))
   const totalWeight = groups.reduce((sum, group) => sum + group.bytesDownloaded, 0) || 1
-  const totalRetries = download.networks.reduce((sum, network) => sum + network.retries, 0)
+  const totalRetries = connectionsOf(download.networks).reduce(
+    (sum, network) => sum + network.retries,
+    0
+  )
   const isTorrent = download.kind === 'torrent'
   // "Chunks" in the block grid means byte ranges, not parallel connections. A torrent's are its
   // pieces, those its chosen files needed.
@@ -179,6 +186,7 @@ export function CompleteScreen({
             </div>
           ))}
         </div>
+        {throughVpn && <ThroughVpn {...throughVpn} className="pt-1" />}
         <div className="mt-auto pt-3 font-mono text-[11px] leading-[1.4] text-muted-foreground">
           {[
             `written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'}`,

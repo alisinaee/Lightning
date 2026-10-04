@@ -29,7 +29,7 @@ export const KIND_PALETTE: Record<NetworkInterfaceKind, KindPalette> = {
   usb: makeKindPalette('usb', 'USB'),
   ethernet: makeKindPalette('ethernet', 'ETH'),
   bridge: makeKindPalette('neutral', 'NET'),
-  vpn: makeKindPalette('neutral', 'VPN'),
+  vpn: makeKindPalette('vpn', 'VPN'),
   other: makeKindPalette('neutral', 'NET')
 }
 

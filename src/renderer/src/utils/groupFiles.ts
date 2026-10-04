@@ -1,4 +1,6 @@
 import type { DownloadState, GroupInfo, PendingGroupItem } from '@shared/types'
+import { useAppStore } from '../store/useAppStore'
+import { connectionsOf } from './format'
 
 /** What a file of a group is, for the one connection chooser all its views share. */
 export type GroupFile =
@@ -10,18 +12,24 @@ export const fileIdOf = (file: GroupFile): string =>
 /** The networks the file uses now, or (waiting) the ones chosen for it or planned. */
 export function networksOf(group: GroupInfo, file: GroupFile): string[] {
   if (file.kind === 'download') {
-    return file.download.networks.filter((network) => network.enabled).map((network) => network.id)
+    return connectionsOf(file.download.networks)
+      .filter((network) => network.enabled)
+      .map((network) => network.id)
   }
-  if (group.pinned.includes(file.item.id)) return file.item.request.interfaceIds
+  const real = (ids: string[]): string[] =>
+    ids.filter((id) => !useAppStore.getState().vpnInterfaces.some((tunnel) => tunnel.id === id))
+  if (group.pinned.includes(file.item.id)) return real(file.item.request.interfaceIds)
   const planned = group.plannedNetworks[file.item.id]
-  return planned ? [planned] : group.interfaceIds
+  return planned ? [planned] : real(group.interfaceIds)
 }
 
 /** Switches a running file's networks to exactly `next`: the new ones first, so it is never left
  * with none (which would pause it). An errored file is resumed first, so it can be switched. */
 async function switchNetworks(download: DownloadState, next: string[]): Promise<void> {
   if (download.status === 'error') await window.plexo.resumeDownload(download.id)
-  const current = download.networks.filter((network) => network.enabled).map((n) => n.id)
+  const current = connectionsOf(download.networks)
+    .filter((network) => network.enabled)
+    .map((n) => n.id)
   for (const id of next) {
     if (!current.includes(id)) await window.plexo.setDownloadNetwork(download.id, id, true)
   }

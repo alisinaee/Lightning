@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import {
+  connectionsOf,
   describeError,
   formatBytes,
   formatEta,
@@ -95,7 +96,7 @@ export function GroupFileRow({
         ? `${formatBytes(download.bytesDownloaded)} of ${formatBytes(wanted)}`
         : formatBytes(download.bytesDownloaded)
     speed = download.status === 'downloading' ? download.speedBytesPerSec : 0
-    const on = download.networks.filter((network) => network.enabled)
+    const on = connectionsOf(download.networks).filter((network) => network.enabled)
     chips = on.map((network) => ({
       id: network.id,
       name: networkVisual(network.id, network.kind, network.label).name,

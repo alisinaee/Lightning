@@ -11,6 +11,7 @@ import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
 import { TorrentBadge } from '../components/TorrentBadge'
+import { ThroughVpn } from '../components/ThroughVpn'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
@@ -27,6 +28,7 @@ import {
   formatPercent,
   formatSpeed,
   groupByNetwork,
+  vpnShare,
   isFolder,
   networksInPlay,
   splitFormattedBytes,
@@ -164,6 +166,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const speed = splitFormattedBytes(effectiveSpeed)
   // Every network is a row, for switching it on or off; the charts draw only those in play.
   const rows = groupByNetwork(download)
+  const throughVpn = vpnShare(download)
   const rowVisuals = rows.map((row) => networkVisual(row.id, row.kind, row.label))
   const groups = networksInPlay(rows)
   const visuals = groups.map((group) => networkVisual(group.id, group.kind, group.label))
@@ -486,6 +489,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               />
             ))}
           </div>
+          {throughVpn && <ThroughVpn {...throughVpn} className="mt-3 px-5" />}
         </div>
       </div>
     </div>

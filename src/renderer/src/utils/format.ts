@@ -4,6 +4,7 @@ import type {
   FinishedDownload,
   HttpDownloadNetwork,
   HttpDownloadState,
+  NetworkInterfaceKind,
   TorrentDownloadNetwork,
   TorrentDownloadState
 } from '@shared/types'
@@ -143,14 +144,33 @@ export interface TorrentNetworkGroup extends TorrentDownloadNetwork {
 
 export type NetworkGroup = HttpNetworkGroup | TorrentNetworkGroup
 
+/** The connections a download used or may use: its networks with any VPN tunnel left out (that
+ * is the VPN layer, see vpnShare). */
+export function connectionsOf<T extends { kind: NetworkInterfaceKind }>(networks: T[]): T[]
+export function connectionsOf(networks: DownloadNetwork[]): DownloadNetwork[]
+export function connectionsOf(networks: { kind: NetworkInterfaceKind }[]): unknown[] {
+  return networks.filter((network) => network.kind !== 'vpn')
+}
+
+/** What went through VPN tunnels, folded into one figure — or null when none did. Shown on its
+ * own, apart from the connections. */
+export function vpnShare(
+  download: Pick<DownloadState, 'networks'>
+): { bytesDownloaded: number; speedBytesPerSec: number } | null {
+  const tunnels = download.networks.filter((network) => network.kind === 'vpn')
+  const bytesDownloaded = tunnels.reduce((sum, network) => sum + network.bytesDownloaded, 0)
+  const speedBytesPerSec = tunnels.reduce((sum, network) => sum + network.speedBytesPerSec, 0)
+  return bytesDownloaded > 0 || speedBytesPerSec > 0 ? { bytesDownloaded, speedBytesPerSec } : null
+}
+
 export function groupByNetwork(download: DownloadState): NetworkGroup[] {
   if (download.kind === 'http') {
-    return download.networks.map((network) => ({
+    return connectionsOf(download.networks).map((network) => ({
       ...network,
       streams: download.streams.filter((stream) => stream.interfaceId === network.id)
     }))
   }
-  return download.networks.map((network) => ({
+  return connectionsOf(download.networks).map((network) => ({
     ...network,
     peers: download.peers.filter((peer) => peer.interfaceId === network.id)
   }))

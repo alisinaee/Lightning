@@ -2,9 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { isNetworkOff } from '@shared/networks'
-import { VpnSwitch } from './VpnSwitch'
-import { VpnBadge } from './VpnBadge'
+import { isNetworkOff, isVpn } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
 import { UsageBar } from './LimitsDialog'
@@ -36,6 +34,7 @@ export function NetworksMenu({
   for (const download of Object.values(downloads)) {
     if (download.status !== 'downloading') continue
     for (const network of download.networks) {
+      if (isVpn(network)) continue
       speeds.set(network.id, (speeds.get(network.id) ?? 0) + network.speedBytesPerSec)
     }
   }
@@ -103,7 +102,6 @@ export function NetworksMenu({
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex min-w-0 items-center gap-1">
                     <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
-                    {iface.kind === 'vpn' && <VpnBadge />}
                     <span className="relative z-10 flex">
                       <NetworkEditPopover
                         interfaceId={iface.id}
@@ -155,7 +153,6 @@ export function NetworksMenu({
             </div>
           )
         })}
-        <VpnSwitch />
         <button
           type="button"
           className="px-4 py-3 text-[13px] font-medium text-primary hover:underline"
