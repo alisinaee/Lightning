@@ -7,6 +7,7 @@ import { acceptedLink, describeError, formatBytes, toDisplayPath } from '../util
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 /** Links checked at the same moment: enough to be quick, few enough not to hammer one host. */
 const PROBE_PARALLEL = 3
@@ -51,7 +52,7 @@ export function MultiLinkDialog(): React.JSX.Element {
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
       <DialogContent
         showCloseButton={false}
-        className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[600px]"
+        className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]"
       >
         {open && <MultiLinkForm onDone={close} />}
       </DialogContent>
@@ -176,7 +177,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
 
   return (
     <form
-      className="flex min-h-0 flex-col"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
         if (rows) void handleStart()
@@ -229,7 +230,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               </span>
             </label>
 
-            <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
+            <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {rows.map((row) => (
                 <label
                   key={row.url}
@@ -248,9 +249,18 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     }
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">
-                      {row.status === 'ready' ? row.result.suggestedFileName : row.url}
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <div className="truncate font-medium">
+                            {row.status === 'ready' ? row.result.suggestedFileName : row.url}
+                          </div>
+                        }
+                      />
+                      <TooltipContent className="max-w-[min(560px,90vw)] break-all">
+                        {row.status === 'ready' ? row.result.suggestedFileName : row.url}
+                      </TooltipContent>
+                    </Tooltip>
                     {row.status === 'checking' && (
                       <div className="text-[11.5px] text-muted-foreground">Checking…</div>
                     )}
