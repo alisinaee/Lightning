@@ -1,5 +1,7 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { useEffect } from 'react'
+import { SimBanner } from './components/lab/SimBanner'
+import { TestLab } from './components/lab/TestLab'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { GroupDialog } from './components/GroupDialog'
 import { MultiLinkDialog } from './components/MultiLinkDialog'
@@ -9,6 +11,7 @@ import { TitleBar } from './components/TitleBar'
 import { UpdateDialog } from './components/UpdateDialog'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
+import { useLabEvents } from './hooks/useLabEvents'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
@@ -46,6 +49,7 @@ function App(): React.JSX.Element {
   useOpenedLinks()
   useNewDownloadShortcuts()
   useNetworkEvents()
+  useLabEvents()
 
   const downloads = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
@@ -67,6 +71,7 @@ function App(): React.JSX.Element {
     <TooltipProvider>
       <div className="flex h-full flex-col">
         <TitleBar />
+        <SimBanner />
         <div className="min-h-0 flex-1">
           {shown && !cancelled ? renderDownload(shown) : <DownloadsScreen />}
         </div>
@@ -76,6 +81,7 @@ function App(): React.JSX.Element {
         <GroupDialog />
         <UpdateDialog />
         <NetworkBindingDialog />
+        <TestLab />
       </div>
     </TooltipProvider>
   )

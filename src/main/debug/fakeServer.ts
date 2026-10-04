@@ -24,6 +24,9 @@ const CHUNK = 64 * 1024
 const TICK_MS = 50
 const MAX_PER_TICK = 2 * 1024 * 1024
 const MIX = 0x9e3779b1
+/** A slow reader gets no more than this much ahead of it: bytes are counted as sent only when
+ * the connection can take them, so the counters show what the client could really read. */
+const MAX_BUFFERED = 1024 * 1024
 
 export type Speed = number | 'block' | 'unlimited'
 
@@ -270,7 +273,9 @@ export class FakeServer {
       if (n.cap < 0) continue
       const perTick = n.cap === 0 ? MAX_PER_TICK : (n.cap * 1024 * TICK_MS) / 1000
       let budget = n.carry + perTick
-      const live = [...n.conns].filter((c) => c.sent <= c.end && !c.res.writableNeedDrain)
+      const live = [...n.conns].filter(
+        (c) => c.sent <= c.end && c.res.writableLength < MAX_BUFFERED
+      )
       for (const c of live) {
         const own = c.kbps > 0 ? (c.kbps * 1024 * TICK_MS) / 1000 : Infinity
         c.allow = Math.min(MAX_PER_TICK, c.carry + own)
@@ -281,7 +286,7 @@ export class FakeServer {
         for (const c of live) {
           const limit = c.dropAt === null ? c.end : Math.min(c.end, c.dropAt)
           const k = Math.floor(Math.min(CHUNK, budget, c.allow, limit - c.sent + 1))
-          if (k <= 0) continue
+          if (k <= 0 || c.res.writableLength >= MAX_BUFFERED) continue
           const body = Buffer.allocUnsafe(k)
           fillPattern(body, c.hash, c.sent, body.length)
           c.res.write(body)

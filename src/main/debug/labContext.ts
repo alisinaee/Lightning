@@ -389,8 +389,10 @@ export class RunContext implements LabContext {
     return state.url.includes(`/${this.tag}/`)
   }
 
-  private async historyEntries(): Promise<FinishedDownload[]> {
-    if (Date.now() - this.history.at > 400) {
+  /** History as of at most `maxAge` ms ago: a download leaves the live list a moment before the
+   * saved history shows it, so a lookup that finds neither looks again at once. */
+  private async historyEntries(maxAge = 400): Promise<FinishedDownload[]> {
+    if (Date.now() - this.history.at > maxAge) {
       const entries = await listHistory().catch(() => [])
       this.history = { at: Date.now(), entries: entries.filter((e) => this.isMine(e)) }
     }
@@ -400,14 +402,16 @@ export class RunContext implements LabContext {
   async all(): Promise<Snapshot[]> {
     const live = this.live()
     const liveIds = new Set(live.map((state) => state.id))
-    const finished = (await this.historyEntries()).filter((entry) => !liveIds.has(entry.id))
+    const finished = (await this.historyEntries(0)).filter((entry) => !liveIds.has(entry.id))
     return [...live, ...finished]
   }
 
   async find(file: LabFile): Promise<Snapshot | undefined> {
     const live = this.live().find((state) => state.url.includes(file.path))
     if (live) return live
-    return (await this.historyEntries()).find((entry) => entry.url.includes(file.path))
+    const known = (await this.historyEntries()).find((entry) => entry.url.includes(file.path))
+    if (known) return known
+    return (await this.historyEntries(100)).find((entry) => entry.url.includes(file.path))
   }
 
   private async need(file: LabFile): Promise<Snapshot> {

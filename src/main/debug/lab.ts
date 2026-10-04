@@ -306,6 +306,9 @@ export class Lab {
     }
 
     // Everything the run makes lives in its own folder under the system's temp folder.
+    if (plan.fixedDir && mode === 'run') {
+      await rm(plan.fixedDir, { recursive: true, force: true }).catch(() => {})
+    }
     const dir =
       plan.fixedDir ?? (await mkdtemp(join(tmpdir(), `plexo-lab-${plan.id.replace(/\W/g, '')}-`)))
     await mkdir(dir, { recursive: true })
@@ -534,6 +537,7 @@ export class Lab {
       }[step.status]
       lines.push(`  [${mark}] ${step.name}`)
       if (step.error) lines.push(`         error: ${step.error}`)
+      for (const note of step.notes) lines.push(`         note: ${note}`)
       for (const a of step.assertions) {
         lines.push(`         ${a.ok ? 'ok  ' : 'FAIL'} ${a.label}`)
         if (!a.ok) {

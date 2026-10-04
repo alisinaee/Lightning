@@ -1062,7 +1062,7 @@ const plans: LabPlan[] = [
         )
       })
       await ctx.step('Finish and check', async () => {
-        const remaining = [...first.slice(1), ...added]
+        const remaining = [...first, ...added].filter((f) => f !== removed)
         await waitAll(ctx, remaining, 240_000)
         await verifyAll(ctx, remaining)
         ctx.expect('no waiting items are left in the group', ctx.group(groupId)?.pending.length, 0)
@@ -1161,13 +1161,33 @@ const plans: LabPlan[] = [
     estimateSec: 50,
     steps: ['Total speed limit', 'Limit removed', 'Slow mode'],
     tests:
-      'That the speed limit and Slow mode really cap how fast data arrives, measured at the server, and that removing the limit lets the download speed up again.',
+      'That the speed limit and Slow mode really cap how fast data is received and saved, and that removing the limit lets the download speed up again.',
     challenge:
-      'The server could send at full speed. The lab sets a 1 MB/s limit, measures what the server actually sent for ten seconds, removes the limit, and then does the same with Slow mode at 0.5 MB/s.',
+      'The server could send at full speed. The lab sets a 1 MB/s limit, measures for ten seconds how much was really saved (and how much the server sent), removes the limit, and then does the same with Slow mode at 0.5 MB/s.',
     passLooksLike:
       'Measured speed stays within 25% of the limit while it is on, and rises well above it as soon as it is removed.',
     async run(ctx) {
       const file = ctx.file({ name: 'limited.bin', mb: 400 })
+      /** Measures a window two ways: what the server sent, and what the app says it has saved. */
+      const measure = async (
+        ms: number
+      ): Promise<{ server: number; saved: number; requests: number; shown: number }> => {
+        const before = await bytesOf(ctx, file)
+        const requests = requestsOn(ctx.counters(), W)
+        const sampled = await ctx.sample(ms)
+        const saved = (await bytesOf(ctx, file)) - before
+        const asked = requestsOn(ctx.counters(), W) - requests
+        const shown = (await ctx.find(file))?.speedBytesPerSec ?? 0
+        ctx.note(
+          `server sent ${mb(sampled.total)}, the app saved ${mb(saved)}, ${asked} request(s), the app showed ${mb(shown)}/s`
+        )
+        return {
+          server: sampled.rate[W] ?? 0,
+          saved: saved / sampled.seconds,
+          requests: asked,
+          shown
+        }
+      }
       await ctx.step('Total speed limit', async () => {
         ctx.server.setSpeed(W, 'unlimited')
         await ctx.settings.set({ speedLimit: 1 * MB })
@@ -1176,21 +1196,32 @@ const plans: LabPlan[] = [
           fatal: true
         })
         await ctx.sleep(3000)
-        const sampled = await ctx.sample(10_000)
+        const got = await measure(10_000)
         ctx.expect(
-          'speed over 10 s stays within 25% of the 1 MB/s limit',
-          sampled.rate[W] / MB,
+          'the app saves data at the limit (1 MB/s, within 25%)',
+          got.saved / MB,
           is.between(0.75, 1.25),
           'The limit is not respected.'
+        )
+        ctx.expect(
+          'the server is not sending far above the limit (socket buffers blur a short window)',
+          got.server / MB,
+          is.lte(3),
+          'Data is being pulled from the server at far more than the limit allows.'
+        )
+        ctx.expect(
+          'the speed the app shows matches what it saved (within 40%)',
+          got.shown / Math.max(1, got.saved),
+          is.between(0.6, 1.4)
         )
       })
       await ctx.step('Limit removed', async () => {
         await ctx.settings.set({ speedLimit: undefined })
         await ctx.sleep(2000)
-        const sampled = await ctx.sample(2000)
+        const got = await measure(2000)
         ctx.expect(
           'speed rises well above the old limit',
-          sampled.rate[W] / MB,
+          got.server / MB,
           is.gt(2.5),
           'Removing the limit did not speed the download up.'
         )
@@ -1198,11 +1229,16 @@ const plans: LabPlan[] = [
       await ctx.step('Slow mode', async () => {
         await ctx.settings.set({ slowMode: true, slowModeSpeed: MB / 2 })
         await ctx.sleep(3000)
-        const sampled = await ctx.sample(8000)
+        const got = await measure(8000)
         ctx.expect(
-          'Slow mode keeps speed within 25% of 0.5 MB/s',
-          sampled.rate[W] / MB,
+          'Slow mode saves data at 0.5 MB/s (within 25%)',
+          got.saved / MB,
           is.between(0.375, 0.625)
+        )
+        ctx.expect(
+          'the server is not sending far above the slow-mode speed',
+          got.server / MB,
+          is.lte(1.5)
         )
       })
     }
@@ -1295,6 +1331,12 @@ const plans: LabPlan[] = [
       })
       await ctx.step('Nothing left behind', async () => {
         await ctx.remove(files[2])
+        ctx.expect(
+          'the cancelled download stays listed as cancelled (until removed), not running',
+          (await ctx.find(files[0]))?.status,
+          'cancelled'
+        )
+        await ctx.remove(files[0])
         await ctx.waitFor(
           'no download of the lab is listed',
           async () => (await ctx.all()).length === 0,

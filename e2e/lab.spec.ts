@@ -1,5 +1,5 @@
 import type {} from '../src/preload/globals'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -33,7 +33,10 @@ async function launch(): Promise<void> {
       ...(process.env as Record<string, string>),
       PLEXO_USER_DATA: userData,
       PLEXO_E2E_HIDE_WINDOW: '1',
-      PLEXO_E2E_DHT: '0'
+      PLEXO_E2E_DHT: '0',
+      // Pretend an update exists that was already dismissed, so the real check can't raise a
+      // dialog over the window part way through.
+      PLEXO_FORCE_UPDATE_VERSION: '0.0.1-lab'
     }
   })
   page = await app.firstWindow()
@@ -42,6 +45,10 @@ async function launch(): Promise<void> {
 
 test.beforeAll(async () => {
   userData = await mkdtemp(join(tmpdir(), 'plexo-lab-e2e-'))
+  await writeFile(
+    join(userData, 'app-settings.json'),
+    JSON.stringify({ dismissedUpdateVersion: '0.0.1-lab' })
+  )
   await launch()
 })
 
@@ -52,6 +59,23 @@ test.afterAll(async () => {
 
 const runPlan = (id: string): Promise<LabPlanRun> =>
   page.evaluate((planId) => window.plexo.labRun(planId), id)
+
+test('the Debug button opens the Test lab and a plan runs from it', async () => {
+  test.setTimeout(90_000)
+  await page.getByRole('button', { name: /Debug/ }).click()
+  const card = page.locator('#lab-plan-0')
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('Self-check')
+  await expect(card).toContainText('What a pass looks like')
+  // The main window stays usable beside the panel.
+  await expect(page.getByRole('button', { name: 'New download' }).first()).toBeVisible()
+  await card.getByRole('button', { name: 'Run', exact: true }).click()
+  await expect(page.getByText('Test lab: simulated networks are active')).toBeVisible()
+  await expect(card.getByText('PASS', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Test lab: simulated networks are active')).toBeHidden()
+  await expect(card.getByRole('button', { name: 'Copy report' })).toBeVisible()
+  if (process.env.LAB_SHOT) await page.screenshot({ path: process.env.LAB_SHOT })
+})
 
 test('the lab lists its plans', async () => {
   const plans = await page.evaluate(() => window.plexo.labList())

@@ -76,3 +76,54 @@ curl -s 'http://127.0.0.1:8099/__speed?net=Wi-Fi&kbps=500'    # 0 = unlimited, -
 curl -s 'http://127.0.0.1:8099/__scenario?name=flap'
 curl -s 'http://127.0.0.1:8099/__reset'
 ```
+
+## 6. The Test lab (Debug button)
+
+The title bar has a **Debug** button. It opens the **Test lab**, a resizable panel on the right
+that runs automatic test plans against the real app: the real download manager, groups, Auto
+planner, networks and settings. The main window stays visible and usable, so you can watch the
+groups list while a plan runs. Nothing here needs `scripts/fake-server.mjs`: the lab has its own
+server inside Plexo and its own pretend networks.
+
+How it works:
+
+- **Server** (`src/main/debug/fakeServer.ts`): an HTTP server on `127.0.0.1` (first free port from 18000) with speed shared per network (named by the `X-Plexo-Network` header), counters per
+  network and per file, and faults: `fail=N`, `status=429&retryAfter=S&times=K`, `cut=<bytes>`,
+  `stall=1`, `slowstart=<ms>`, `wrongrange=1`, `norange=1`, `forMs=<ms>`. A file's bytes are a
+  pattern of its path and offset, so every finished file is checked **byte for byte**.
+- **Simulated networks** (`src/main/debug/simNetworks.ts`): Wi-Fi, Ethernet, Phone and a Fake VPN
+  replace the real list while a run is going (also in a packaged build). Plans add and remove
+  them to simulate a connection dropping and returning. A banner "Test lab: simulated networks
+  are active" shows in the window with a Stop / Restore button. The real networks always come
+  back when a run ends, is stopped, or the app quits.
+- **Cleanup**: every plan removes its downloads, groups and test files (a temp folder), restores
+  the settings it changed, and then checks that nothing is left behind, even after a failure or Stop.
+
+How to run: open Debug, press **Run** on a plan or **Run all** (plan 16 needs you and is skipped
+by Run all). **Stop** ends the run and cleans up. Headless: `LAB_PLANS=0,1,2,9,10 npx playwright
+test e2e/lab.spec.ts` (the default; `LAB_PLANS=all` runs everything but 16, `LAB_PLANS=16` runs
+the restart plan, `LAB_VERBOSE=1` prints each report).
+
+Where the report is: at the end of each plan the panel shows PASS / FAIL, every step and every
+check (expected against actual), and a **Copy report** button. The same is written to the log file
+(see section 3) as lines tagged `[lab]`: `info` for each step and check, `error` for failures.
+
+| #   | Plan                              | What it asserts                                                                                                    |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 0   | Self-check (Easy)                 | Server runs, 4 pretend networks listed (VPN not selectable), one small file byte-exact over Wi-Fi                  |
+| 1   | Integrity across many connections | 3 files over 3 networks are byte-exact and every network's counters show it carried data                           |
+| 2   | Pause and resume torture          | 10 pauses (some doubled) at random moments: byte-exact, progress never backwards, one staging file                 |
+| 3   | Server fault gauntlet             | 503s, 429 + Retry-After (waited), cut mid-piece, stalled headers, wrong Content-Range (fails safe), no ranges      |
+| 4   | Network drops and returns         | Ethernet removed mid-file: no error, no restart, no more data over it; returns and is used again                   |
+| 5   | Auto: Wi-Fi collapse              | Plan log notes the slowdown within 20 s, Wi-Fi's share falls, finishes before a stuck file would                   |
+| 6   | Auto: recovery and swap           | Fast and slow networks swap: Auto re-plans and beats the first-assignment estimate                                 |
+| 7   | Auto: flapping must not thrash    | A network flapping every 4 s for a minute causes at most 6 plan actions; all files finish                          |
+| 8   | Auto: a network dies              | Blocked and removed network: its file moves to another, nothing ever fails, plan log notes it                      |
+| 9   | VPN setting proof                 | With Use VPN off the VPN gets 0 requests (Auto and manual "all networks"); on, Auto uses it                        |
+| 10  | Manual per-file connections       | The server confirms each file touched only its chosen networks; a mid-run switch takes effect                      |
+| 11  | Pinning in Auto                   | A file pinned to the slowest network uses only it; others are not pushed onto it                                   |
+| 12  | Group edits while running         | Add links, remove a running file, Auto/Manual/Auto, pause/resume: counts consistent, no orphans                    |
+| 13  | Concurrency and queue limits      | Never more than 2 ordinary downloads at once, roughly FIFO; Auto lanes may exceed the limit                        |
+| 14  | Speed limit and slow mode         | Measured speed within 25% of the limit; rises when removed; Slow mode likewise                                     |
+| 15  | Cancel and cleanup                | Cancel, remove and remove-group leave no partial files, no listed items, no open connections                       |
+| 16  | Restart recovery (needs you)      | Group paused, you quit and reopen Plexo, press Verify: group, paused downloads and plan are back, then it finishes |
