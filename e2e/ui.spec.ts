@@ -487,3 +487,38 @@ test('network reset controls confirm scope, keep limits when resetting usage, an
   await plexo.relaunch()
   expect((await plexo.api.networkUsage())[id]).toBe(0)
 })
+
+test('all downloads reset to defaults on Save, leaving each network’s limits', async ({
+  plexo,
+  dirs
+}) => {
+  const [{ id }] = await plexo.api.listInterfaces()
+  await plexo.api.updateSettings({
+    speedLimit: 1024 ** 2,
+    slowMode: true,
+    slowModeSpeed: 512 * 1024,
+    downloadsAtOnce: 5,
+    networkPreferences: { [id]: { speedLimit: 1024 ** 2 } }
+  })
+  await plexo.page.reload()
+  const page = plexo.page
+  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
+  await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
+  const resetButton = dialog.getByRole('button', { name: 'Reset to defaults…', exact: true })
+  await resetButton.click()
+  const confirmation = page.getByRole('alertdialog')
+  await expect(confirmation.getByText(/Network limits stay unchanged/)).toBeVisible()
+  await confirmation.getByRole('button', { name: 'Reset to defaults', exact: true }).click()
+  await expect(resetButton).toBeDisabled()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  const settings = async (): Promise<Record<string, unknown>> =>
+    JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8'))
+  await expect.poll(settings).toMatchObject({ slowModeSpeed: 2 * 1024 ** 2, downloadsAtOnce: 2 })
+  const saved = await settings()
+  // Off and no limit are what a missing entry means.
+  expect(saved.speedLimit).toBeUndefined()
+  expect(saved.slowMode).toBeUndefined()
+  expect(saved.networkPreferences).toMatchObject({ [id]: { speedLimit: 1024 ** 2 } })
+})

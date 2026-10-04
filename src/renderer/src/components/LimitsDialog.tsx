@@ -1,5 +1,10 @@
 import { DATA_LIMIT_PERIODS, dataUsageLabel, nextDataReset } from '@shared/dataLimits'
-import { DOWNLOADS_AT_ONCE, type DataLimitPeriod, type NetworkPreference } from '@shared/types'
+import {
+  DEFAULT_SLOW_MODE_SPEED,
+  DOWNLOADS_AT_ONCE,
+  type DataLimitPeriod,
+  type NetworkPreference
+} from '@shared/types'
 import { Minus, Plus } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { useNetworkUsage } from '../hooks/useNetworks'
@@ -27,6 +32,14 @@ type Draft = Pick<
   ReturnType<typeof useAppStore.getState>,
   'speedLimit' | 'slowMode' | 'slowModeSpeed' | 'downloadsAtOnce' | 'networkPreferences'
 >
+
+/** All downloads as a fresh install has them. */
+const GENERAL_DEFAULTS = {
+  speedLimit: undefined,
+  slowMode: false,
+  slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
+  downloadsAtOnce: DOWNLOADS_AT_ONCE.default
+} satisfies Partial<Draft>
 
 const KB = 1024
 const MB = 1024 ** 2
@@ -206,6 +219,10 @@ function GeneralPage({
   change: (patch: Partial<Draft>) => void
 }): React.JSX.Element {
   const { speedLimit, slowMode, slowModeSpeed, downloadsAtOnce } = draft
+  const [confirmReset, setConfirmReset] = useState(false)
+  const atDefaults = Object.entries(GENERAL_DEFAULTS).every(
+    ([key, value]) => draft[key as keyof typeof GENERAL_DEFAULTS] === value
+  )
 
   return (
     <>
@@ -282,6 +299,33 @@ function GeneralPage({
           at the same time
         </div>
       </section>
+      <div className="flex flex-wrap items-center gap-2 border-t-[0.5px] border-border pt-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={atDefaults}
+          onClick={() => setConfirmReset(true)}
+        >
+          Reset to defaults…
+        </Button>
+      </div>
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all downloads to defaults?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This resets total speed, slow mode and downloads at once. Network limits stay
+              unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => change(GENERAL_DEFAULTS)}>
+              Reset to defaults
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
