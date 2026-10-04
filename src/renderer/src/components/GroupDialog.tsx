@@ -8,6 +8,7 @@ import type {
 import { cn } from 'cn'
 import { AlertTriangle, Plus, X } from 'lucide-react'
 import { useState } from 'react'
+import { defaultNetworkIds } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import {
   describeError,
@@ -78,7 +79,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
   const [actionError, setActionError] = useState<string | null>(null)
   // The networks the files added next use, in a manual group.
   const [newConnection, setNewConnection] = useState<string[]>(() =>
-    enabledNetworkIds(interfaces.map((iface) => iface.id))
+    defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
   )
 
   const rows: FileRow[] = [
@@ -168,7 +169,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     const failedLinks = new Set<string>()
     const interfaceIds = manual
       ? newConnection
-      : enabledNetworkIds(interfaces.map((iface) => iface.id))
+      : defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
     probeLinks(links, window.plexo.probeUrl, (url, outcome) => {
       if ('result' in outcome) {
         requests.push(requestFor(outcome.result, group.destinationDir, interfaceIds))
@@ -391,12 +392,6 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
       </AlertDialog>
     </div>
   )
-}
-
-/** The networks not switched off in the networks menu: where new files go by default. */
-function enabledNetworkIds(ids: string[]): string[] {
-  const preferences = useAppStore.getState().networkPreferences
-  return ids.filter((id) => !preferences[id]?.off)
 }
 
 /** The network or networks a file is on, for an auto group's list. */

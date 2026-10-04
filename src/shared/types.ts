@@ -1,4 +1,4 @@
-export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'other'
+export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'vpn' | 'other'
 export type IpFamily = 4 | 6
 
 export interface NetworkAddress {
@@ -148,6 +148,7 @@ export type DownloadUnitState = HttpBlockState | TorrentPieceState
 /**
  * - on: in use.
  * - off: the user switched it off. A network that turns up mid-download starts off.
+ * A VPN network is off unless its preference says `off: false`.
  * - offline: not connected to this computer. It's used again as soon as it is.
  * - unreachable: connected, but the server can't be reached through it. One connection keeps
  *   trying, and the rest follow once it gets through.

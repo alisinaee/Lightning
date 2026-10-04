@@ -2,6 +2,7 @@ import type { GroupMode, ProbeResult } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { defaultNetworkIds } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes, toDisplayPath } from '../utils/format'
 import { folderNameOf, isSplittable, linksIn, probeLinks, requestFor } from '../utils/links'
@@ -90,9 +91,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const target = folderName
     ? `${destinationDir.replace(/[\\/]+$/, '')}${separator}${folderName}`
     : destinationDir
-  const enabledIds = interfaces
-    .map((iface) => iface.id)
-    .filter((id) => !useAppStore.getState().networkPreferences[id]?.off)
+  const enabledIds = defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
   const connectionOf = (url: string): string[] => connections[url] ?? enabledIds
 

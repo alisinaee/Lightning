@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
 import { testInterfaces } from '../testKnobs'
+import { isVpnInterface } from './vpn'
 
 const execFileAsync = promisify(execFile)
 const DISCOVERY_TIMEOUT_MS = 5000
@@ -147,6 +148,9 @@ export async function listActiveInterfaces(): Promise<NetworkInterfaceInfo[]> {
     // NDIS media: 1 = wireless LAN, 9 = native 802.11, 14 = Ethernet (802.3).
     if (adapter?.NdisPhysicalMedium === 1 || adapter?.NdisPhysicalMedium === 9) kind = 'wifi'
     else if (kind === 'other' && adapter?.NdisPhysicalMedium === 14) kind = 'ethernet'
+    if (isVpnInterface({ device, description: adapter?.InterfaceDescription, hardwareName })) {
+      kind = 'vpn'
+    }
     result.push({
       id: device,
       device,

@@ -3,6 +3,8 @@ import { cn } from 'cn'
 import { AlertTriangle, Folder, FolderOpen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { defaultNetworkIds } from '@shared/networks'
+import { VpnBadge } from './VpnBadge'
 import { useAppStore } from '../store/useAppStore'
 import {
   acceptedLink,
@@ -105,6 +107,7 @@ export function NewDownloadDialog(): React.JSX.Element {
 
 function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const interfaces = useAppStore((store) => store.interfaces)
+  const networkPreferences = useAppStore((store) => store.networkPreferences)
   const homeDir = useAppStore((store) => store.homeDir)
   const url = useAppStore((store) => store.draftUrl)
   const setUrl = useAppStore((store) => store.setDraftUrl)
@@ -119,13 +122,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const linkInput = useRef<HTMLInputElement>(null)
 
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' })
-  // Tracks deselections rather than selections, so a newly-detected interface starts selected.
-  // Starts from the default networks: the ones switched off in the networks menu.
-  const [deselectedInterfaceIds, setDeselectedInterfaceIds] = useState<string[]>(() =>
-    Object.entries(useAppStore.getState().networkPreferences)
-      .filter(([, preference]) => preference.off)
-      .map(([id]) => id)
-  )
+  // What this download changes from the default networks (those on in the networks menu).
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({})
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [fileNameOverride, setFileNameOverride] = useState<string | null>(null)
@@ -195,7 +193,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
 
   const detectedIds = interfaces.map((iface) => iface.id)
-  const enabledIds = detectedIds.filter((id) => !deselectedInterfaceIds.includes(id))
+  const defaultIds = defaultNetworkIds(interfaces, networkPreferences)
+  const enabledIds = detectedIds.filter((id) => overrides[id] ?? defaultIds.includes(id))
   const selectedInterfaceIds = isSingleStreamOnly ? enabledIds.slice(0, 1) : enabledIds
 
   const canStart =
@@ -235,16 +234,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
   const handleToggleInterface = (id: string): void => {
     if (isSingleStreamOnly) {
-      // Single-stream mode can only download through 1 interface at a time
-      setDeselectedInterfaceIds(detectedIds.filter((otherId) => otherId !== id))
+      setOverrides(Object.fromEntries(detectedIds.map((other) => [other, other === id])))
       return
     }
-    setDeselectedInterfaceIds((prev) => {
-      if (prev.includes(id)) return prev.filter((entry) => entry !== id)
-      // Keep at least 1 interface selected
-      const remaining = detectedIds.filter((other) => !prev.includes(other) && other !== id)
-      return remaining.length === 0 ? prev : [...prev, id]
-    })
+    if (enabledIds.includes(id) && enabledIds.length === 1) return // keep at least one
+    setOverrides((prev) => ({ ...prev, [id]: !enabledIds.includes(id) }))
   }
 
   const handleBrowse = async (): Promise<void> => {
@@ -450,6 +444,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                 >
                   <span className="size-2 rounded-full" style={{ background: visual.solid }} />
                   {visual.name}
+                  {iface.kind === 'vpn' && <VpnBadge />}
                 </button>
               )
             })}

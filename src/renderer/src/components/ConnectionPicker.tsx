@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import type { NetworkOption } from '../hooks/useNetworkOptions'
+import { VpnBadge } from './VpnBadge'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -76,6 +77,7 @@ export function ConnectionPicker({
             />
             <span className="size-2 shrink-0 rounded-full" style={{ background: option.solid }} />
             <span className="truncate">{option.name}</span>
+            {option.vpn && <VpnBadge />}
           </label>
         ))}
       </PopoverContent>

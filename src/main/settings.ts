@@ -36,7 +36,7 @@ function sanitizeNetworkPreferences(parsed: unknown): NetworkPreferences {
     const preference: NetworkPreference = {}
     if (typeof value.customName === 'string') preference.customName = value.customName
     if (typeof value.colorId === 'string') preference.colorId = value.colorId
-    if (value.off === true) preference.off = true
+    if (typeof value.off === 'boolean') preference.off = value.off
     preference.speedLimit = byteCount(value.speedLimit)
     preference.dataLimit = byteCount(value.dataLimit)
     if (

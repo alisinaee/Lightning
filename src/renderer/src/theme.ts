@@ -29,6 +29,7 @@ export const KIND_PALETTE: Record<NetworkInterfaceKind, KindPalette> = {
   usb: makeKindPalette('usb', 'USB'),
   ethernet: makeKindPalette('ethernet', 'ETH'),
   bridge: makeKindPalette('neutral', 'NET'),
+  vpn: makeKindPalette('neutral', 'VPN'),
   other: makeKindPalette('neutral', 'NET')
 }
 
@@ -110,6 +111,7 @@ const KIND_SWATCH: Record<NetworkInterfaceKind, NetworkColorId | undefined> = {
   usb: 'amber',
   ethernet: 'steel',
   bridge: undefined,
+  vpn: undefined,
   other: undefined
 }
 

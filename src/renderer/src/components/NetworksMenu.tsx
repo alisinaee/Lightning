@@ -2,6 +2,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { isNetworkOff } from '@shared/networks'
+import { VpnBadge } from './VpnBadge'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
 import { UsageBar } from './LimitsDialog'
@@ -37,7 +39,7 @@ export function NetworksMenu({
     }
   }
   const total = [...speeds.values()].reduce((sum, speed) => sum + speed, 0)
-  const on = interfaces.filter((iface) => !preferences[iface.id]?.off)
+  const on = interfaces.filter((iface) => !isNetworkOff(iface, preferences))
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -51,7 +53,7 @@ export function NetworksMenu({
               className="size-2 rounded-full"
               style={{
                 background: networkVisual(iface.id, iface.kind, iface.displayName).solid,
-                opacity: preferences[iface.id]?.off ? 0.3 : 1
+                opacity: isNetworkOff(iface, preferences) ? 0.3 : 1
               }}
             />
           ))}
@@ -77,6 +79,9 @@ export function NetworksMenu({
             New downloads combine the networks turned on here. You can change this for any single
             download.
           </div>
+          {interfaces.some((iface) => iface.kind === 'vpn') && (
+            <div className="text-[12px] text-muted-foreground">VPN: off unless you turn it on.</div>
+          )}
         </div>
         {interfaces.map((iface) => {
           const visual = networkVisual(iface.id, iface.kind, iface.displayName)
@@ -100,6 +105,7 @@ export function NetworksMenu({
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex min-w-0 items-center gap-1">
                     <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
+                    {iface.kind === 'vpn' && <VpnBadge />}
                     <span className="relative z-10 flex">
                       <NetworkEditPopover
                         interfaceId={iface.id}
@@ -126,10 +132,8 @@ export function NetworksMenu({
                 <Switch
                   className="relative z-10"
                   aria-label={`Use ${visual.name} for new downloads`}
-                  checked={!preference?.off}
-                  onCheckedChange={(checked) =>
-                    setNetworkPreference(iface.id, { off: checked ? undefined : true })
-                  }
+                  checked={!isNetworkOff(iface, preferences)}
+                  onCheckedChange={(checked) => setNetworkPreference(iface.id, { off: !checked })}
                 />
                 <button
                   type="button"
