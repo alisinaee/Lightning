@@ -4,6 +4,7 @@ import type { IpcContract } from '../shared/ipc-contract'
 import type {
   AppSettings,
   DownloadUpdate,
+  GroupPatch,
   InitialState,
   NetworkInterfaceInfo
 } from '../shared/types'
@@ -52,6 +53,14 @@ const plexoApi = {
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
   removeDownload: (downloadId: string, options?: { trashFile?: boolean }) =>
     invoke('removeDownload', downloadId, options),
+  listGroups: () => invoke('listGroups'),
+  createGroup: (input: IpcContract['createGroup']['args'][0]) => invoke('createGroup', input),
+  updateGroup: (id: string, patch: GroupPatch) => invoke('updateGroup', id, patch),
+  removeGroup: (id: string, options?: { trashFiles?: boolean }) =>
+    invoke('removeGroup', id, options),
+  addGroupItems: (id: string, requests: IpcContract['addGroupItems']['args'][1]) =>
+    invoke('addGroupItems', id, requests),
+  removeGroupItem: (id: string, itemId: string) => invoke('removeGroupItem', id, itemId),
   checkForUpdate: () => invoke('checkForUpdate'),
   takePendingLink: () => invoke('takePendingLink'),
 
@@ -73,6 +82,13 @@ const plexoApi = {
     const listener = (): void => callback()
     ipcRenderer.on(IpcChannels.historyChanged, listener)
     return () => ipcRenderer.removeListener(IpcChannels.historyChanged, listener)
+  },
+
+  /** A group was made, changed or removed: listGroups() has them. */
+  onGroupsChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.groupsChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.groupsChanged, listener)
   },
 
   onNetworksChanged: (callback: (networks: NetworkInterfaceInfo[]) => void): (() => void) => {

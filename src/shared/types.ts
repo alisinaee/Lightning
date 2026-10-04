@@ -214,6 +214,8 @@ interface DownloadStateBase {
   /** The best combined speed held for a few seconds, so it only ever rises; unset until it has
    * run that long. A download done sooner gets the best speed it showed. */
   peakSpeedBytesPerSec?: number
+  /** The group (an "Add several links" batch) it belongs to, if any; see DownloadGroup. */
+  groupId?: string
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }
@@ -357,6 +359,11 @@ interface StartDownloadRequestBase {
   interfaceIds: string[]
   etag: string | null
   lastModified: string | null
+  /** The group it belongs to, if any. */
+  groupId?: string
+  /** Set for a download an auto group runs on one network of its own: it doesn't count towards
+   * downloadsAtOnce, which would otherwise keep two networks from each running a file. */
+  groupLane?: boolean
 }
 
 export interface StartHttpDownloadRequest extends StartDownloadRequestBase {
@@ -374,3 +381,44 @@ export interface StartTorrentDownloadRequest extends StartDownloadRequestBase {
 }
 
 export type StartDownloadRequest = StartHttpDownloadRequest | StartTorrentDownloadRequest
+
+/** `auto`: Plexo gives each file a network of its own to finish the group soonest. `manual`: each
+ * file uses the networks the user picked for it. */
+export type GroupMode = 'auto' | 'manual'
+
+/** A batch of links added together, kept in one folder. */
+export interface DownloadGroup {
+  id: string
+  name: string
+  destinationDir: string
+  mode: GroupMode
+  createdAt: number
+  /** The networks an auto group may use. */
+  interfaceIds: string[]
+}
+
+/** A file of an auto group that hasn't started yet: it starts when a network is free for it. */
+export interface PendingGroupItem {
+  id: string
+  request: StartDownloadRequest
+  /** Why it couldn't start; it then stays here for the user to remove. */
+  error?: string
+}
+
+export interface GroupInfo extends DownloadGroup {
+  pending: PendingGroupItem[]
+}
+
+export interface CreateGroupInput {
+  /** Empty: a name is made up from the file count and the date. */
+  name: string
+  destinationDir: string
+  mode: GroupMode
+  interfaceIds: string[]
+  requests: StartDownloadRequest[]
+}
+
+export interface GroupPatch {
+  name?: string
+  mode?: GroupMode
+}

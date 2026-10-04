@@ -30,7 +30,7 @@ import {
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
-import { addToHistory, findInHistory, removeFromHistory } from './history'
+import { addToHistory, findInHistory, listHistory, removeFromHistory } from './history'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { HttpTransfer, splittable } from './httpTransfer'
@@ -314,9 +314,38 @@ export class DownloadManager {
   private runningCount(): number {
     let running = 0
     for (const runtime of this.runtimes.values()) {
-      if (runtime.state.status === 'downloading') running++
+      // A group's lane runs beside the others, whatever the limit says (see groupLane).
+      if (runtime.state.status === 'downloading' && !runtime.requestPayload.groupLane) running++
     }
     return running
+  }
+
+  /** The downloads of a group still in the list (finished ones are in history), as live state:
+   * read it, don't change it. */
+  groupDownloads(groupId: string): readonly DownloadState[] {
+    return [...this.runtimes.values()]
+      .map((runtime) => runtime.state)
+      .filter((state) => state.groupId === groupId)
+  }
+
+  /** Every group id some download, finished or not, still belongs to. */
+  async groupIdsInUse(): Promise<Set<string>> {
+    await this.initialization
+    const ids = new Set<string>()
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.state.groupId) ids.add(runtime.state.groupId)
+    }
+    for (const entry of await listHistory()) if (entry.groupId) ids.add(entry.groupId)
+    return ids
+  }
+
+  /** Removes every download of a group, finished ones from the list too (their files stay,
+   * unless `trashFiles`). */
+  async removeGroupDownloads(groupId: string, trashFiles: boolean): Promise<void> {
+    await this.initialization
+    const ids = new Set(this.groupDownloads(groupId).map((state) => state.id))
+    for (const entry of await listHistory()) if (entry.groupId === groupId) ids.add(entry.id)
+    for (const id of ids) await this.remove(id, trashFiles)
   }
 
   /** Starts queued downloads, first queued first, while fewer than downloadsAtOnce run. Called
@@ -757,6 +786,7 @@ export class DownloadManager {
         bytesUploaded: 0,
         uploadSpeedBytesPerSec: 0,
         status: 'downloading',
+        groupId: requestPayload.groupId,
         networks: available.map((iface) => newTorrentNetwork(iface, selected.includes(iface))),
         peers: [],
         peakPeers: 0,
@@ -800,6 +830,7 @@ export class DownloadManager {
         bytesDownloaded: 0,
         speedBytesPerSec: 0,
         status: 'downloading',
+        groupId: requestPayload.groupId,
         networks,
         streams: [],
         peakStreams: 0,
@@ -816,7 +847,7 @@ export class DownloadManager {
       )
     }
     // Decided only now: other starts may have taken the room while this one was set up.
-    const room = this.runningCount() < this.downloadsAtOnce
+    const room = requestPayload.groupLane === true || this.runningCount() < this.downloadsAtOnce
     if (!room) this.enqueue(runtime, false)
     this.runtimes.set(id, runtime)
     await this.persistNow(runtime)
@@ -933,7 +964,7 @@ export class DownloadManager {
     // Switched back on, then off again while the paused run wound down: it stays paused.
     if (byNetwork && !networks.some((network) => network.enabled)) return
 
-    if (this.runningCount() >= this.downloadsAtOnce) {
+    if (!runtime.requestPayload.groupLane && this.runningCount() >= this.downloadsAtOnce) {
       // Asked for by name, so it goes next.
       this.enqueue(runtime, true)
       runtime.state.error = undefined

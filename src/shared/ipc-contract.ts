@@ -1,7 +1,10 @@
 import type {
   AppSettings,
+  CreateGroupInput,
   DownloadUpdate,
   FinishedDownload,
+  GroupInfo,
+  GroupPatch,
   NetworkInterfaceInfo,
   ProbeResult,
   StartDownloadRequest,
@@ -10,7 +13,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, historyChanged and linkReceived) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged and linkReceived) — one source of truth for
  * both plexoApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -47,6 +50,21 @@ export interface IpcContract {
   /** Removes a download, cancelling one under way. A finished one's file stays, unless
    * `trashFile`: then it goes to the Trash. */
   removeDownload: { args: [id: string, options?: { trashFile?: boolean }]; result: void }
+  /** Every group, with the files of an auto group still waiting to start. */
+  listGroups: { args: []; result: GroupInfo[] }
+  /** Makes a group of the requests and starts it; `failed` says which files couldn't start. */
+  createGroup: { args: [input: CreateGroupInput]; result: { group: GroupInfo; failed: string[] } }
+  updateGroup: { args: [id: string, patch: GroupPatch]; result: void }
+  /** Removes the group and its downloads, cancelling those under way. Finished files stay,
+   * unless `trashFiles`: then they go to the Trash. */
+  removeGroup: { args: [id: string, options?: { trashFiles?: boolean }]; result: void }
+  /** Adds files to a group: started at once in a manual group, queued for a network in an auto one. */
+  addGroupItems: {
+    args: [id: string, requests: StartDownloadRequest[]]
+    result: { failed: string[] }
+  }
+  /** Drops a file of an auto group that hasn't started. */
+  removeGroupItem: { args: [id: string, itemId: string]; result: void }
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
   takePendingLink: { args: []; result: string | null }

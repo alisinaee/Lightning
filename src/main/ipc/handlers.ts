@@ -10,12 +10,14 @@ import {
   type BrowserWindow,
   type IpcMainInvokeEvent
 } from 'electron'
+import { describeError } from '../../shared/errors'
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { IpcContract } from '../../shared/ipc-contract'
 import {
   DEFAULT_SLOW_MODE_SPEED,
   DOWNLOADS_AT_ONCE,
   type InitialState,
+  type StartDownloadRequest,
   type ThemeSource
 } from '../../shared/types'
 import { DownloadManager } from '../download/downloadManager'
@@ -26,6 +28,8 @@ import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
 import { measureLatencies } from '../network/latency'
 import { NetworkMonitor } from '../network/interfaces'
+import { AutoScheduler } from '../groups/autoScheduler'
+import { GroupStore } from '../groups/groupStore'
 import { loadSettings, saveSettings } from '../settings'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
@@ -85,6 +89,38 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     manager.systemResumed()
     void networks.refresh()
   })
+
+  const groups = new GroupStore(() => {
+    const window = getWindow()
+    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.groupsChanged)
+  })
+  const autoScheduler = new AutoScheduler(manager, groups, networks)
+  void groups.loaded.then(() => autoScheduler.run())
+
+  /** Adds files to a group: a manual group's start at once, an auto group's wait for a network. */
+  const addToGroup = async (id: string, requests: StartDownloadRequest[]): Promise<string[]> => {
+    const group = groups.get(id)
+    if (!group) throw new Error('This group no longer exists.')
+    if (group.mode === 'auto') {
+      groups.addPending(id, requests)
+      autoScheduler.activate(id)
+      return []
+    }
+    const failed: string[] = []
+    for (const request of requests) {
+      try {
+        await manager.start({
+          ...request,
+          destinationDir: group.destinationDir,
+          groupId: id,
+          groupLane: false
+        })
+      } catch (error) {
+        failed.push(`${request.suggestedFileName}: ${describeError(error)}`)
+      }
+    }
+    return failed
+  }
 
   handle('listInterfaces', () => networks.refresh())
 
@@ -195,6 +231,39 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('listDownloads', async () => manager.listDownloads())
 
   handle('listHistory', async () => listHistory())
+
+  handle('listGroups', async () => {
+    await groups.loaded
+    groups.prune(await manager.groupIdsInUse())
+    return groups.list()
+  })
+
+  handle('createGroup', async (_event, input) => {
+    await groups.loaded
+    const created = groups.create({ ...input, fileCount: input.requests.length })
+    const failed = await addToGroup(created.id, input.requests)
+    return { group: groups.get(created.id) ?? { ...created, pending: [] }, failed }
+  })
+
+  handle('updateGroup', async (_event, id, patch) => {
+    groups.update(id, patch)
+    const group = groups.get(id)
+    if (!group) return
+    if (patch.mode === 'manual') await autoScheduler.startPending(group)
+    else if (patch.mode === 'auto') autoScheduler.activate(id)
+  })
+
+  handle('removeGroup', async (_event, id, options) => {
+    autoScheduler.forget(id)
+    groups.remove(id)
+    await manager.removeGroupDownloads(id, options?.trashFiles === true)
+  })
+
+  handle('addGroupItems', async (_event, id, requests) => ({
+    failed: await addToGroup(id, requests)
+  }))
+
+  handle('removeGroupItem', async (_event, id, itemId) => groups.removePending(id, itemId))
 
   handle('clearHistory', async () => manager.clearHistory())
 
