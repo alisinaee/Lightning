@@ -259,6 +259,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       )}
                     </div>
                   </label>
+                  {row.status === 'ready' && row.result.totalBytes !== null && (
+                    <span className="w-20 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground">
+                      {formatBytes(row.result.totalBytes)}
+                    </span>
+                  )}
                   {row.status === 'ready' &&
                     (mode === 'manual' ? (
                       <>
@@ -273,13 +278,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                         />
                       </>
                     ) : (
-                      <span className="shrink-0 text-[11.5px] text-muted-foreground">Auto</span>
+                      <span className="w-[150px] shrink-0 text-right text-[11.5px] text-muted-foreground">
+                        Auto
+                      </span>
                     ))}
-                  {row.status === 'ready' && row.result.totalBytes !== null && (
-                    <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">
-                      {formatBytes(row.result.totalBytes)}
-                    </span>
-                  )}
                 </div>
               ))}
             </div>
