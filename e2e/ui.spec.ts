@@ -128,11 +128,18 @@ test.describe('UI journeys @smoke', () => {
     await link.fill(origin.url())
     const start = page.getByRole('button', { name: 'Download' })
     await expect(start).toBeEnabled()
+    await page.getByRole('group', { name: 'Streams' }).getByRole('button', { name: '8' }).click()
 
     const reached = origin.hold(6 * BLOCK)
     await plexo.expectNextDownload(origin.sha256)
     await start.click()
     await reached
+    // The streams picked in the dialog reach the download.
+    const { id } = (await plexo.current())!
+    const manifestPath = join(dirs.userData, 'downloads', id, 'manifest.json')
+    await expect
+      .poll(async () => JSON.parse(await readFile(manifestPath, 'utf-8')).requestPayload)
+      .toMatchObject({ streamsPerNetwork: 8 })
     // Added to the list; its own screen is a click away.
     await page.getByRole('button', { name: /^Open / }).click()
 

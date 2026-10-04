@@ -16,6 +16,7 @@ import {
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 type ProbeState =
@@ -25,6 +26,10 @@ type ProbeState =
   | { status: 'error'; message: string }
 
 const PROBE_DEBOUNCE_MS = 600
+
+type StreamsChoice = 'auto' | number
+/** Streams per network the user can pick instead of Auto. */
+const STREAMS_CHOICES: StreamsChoice[] = ['auto', 4, 8, 16, 32]
 
 const labelClass = 'w-16 shrink-0 text-[12.5px] text-[var(--text-secondary)]'
 
@@ -79,7 +84,7 @@ function TorrentFileList({
 }
 
 /** New download: a link, then only what differs from one download to the next — its name (or a
- * torrent's files), where it goes, and over which networks. Everything set once for every
+ * torrent's files), where it goes, over which networks, and how many streams each runs. Everything set once for every
  * download lives in Speed & data limits and the networks menu. */
 export function NewDownloadDialog(): React.JSX.Element {
   const open = useAppStore((store) => store.newDownloadOpen)
@@ -126,6 +131,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [fileNameOverride, setFileNameOverride] = useState<string | null>(null)
   // A torrent's files left out, by index: every file is downloaded unless unticked.
   const [skippedFiles, setSkippedFiles] = useState<number[]>([])
+  // For this download only: the next one starts on Auto again.
+  const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
 
   // Opened with nothing in it: a link on the clipboard is most likely what it's for, as download
   // managers have long assumed. Anything else on the clipboard is left alone.
@@ -274,7 +281,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               infoHash: probe.result.torrent.infoHash,
               selectedFiles: skippedFiles.length > 0 ? chosenFiles : undefined
             }
-          : { ...common, kind: 'http' }
+          : {
+              ...common,
+              kind: 'http',
+              streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
+            }
       )
       // Started: the link is spent, so the next download starts from an empty one.
       useAppStore.setState({ startedUrl: url.trim(), draftUrl: '' })
@@ -444,6 +455,34 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             })}
           </div>
         </div>
+
+        {/* A torrent's speed comes from its peers, and an unsplittable file has one stream. */}
+        {ready && !torrent && !isSingleStreamOnly && (
+          <div className="flex items-center gap-3">
+            <div className={labelClass} id="new-download-streams">
+              Streams
+            </div>
+            <ToggleGroup
+              value={[String(streamsChoice)]}
+              onValueChange={(values) => {
+                if (values.length === 0) return
+                setStreamsChoice(values[0] === 'auto' ? 'auto' : Number(values[0]))
+              }}
+              aria-labelledby="new-download-streams"
+              variant="pill"
+              size="xs"
+              spacing={1}
+            >
+              {STREAMS_CHOICES.map((choice) => (
+                // h-6/min-w-6: WCAG 2.5.8's 24px floor — the xs toggle size is 20px.
+                <ToggleGroupItem key={choice} value={String(choice)} className="h-6 min-w-6 px-2">
+                  {choice === 'auto' ? 'Auto' : choice}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <div className="font-mono text-[11px] text-muted-foreground">per network</div>
+          </div>
+        )}
 
         {subnetConflict && (
           <div className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-usb-text)]">
