@@ -160,8 +160,7 @@ function sortValue(entry: ListEntry, key: SortKey): string | number {
       const seconds = items.map((item) => {
         if (isFinished(item) || item.status !== 'downloading' || item.speedBytesPerSec <= 0)
           return null
-        const left = wantedBytes(item) - item.bytesDownloaded
-        return left > 0 ? left / item.speedBytesPerSec : null
+        return item.timeLeftSeconds ?? null
       })
       const known = seconds.filter((value): value is number => value !== null)
       return known.length > 0 ? Math.max(...known) : Number.POSITIVE_INFINITY

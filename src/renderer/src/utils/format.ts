@@ -26,10 +26,8 @@ export function formatSpeed(bytesPerSec: number): string {
   return `${formatBytes(bytesPerSec)}/s`
 }
 
-export function formatEta(remainingBytes: number, bytesPerSec: number): string {
-  if (bytesPerSec <= 0 || remainingBytes <= 0) return '—'
-  const seconds = remainingBytes / bytesPerSec
-  if (!Number.isFinite(seconds)) return '—'
+export function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
   if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))}s`
   const totalSec = Math.round(seconds)
   const mins = Math.floor(totalSec / 60)
@@ -213,7 +211,7 @@ export function linkExpired(download: DownloadState): boolean {
 
 /** "2m 5s" from a number of seconds, as formatEta shows it; "—" when there isn't one. */
 export function formatSeconds(seconds: number | null): string {
-  return seconds === null ? '—' : formatEta(seconds, 1)
+  return seconds === null ? '—' : formatEta(seconds)
 }
 
 /** A date and time in full, for a tooltip. */

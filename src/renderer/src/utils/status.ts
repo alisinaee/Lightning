@@ -99,8 +99,8 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     return { ...base, label: STATUS_STYLE.completed.label, bar: false, speed: 0, etaSeconds: null }
   }
   const speed = item.status === 'downloading' ? item.speedBytesPerSec : 0
-  const etaSeconds =
-    speed > 0 && total > item.bytesDownloaded ? (total - item.bytesDownloaded) / speed : null
+  // Main's own, smoothed estimate (see updateTimeLeft).
+  const etaSeconds = speed > 0 ? (item.timeLeftSeconds ?? null) : null
   switch (status) {
     case 'downloading':
       return {
