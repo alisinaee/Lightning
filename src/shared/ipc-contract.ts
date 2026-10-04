@@ -27,7 +27,9 @@ export interface IpcContract {
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
-  revealInFolder: { args: [filePath: string]; result: void }
+  /** Shows a download's file in its folder, by the download's own path. False when nothing is
+   * there any more: history is re-sent, with it marked missing. */
+  revealDownload: { args: [id: string]; result: boolean }
   /** Opens a finished download's file with the app the OS has for it. */
   openDownloadedFile: { args: [id: string]; result: void }
   startDownload: { args: [request: StartDownloadRequest]; result: string }
@@ -44,6 +46,9 @@ export interface IpcContract {
   freeSpace: { args: [dir: string]; result: number | null }
   /** A torrent download's files, in the torrent's order; empty for any other download. */
   torrentFiles: { args: [id: string]; result: TorrentFileEntry[] }
+  /** Which of a torrent download's files to fetch, by index, as it runs or not. Refused for one
+   * already downloaded, or with no room on disk for what's added. */
+  chooseTorrentFiles: { args: [id: string, selected: number[]]; result: void }
   pauseDownload: { args: [id: string]; result: void }
   resumeDownload: { args: [id: string]; result: void }
   /** A fresh link to the same file, for a download whose link stopped working; it resumes. */

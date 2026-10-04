@@ -358,11 +358,11 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                   </Button>
                 </>
               )}
-              {!isPaused && knownSize && effectiveSpeed > 0 && (
+              {!isPaused && download.timeLeftSeconds !== undefined && (
                 <>
                   <Dot />
                   <span className="text-[var(--text-secondary)]">
-                    {formatEta(remainingBytes, effectiveSpeed)} left
+                    {formatEta(download.timeLeftSeconds)} left
                   </span>
                 </>
               )}
@@ -407,7 +407,11 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           </div>
         </div>
         {download.kind === 'torrent' && filesOpen && (
-          <TorrentFiles downloadId={download.id} pieces={download.pieces} />
+          <TorrentFiles
+            downloadId={download.id}
+            pieces={download.pieces}
+            selected={download.files.selected}
+          />
         )}
       </div>
 
