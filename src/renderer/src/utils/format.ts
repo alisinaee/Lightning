@@ -210,3 +210,19 @@ export function linkExpired(download: DownloadState): boolean {
     LINK_REFUSED.test(download.error ?? '')
   )
 }
+
+/** "2m 5s" from a number of seconds, as formatEta shows it; "—" when there isn't one. */
+export function formatSeconds(seconds: number | null): string {
+  return seconds === null ? '—' : formatEta(seconds, 1)
+}
+
+/** A date and time in full, for a tooltip. */
+export function formatDateTime(time: number): string {
+  return new Date(time).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}

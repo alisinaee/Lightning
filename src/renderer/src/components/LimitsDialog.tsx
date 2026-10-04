@@ -24,7 +24,8 @@ import {
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { VpnSwitch } from './VpnSwitch'
-import { DATA_UNITS, FieldValidityContext, GB, MB, SpeedInput, UnitField } from './LimitFields'
+import { SpeedInput, UnitField } from './LimitFields'
+import { DATA_UNITS, FieldValidityContext, GB, MB } from './limitUnits'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 

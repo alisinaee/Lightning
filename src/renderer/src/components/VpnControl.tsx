@@ -1,13 +1,8 @@
 import { ShieldCheck, ShieldOff } from 'lucide-react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { useVpnLayer } from '../hooks/useConnections'
+import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Switch } from './ui/switch'
-
-/** What the VPN layer is doing, in a sentence. */
-export function describeVpn(on: boolean, tunnels: string[]): string {
-  return on ? `On — via ${tunnels.join(', ')}` : 'Off — downloads use your real connections'
-}
 
 /** The VPN, as its own control beside the networks menu: a tunnel is not a connection, only
  * something downloads go through or skip. Shown only while a VPN is detected. */
