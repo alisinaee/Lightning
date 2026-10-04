@@ -13,6 +13,7 @@ import type {
   LabStep
 } from '../../shared/lab'
 import type { PlanEvent } from '../../shared/types'
+import { listHistory } from '../download/history'
 import { log } from '../logger'
 import { FakeServer } from './fakeServer'
 import {
@@ -316,7 +317,9 @@ export class Lab {
     let ctx: RunContext | null = null
     let sampler: NodeJS.Timeout | null = null
     try {
+      await this.sweepLeftovers(hooks)
       simNetworks.enable()
+      this.deps.resetPlanner()
       await this.deps.networks.refresh()
       const port = mode === 'verify' ? await plan.verifyPort?.() : undefined
       await this.server.start(port)
@@ -450,6 +453,23 @@ export class Lab {
     this.abort = null
     this.emitNow()
     return structuredClone(run)
+  }
+
+  /** A plan that died badly may have left downloads behind: they would poison this one, so they
+   * go, loudly. (The restart plan's own files are not touched.) */
+  private async sweepLeftovers(hooks: RunHooks): Promise<void> {
+    const mine = (path: string): boolean =>
+      path.includes('plexo-lab-') && !path.includes('plexo-lab-restart')
+    const ids = this.deps.manager
+      .liveStates()
+      .filter((s) => mine(s.destinationPath))
+      .map((s) => s.id)
+    const finished = (await listHistory().catch(() => [])).filter((e) => mine(e.destinationPath))
+    for (const entry of finished) ids.push(entry.id)
+    if (ids.length === 0) return
+    log.error('lab', `${ids.length} download(s) left by an earlier plan were found and removed`)
+    hooks.note(`LEFTOVERS from an earlier plan were removed: ${ids.length} download(s)`)
+    for (const id of ids) await this.deps.manager.remove(id).catch(() => {})
   }
 
   private collectPlanLog(ctx: RunContext, run: LabPlanRun): void {

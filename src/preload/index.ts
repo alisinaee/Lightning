@@ -7,7 +7,8 @@ import type {
   DownloadUpdate,
   GroupPatch,
   InitialState,
-  NetworkInterfaceInfo
+  NetworkInterfaceInfo,
+  SettingsPush
 } from '../shared/types'
 
 /** Typed wrapper around ipcRenderer.invoke — the channel name picks its args/result shape out of
@@ -37,6 +38,7 @@ const plexoApi = {
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   readClipboardText: () => invoke('readClipboardText'),
   revealInFolder: (filePath: string) => invoke('revealInFolder', filePath),
+  openDownloadedFile: (id: string) => invoke('openDownloadedFile', id),
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>
     invoke('startDownload', request),
   listDownloads: () => invoke('listDownloads'),
@@ -72,6 +74,13 @@ const plexoApi = {
   labRunAll: () => invoke('labRunAll'),
   labVerify: (planId: string) => invoke('labVerify', planId),
   labStop: () => invoke('labStop'),
+
+  /** Settings were changed from main (the Test lab): the switches must follow. */
+  onSettingsChanged: (callback: (settings: SettingsPush) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, settings: SettingsPush): void => callback(settings)
+    ipcRenderer.on(IpcChannels.settingsChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.settingsChanged, listener)
+  },
 
   /** The Test lab's state changed (a step, an assertion, a sample). */
   onLabEvent: (callback: (event: LabEvent) => void): (() => void) => {

@@ -10,6 +10,7 @@ export const IpcChannels = {
   chooseTorrentFile: 'dialog:choose-torrent-file',
   readClipboardText: 'clipboard:read-text',
   revealInFolder: 'shell:reveal-in-folder',
+  openDownloadedFile: 'shell:open-downloaded-file',
   startDownload: 'download:start',
   listDownloads: 'download:list',
   listHistory: 'history:list',
@@ -44,5 +45,6 @@ export const IpcChannels = {
   labRunAll: 'lab:run-all',
   labVerify: 'lab:verify',
   labStop: 'lab:stop',
-  labEvent: 'lab:event'
+  labEvent: 'lab:event',
+  settingsChanged: 'app:settings-changed'
 } as const

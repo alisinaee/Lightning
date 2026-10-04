@@ -1,4 +1,5 @@
 import { connectionsOnly, isVpn } from '@shared/networks'
+import type { FileKind } from '../utils/fileKind'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
 import type {
   AppSettings,
@@ -31,7 +32,42 @@ function loadGroupUi(): Record<string, GroupUi> {
   }
 }
 
-export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
+/** What the list shows by status: the menu's four, and the sidebar's finer ones. */
+export type DownloadFilter =
+  'all' | 'progress' | 'finished' | 'failed' | 'downloading' | 'queued' | 'paused'
+
+/** The list's columns, as the user left them (see components/downloads/columns.ts). */
+export type ColumnId = 'name' | 'size' | 'status' | 'speed' | 'eta' | 'added' | 'connections'
+export type SortKey = ColumnId
+export interface TableLayout {
+  sort: { key: SortKey; dir: 'asc' | 'desc' }
+  widths: Partial<Record<ColumnId, number>>
+  hidden: ColumnId[]
+}
+
+const TABLE_KEY = 'plexo.table'
+const DEFAULT_TABLE: TableLayout = { sort: { key: 'status', dir: 'asc' }, widths: {}, hidden: [] }
+
+function loadTable(): TableLayout {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TABLE_KEY) ?? '{}') as Partial<TableLayout>
+    return {
+      sort: parsed.sort?.key && parsed.sort.dir ? parsed.sort : DEFAULT_TABLE.sort,
+      widths: parsed.widths ?? {},
+      hidden: Array.isArray(parsed.hidden) ? parsed.hidden : []
+    }
+  } catch {
+    return DEFAULT_TABLE
+  }
+}
+
+function saveTable(layout: TableLayout): void {
+  try {
+    localStorage.setItem(TABLE_KEY, JSON.stringify(layout))
+  } catch {
+    // Not remembered across launches; still kept for this one.
+  }
+}
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -72,6 +108,17 @@ interface AppStore {
   view: View
   downloadFilter: DownloadFilter
   setDownloadFilter: (filter: DownloadFilter) => void
+  /** The sidebar's file-type group, or null for every kind. */
+  kindFilter: FileKind | null
+  setKindFilter: (kind: FileKind | null) => void
+  /** The search box over the list. */
+  search: string
+  setSearch: (text: string) => void
+  /** Sort, column widths and hidden columns of the downloads table; remembered. */
+  tableLayout: TableLayout
+  sortBy: (key: SortKey) => void
+  setColumnWidth: (id: ColumnId, width: number) => void
+  toggleColumn: (id: ColumnId) => void
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
   /** The Add several links dialog. */
@@ -167,6 +214,41 @@ export const useAppStore = create<AppStore>((set, get) => ({
   view: { name: 'list' },
   downloadFilter: 'all',
   setDownloadFilter: (downloadFilter) => set({ downloadFilter }),
+  kindFilter: null,
+  setKindFilter: (kindFilter) => set({ kindFilter }),
+  search: '',
+  setSearch: (search) => set({ search }),
+  tableLayout: loadTable(),
+  // Clicking the sorted column flips it; another column starts ascending.
+  sortBy: (key) => {
+    const { sort } = get().tableLayout
+    const tableLayout = {
+      ...get().tableLayout,
+      sort: {
+        key,
+        dir: sort.key === key && sort.dir === 'asc' ? ('desc' as const) : ('asc' as const)
+      }
+    }
+    set({ tableLayout })
+    saveTable(tableLayout)
+  },
+  setColumnWidth: (id, width) => {
+    const tableLayout = {
+      ...get().tableLayout,
+      widths: { ...get().tableLayout.widths, [id]: Math.round(width) }
+    }
+    set({ tableLayout })
+    saveTable(tableLayout)
+  },
+  toggleColumn: (id) => {
+    const { hidden } = get().tableLayout
+    const tableLayout = {
+      ...get().tableLayout,
+      hidden: hidden.includes(id) ? hidden.filter((other) => other !== id) : [...hidden, id]
+    }
+    set({ tableLayout })
+    saveTable(tableLayout)
+  },
   newDownloadOpen: false,
   multiLinksOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,

@@ -154,3 +154,14 @@ test('plan 16 survives a restart', async () => {
   const second = await page.evaluate(() => window.plexo.labVerify('16'))
   expect(second.status, second.report).toBe('pass')
 })
+
+test('Run all completes end to end', async () => {
+  test.skip(!PLANS.includes('runall'), 'set LAB_PLANS=runall (about 12 minutes)')
+  test.setTimeout(30 * 60_000)
+  const began = Date.now()
+  const state = await page.evaluate(() => window.plexo.labRunAll())
+  console.log(`Run all took ${((Date.now() - began) / 1000).toFixed(0)} s\n${state.report}`)
+  const failed = Object.values(state.runs).filter((run) => run.status !== 'pass')
+  expect(failed.map((run) => run.report)).toEqual([])
+  expect(state.simActive).toBe(false)
+})

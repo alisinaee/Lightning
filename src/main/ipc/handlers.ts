@@ -21,12 +21,13 @@ import {
   type GroupInfo,
   type GroupPatch,
   type InitialState,
+  type SettingsPush,
   type StartDownloadRequest,
   type ThemeSource
 } from '../../shared/types'
 import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
-import { listHistory } from '../download/history'
+import { findInHistory, listHistory } from '../download/history'
 import { probeUrl } from '../download/probe'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
@@ -163,6 +164,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const saved = await loadSettings()
     networks.useVpn = saved.useVpn ?? false
     manager.applySettings(saved)
+    const window = getWindow()
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(IpcChannels.settingsChanged, {
+        downloadsAtOnce: saved.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
+        speedLimit: saved.speedLimit,
+        slowMode: saved.slowMode ?? false,
+        slowModeSpeed: saved.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
+        useVpn: saved.useVpn ?? false
+      } satisfies SettingsPush)
+    }
   }
   handle('updateSettings', async (_event, patch) => applySettings(patch))
 
@@ -245,6 +256,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('revealInFolder', async (_event, filePath) => {
     shell.showItemInFolder(filePath)
+  })
+
+  // Only a download Plexo knows can be opened: the window sends an id, never a path to run.
+  handle('openDownloadedFile', async (_event, id) => {
+    const path =
+      (await findInHistory(id))?.destinationPath ??
+      (await manager.listDownloads()).find((entry) => entry.state.id === id)?.state.destinationPath
+    if (!path) throw new Error('That download is no longer listed.')
+    const failure = await shell.openPath(path)
+    if (failure) throw new Error(failure)
   })
 
   handle('startDownload', async (_event, request) => manager.start(request))
@@ -351,6 +372,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     groups,
     networks,
     readSettings: loadSettings,
+    resetPlanner: () => autoScheduler.forgetBaselines(),
     ops: {
       applySettings,
       createGroup,

@@ -20,3 +20,8 @@ export function useVpnLayer(): {
   const setOn = useAppStore((store) => store.setUseVpn)
   return { detected: tunnels.length > 0, on, tunnels, setOn }
 }
+
+/** What the VPN layer is doing, in a sentence. */
+export function describeVpn(on: boolean, tunnels: string[]): string {
+  return on ? `On — via ${tunnels.join(', ')}` : 'Off — downloads use your real connections'
+}

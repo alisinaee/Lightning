@@ -23,6 +23,8 @@ export const MUCH_FASTER = 3
 export const STEAL_SHARE = 0.25
 export const STEAL_MIN_BYTES = 50 * 1024 * 1024
 const BASELINE_WEIGHT = 0.3
+/** Samples needed before a median is taken as the speed a network holds (and the baseline). */
+const SUSTAIN_SAMPLES = 5
 
 export type TrackState = 'fast' | 'slow'
 
@@ -52,7 +54,10 @@ const median = (values: number[]): number => {
 /** The speed a network holds, not a spike: the middle of its last five seconds. */
 export function sustained(track: Track): number {
   if (track.samples.length === 0) return track.baseline
-  return median(track.samples.slice(-5))
+  // A connection's first seconds are often a burst out of socket buffers: with fewer than five
+  // samples the lowest one stands for it, so a reading never claims more than was delivered.
+  if (track.samples.length < SUSTAIN_SAMPLES) return Math.min(...track.samples)
+  return median(track.samples.slice(-SUSTAIN_SAMPLES))
 }
 
 export interface TrackChange {
@@ -71,8 +76,8 @@ export function trackNetwork(
   const samples = [...track.samples, sample].slice(-HISTORY_SECONDS)
   let { baseline, state, lastFasterAt } = track
   let change: TrackChange | undefined
-  const now5 = median(samples.slice(-5))
-  if (samples.length >= 3 && now5 > baseline) {
+  const now5 = median(samples.slice(-SUSTAIN_SAMPLES))
+  if (samples.length >= SUSTAIN_SAMPLES && now5 > baseline) {
     if (baseline > 0 && now5 > baseline * SPEEDUP_RATIO && now - lastFasterAt > COOLDOWN_MS) {
       change = { kind: 'faster', from: baseline, to: now5 }
       lastFasterAt = now

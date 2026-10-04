@@ -3,6 +3,7 @@ import {
   COOLDOWN_MS,
   newTrack,
   planGroup,
+  sustained,
   trackNetwork,
   type PlanAction,
   type PlanNetworkInput,
@@ -268,4 +269,17 @@ test('a pinned file is never changed, and its load is planned around', () => {
     ]
   })
   expect(result.assignments).toEqual({ p: 'eth', x: 'wifi' })
+})
+
+test("a burst in a network's first seconds is not taken as its speed", () => {
+  let track = newTrack()
+  const burst = [6e6, 5e6, 1e6, 1e6, 1e6, 1e6, 1e6]
+  const seen: number[] = []
+  burst.forEach((sample, i) => {
+    track = trackNetwork(track, sample, 1000 * (i + 1)).track
+    seen.push(sustained(track))
+  })
+  // From the third second on the reading is the steady speed, never the burst.
+  expect(seen.slice(2)).toEqual([1e6, 1e6, 1e6, 1e6, 1e6])
+  expect(track.baseline).toBeLessThan(4e6)
 })

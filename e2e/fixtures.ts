@@ -1,7 +1,7 @@
 import type {} from '../src/preload/globals'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
@@ -105,9 +105,26 @@ export class PlexoApp {
     private extraEnv: Record<string, string> = {}
   ) {}
 
+  /** The startup update check would ask GitHub, and a real newer release then raises a dialog
+   * over every test. A pretend release, already dismissed, keeps the window clear (a test that
+   * wants the dialog sets PLEXO_FORCE_UPDATE_VERSION itself). */
+  private async quietUpdateCheck(): Promise<void> {
+    const file = join(this.dirs.userData, 'app-settings.json')
+    let saved: Record<string, unknown> = {}
+    try {
+      saved = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>
+    } catch {
+      // No settings yet.
+    }
+    if (saved.dismissedUpdateVersion !== undefined) return
+    await mkdir(this.dirs.userData, { recursive: true })
+    await writeFile(file, JSON.stringify({ ...saved, dismissedUpdateVersion: '0.0.1-e2e' }))
+  }
+
   /** `args` follow the app on its command line, as a link the OS hands over would. */
   async launch(extraEnv: Record<string, string> = {}, args: string[] = []): Promise<this> {
     Object.assign(this.extraEnv, extraEnv)
+    await this.quietUpdateCheck()
     let retries = 5
     while (true) {
       try {
@@ -130,6 +147,7 @@ export class PlexoApp {
             PLEXO_E2E_INTERFACES: interfacesEnv(NETWORKS),
             // Torrent tests find their peers from the link itself; a run never joins the real DHT.
             PLEXO_E2E_DHT: '0',
+            PLEXO_FORCE_UPDATE_VERSION: '0.0.1-e2e',
             ...this.extraEnv
           }
         })

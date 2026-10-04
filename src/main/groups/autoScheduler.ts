@@ -82,6 +82,12 @@ export class AutoScheduler {
     this.active.add(groupId)
   }
 
+  /** Starts the next group from nothing known of the networks (the Test lab's simulated networks
+   * reuse their names between plans, so what one plan taught would mislead the next). */
+  forgetBaselines(): void {
+    this.baselines.clear()
+  }
+
   forget(groupId: string): void {
     this.active.delete(groupId)
     this.measuring.delete(groupId)

@@ -172,6 +172,8 @@ export interface LabDeps {
   networks: NetworkMonitor
   ops: LabOps
   readSettings(): Promise<AppSettings>
+  /** Forgets what the Auto planner learned of each network. */
+  resetPlanner(): void
   push(): void
 }
 
@@ -651,6 +653,20 @@ export class RunContext implements LabContext {
       }
       const left = this.live().length
       if (left > 0) problems.push(`${left} download(s) are still listed`)
+      this.history.at = 0
+      const kept = (await this.historyEntries(0)).length
+      if (kept > 0) problems.push(`${kept} entr(ies) are still in the history`)
+      // Anything in this plan's folder, listed under whatever link it came from.
+      const stray = this.deps.manager
+        .liveStates()
+        .filter((s) => s.destinationPath.startsWith(this.dir))
+      if (stray.length > 0) problems.push(`${stray.length} stray download(s) in the plan's folder`)
+      const open = this.server.networks().reduce((n, net) => n + net.connections, 0)
+      if (open > 0) {
+        await this.sleep(1500).catch(() => {})
+        const still = this.server.networks().reduce((n, net) => n + net.connections, 0)
+        if (still > 0) problems.push(`${still} connection(s) to the lab server are still open`)
+      }
     }
     for (const restore of this.restores.reverse()) await attempt('restore', restore)
     const before = [...this.settingsBefore]

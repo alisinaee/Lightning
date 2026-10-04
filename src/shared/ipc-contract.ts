@@ -14,7 +14,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged, labEvent and linkReceived) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged, labEvent, settingsChanged and linkReceived) — one source of truth for
  * both plexoApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -28,6 +28,8 @@ export interface IpcContract {
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
   revealInFolder: { args: [filePath: string]; result: void }
+  /** Opens a finished download's file with the app the OS has for it. */
+  openDownloadedFile: { args: [id: string]; result: void }
   startDownload: { args: [request: StartDownloadRequest]; result: string }
   /** Every download, oldest first, each as a snapshot. */
   listDownloads: { args: []; result: DownloadUpdate[] }

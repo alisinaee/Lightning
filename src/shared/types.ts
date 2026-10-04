@@ -460,3 +460,10 @@ export interface GroupPatch {
   name?: string
   mode?: GroupMode
 }
+
+/** The settings the window shows, as main pushes them when something other than the window
+ * changed them (the Test lab). */
+export type SettingsPush = Pick<
+  InitialState,
+  'downloadsAtOnce' | 'speedLimit' | 'slowMode' | 'slowModeSpeed' | 'useVpn'
+>
