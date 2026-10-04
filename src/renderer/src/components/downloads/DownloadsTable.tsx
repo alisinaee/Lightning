@@ -16,7 +16,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
-import { ACTIONS_WIDTH, COLUMNS, ColumnsContext, layoutColumns } from './columns'
+import { ACTIONS_WIDTH, COLUMNS, ColumnsContext, columnOf, layoutColumns } from './columns'
 
 const HIDEABLE = COLUMNS.filter((column) => column.canHide)
 
@@ -98,7 +98,8 @@ export function DownloadsTable({
         />
       </div>
       {layout.visible.map((id, index) => {
-        const column = COLUMNS.find((entry) => entry.id === id)!
+        const column = columnOf(id)
+        if (!column) return null
         const active = sort.key === id
         const next = layout.visible[index + 1]
         const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown

@@ -5,6 +5,7 @@ import { CombineDiagram } from '../components/CombineDiagram'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
 import { DownloadRow } from '../components/downloads/DownloadRow'
 import type { RowHandlers } from '../components/downloads/rowHelpers'
+import { TableBoundary } from '../components/downloads/TableBoundary'
 import { DownloadsTable } from '../components/downloads/DownloadsTable'
 import { GroupTableRow } from '../components/downloads/GroupRows'
 import { DownloadsSidebar } from '../components/downloads/Sidebar'
@@ -543,53 +544,55 @@ export function DownloadsScreen(): React.JSX.Element {
               canClear={history.length > 0}
               onClear={() => void window.plexo.clearHistory()}
             />
-            <DownloadsTable
-              allSelected={items.length > 0 && chosen.length === items.length}
-              someSelected={chosen.length > 0 && chosen.length < items.length}
-              selectable={items.length > 0}
-              onSelectAll={(on) =>
-                setSelected(on ? new Set(items.map((item) => item.id)) : new Set())
-              }
-            >
-              {shown.length === 0 && (
-                <div
-                  role="status"
-                  className="flex flex-col items-center gap-2 px-5 py-16 text-center"
-                >
-                  <p className="text-[16px] font-semibold">
-                    {kindFilter !== null || search.trim() !== ''
-                      ? 'No matching downloads'
-                      : (EMPTY_MESSAGES[filter] ?? 'No downloads')}
-                  </p>
-                  <Button type="button" variant="secondary" onClick={showAll}>
-                    Show all downloads
-                  </Button>
-                </div>
-              )}
-              {shown.map((entry) =>
-                entry.type === 'item' ? (
-                  <DownloadRow
-                    key={entry.id}
-                    item={entry.item}
-                    queuePosition={positions.get(entry.id)}
-                    selected={selected.has(entry.id)}
-                    handlers={handlers}
-                    getVisual={getVisual}
-                    visualsKey={visualsKey}
-                  />
-                ) : (
-                  <GroupTableRow
-                    key={entry.id}
-                    entry={entry.entry}
-                    selected={selected}
-                    getVisual={getVisual}
-                    onToggle={toggle}
-                    onSelect={selectRow}
-                    onOpen={openRow}
-                  />
-                )
-              )}
-            </DownloadsTable>
+            <TableBoundary>
+              <DownloadsTable
+                allSelected={items.length > 0 && chosen.length === items.length}
+                someSelected={chosen.length > 0 && chosen.length < items.length}
+                selectable={items.length > 0}
+                onSelectAll={(on) =>
+                  setSelected(on ? new Set(items.map((item) => item.id)) : new Set())
+                }
+              >
+                {shown.length === 0 && (
+                  <div
+                    role="status"
+                    className="flex flex-col items-center gap-2 px-5 py-16 text-center"
+                  >
+                    <p className="text-[16px] font-semibold">
+                      {kindFilter !== null || search.trim() !== ''
+                        ? 'No matching downloads'
+                        : (EMPTY_MESSAGES[filter] ?? 'No downloads')}
+                    </p>
+                    <Button type="button" variant="secondary" onClick={showAll}>
+                      Show all downloads
+                    </Button>
+                  </div>
+                )}
+                {shown.map((entry) =>
+                  entry.type === 'item' ? (
+                    <DownloadRow
+                      key={entry.id}
+                      item={entry.item}
+                      queuePosition={positions.get(entry.id)}
+                      selected={selected.has(entry.id)}
+                      handlers={handlers}
+                      getVisual={getVisual}
+                      visualsKey={visualsKey}
+                    />
+                  ) : (
+                    <GroupTableRow
+                      key={entry.id}
+                      entry={entry.entry}
+                      selected={selected}
+                      getVisual={getVisual}
+                      onToggle={toggle}
+                      onSelect={selectRow}
+                      onOpen={openRow}
+                    />
+                  )
+                )}
+              </DownloadsTable>
+            </TableBoundary>
           </>
         )}
       </div>

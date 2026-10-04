@@ -78,7 +78,7 @@ export function SizeCell({
 
 /** Icon and word, and under them a slim bar while it is under way, or why it failed. */
 export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
-  const style = STATUS_STYLE[info.status]
+  const style = STATUS_STYLE[info.status] ?? STATUS_STYLE.paused
   const Icon = style.icon
   const moving = info.status === 'downloading'
   return (

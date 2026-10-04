@@ -48,16 +48,49 @@ export interface TableLayout {
 const TABLE_KEY = 'plexo.table'
 const DEFAULT_TABLE: TableLayout = { sort: { key: 'status', dir: 'asc' }, widths: {}, hidden: [] }
 
+const COLUMN_IDS: ColumnId[] = ['name', 'size', 'status', 'speed', 'eta', 'added', 'connections']
+
+/** A saved table layout made safe to use: unknown columns dropped, widths numbers in a sane range,
+ * the name and status columns never hidden, and the defaults for anything unreadable. */
+export function sanitizeTable(raw: unknown): TableLayout {
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const known = (id: unknown): id is ColumnId => COLUMN_IDS.includes(id as ColumnId)
+  const sort = parsed.sort as { key?: unknown; dir?: unknown } | undefined
+  const widths: Partial<Record<ColumnId, number>> = {}
+  if (parsed.widths && typeof parsed.widths === 'object') {
+    for (const [id, width] of Object.entries(parsed.widths)) {
+      if (known(id) && typeof width === 'number' && Number.isFinite(width)) {
+        widths[id] = Math.min(2000, Math.max(20, Math.round(width)))
+      }
+    }
+  }
+  const hidden = Array.isArray(parsed.hidden)
+    ? [...new Set(parsed.hidden.filter(known))].filter((id) => id !== 'name' && id !== 'status')
+    : []
+  return {
+    sort:
+      sort && known(sort.key) && (sort.dir === 'asc' || sort.dir === 'desc')
+        ? { key: sort.key, dir: sort.dir }
+        : DEFAULT_TABLE.sort,
+    widths,
+    hidden
+  }
+}
+
 function loadTable(): TableLayout {
   try {
-    const parsed = JSON.parse(localStorage.getItem(TABLE_KEY) ?? '{}') as Partial<TableLayout>
-    return {
-      sort: parsed.sort?.key && parsed.sort.dir ? parsed.sort : DEFAULT_TABLE.sort,
-      widths: parsed.widths ?? {},
-      hidden: Array.isArray(parsed.hidden) ? parsed.hidden : []
-    }
+    return sanitizeTable(JSON.parse(localStorage.getItem(TABLE_KEY) ?? '{}'))
   } catch {
     return DEFAULT_TABLE
+  }
+}
+
+/** Forgets the saved layout: the table is as it first was. */
+function forgetTable(): void {
+  try {
+    localStorage.removeItem(TABLE_KEY)
+  } catch {
+    // Nothing saved to forget.
   }
 }
 
@@ -119,6 +152,8 @@ interface AppStore {
   sortBy: (key: SortKey) => void
   setColumnWidth: (id: ColumnId, width: number) => void
   toggleColumn: (id: ColumnId) => void
+  /** Back to the default layout, forgetting the saved one. */
+  resetTableLayout: () => void
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
   /** The Add several links dialog. */
@@ -248,6 +283,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
     set({ tableLayout })
     saveTable(tableLayout)
+  },
+  resetTableLayout: () => {
+    forgetTable()
+    set({ tableLayout: DEFAULT_TABLE })
   },
   newDownloadOpen: false,
   multiLinksOpen: false,

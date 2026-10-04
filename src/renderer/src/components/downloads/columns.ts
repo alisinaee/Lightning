@@ -59,6 +59,9 @@ export const COLUMNS: ColumnDef[] = [
   }
 ]
 
+export const columnOf = (id: ColumnId): ColumnDef | undefined =>
+  COLUMNS.find((def) => def.id === id)
+
 const SELECT_WIDTH = 36
 export const ACTIONS_WIDTH = 132
 /** What the name column keeps at least, before columns start to drop out. */
@@ -101,7 +104,10 @@ export function layoutColumns(layout: TableLayout, available: number): ColumnLay
   return {
     visible: shown.map((def) => def.id),
     template,
-    widthOf: (id) => width(COLUMNS.find((def) => def.id === id)!)
+    widthOf: (id) => {
+      const def = columnOf(id)
+      return def ? width(def) : 0
+    }
   }
 }
 
