@@ -330,6 +330,12 @@ export class DownloadManager {
       .filter((state) => state.groupId === groupId)
   }
 
+  /** Every download still in the list, as live state: read it, don't change it. Finished ones
+   * are in history. (For the Test lab.) */
+  liveStates(): readonly DownloadState[] {
+    return [...this.runtimes.values()].map((runtime) => runtime.state)
+  }
+
   /** Every group id some download, finished or not, still belongs to. */
   async groupIdsInUse(): Promise<Set<string>> {
     await this.initialization

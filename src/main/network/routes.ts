@@ -10,6 +10,7 @@ import { Agent as HttpsAgent, request as httpsRequest } from 'node:https'
 import { isIP, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
 import type { IpFamily, NetworkInterfaceInfo } from '../../shared/types'
+import { simNetworks } from '../debug/simNetworks'
 import { testInterfaces } from '../testKnobs'
 import { connectRoute } from './deviceBinding'
 
@@ -366,10 +367,11 @@ export class StreamConnection {
     this.https.destroy()
   }
 
-  /** Dev fake-network mode only (never packaged): every fake network shares 127.0.0.1, so the
-   * request names its network for scripts/fake-server.mjs to throttle each one separately. */
+  /** Fake-network mode only (the Test lab's simulated networks, or an unpackaged dev run with
+   * fake interfaces): every fake network shares 127.0.0.1, so the request names its network for
+   * the fake server to throttle each one separately. */
   private tagged(headers: Record<string, string>): Record<string, string> {
-    const id = testInterfaces() ? this.network()?.id : undefined
+    const id = simNetworks.isActive() || testInterfaces() ? this.network()?.id : undefined
     return id ? { ...headers, 'X-Plexo-Network': id } : headers
   }
 

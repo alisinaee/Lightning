@@ -37,5 +37,12 @@ export const IpcChannels = {
   networksChanged: 'network:changed',
   linkReceived: 'app:link-received',
   takePendingLink: 'app:take-pending-link',
-  checkForUpdate: 'update:check'
+  checkForUpdate: 'update:check',
+  labList: 'lab:list',
+  labGetState: 'lab:get-state',
+  labRun: 'lab:run',
+  labRunAll: 'lab:run-all',
+  labVerify: 'lab:verify',
+  labStop: 'lab:stop',
+  labEvent: 'lab:event'
 } as const

@@ -1,3 +1,4 @@
+import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
   CreateGroupInput,
@@ -13,7 +14,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged and linkReceived) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged, labEvent and linkReceived) — one source of truth for
  * both plexoApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -75,4 +76,14 @@ export interface IpcContract {
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
   takePendingLink: { args: []; result: string | null }
+  /** The Test lab (main/debug/lab.ts): its plans, and what a run (or the last run) has done. */
+  labList: { args: []; result: LabPlanInfo[] }
+  labGetState: { args: []; result: LabState }
+  /** Runs one plan to its end and gives how it went; the window follows it through labEvent. */
+  labRun: { args: [planId: string]; result: LabPlanRun }
+  labRunAll: { args: []; result: LabState }
+  /** The second half of a plan that needed Plexo restarted. */
+  labVerify: { args: [planId: string]; result: LabPlanRun }
+  /** Stops the running plan (it cleans up first) and brings the real networks back. */
+  labStop: { args: []; result: void }
 }

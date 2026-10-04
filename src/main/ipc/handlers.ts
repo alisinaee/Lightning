@@ -16,6 +16,10 @@ import type { IpcContract } from '../../shared/ipc-contract'
 import {
   DEFAULT_SLOW_MODE_SPEED,
   DOWNLOADS_AT_ONCE,
+  type AppSettings,
+  type CreateGroupInput,
+  type GroupInfo,
+  type GroupPatch,
   type InitialState,
   type StartDownloadRequest,
   type ThemeSource
@@ -28,6 +32,7 @@ import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
 import { measureLatencies } from '../network/latency'
 import { NetworkMonitor } from '../network/interfaces'
+import { Lab } from '../debug/lab'
 import { AutoScheduler } from '../groups/autoScheduler'
 import { GroupStore } from '../groups/groupStore'
 import { log } from '../logger'
@@ -147,7 +152,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   const currentThemeSource = (): ThemeSource =>
     nativeTheme.themeSource === 'dark' ? 'dark' : 'light'
 
-  handle('updateSettings', async (_event, patch) => {
+  const applySettings = async (patch: AppSettings): Promise<void> => {
     // The one setting main also applies — before saving, so a failed write still switches the
     // window to the theme the toggle now shows.
     if (patch?.themeSource === 'light' || patch?.themeSource === 'dark') {
@@ -158,7 +163,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const saved = await loadSettings()
     networks.useVpn = saved.useVpn ?? false
     manager.applySettings(saved)
-  })
+  }
+  handle('updateSettings', async (_event, patch) => applySettings(patch))
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
   // throw here must still reply (with no saved values) rather than leave the window never showing.
@@ -253,28 +259,34 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     return groups.list()
   })
 
-  handle('createGroup', async (_event, input) => {
+  const createGroup = async (
+    input: CreateGroupInput
+  ): Promise<{ group: GroupInfo; failed: string[] }> => {
     await groups.loaded
     const created = groups.create({ ...input, fileCount: input.requests.length })
     const failed = await addToGroup(created.id, input.requests)
     const group = groups.get(created.id)
     if (!group) throw new Error('The group could not be created.')
     return { group, failed }
-  })
+  }
 
-  handle('updateGroup', async (_event, id, patch) => {
+  const updateGroup = async (id: string, patch: GroupPatch): Promise<void> => {
     groups.update(id, patch)
     const group = groups.get(id)
     if (!group) return
     if (patch.mode === 'manual') await autoScheduler.startPending(group)
     else if (patch.mode === 'auto') autoScheduler.activate(id)
-  })
+  }
 
-  handle('removeGroup', async (_event, id, options) => {
+  const removeGroup = async (id: string, options?: { trashFiles?: boolean }): Promise<void> => {
     autoScheduler.forget(id)
     groups.remove(id)
     await manager.removeGroupDownloads(id, options?.trashFiles === true)
-  })
+  }
+
+  handle('createGroup', async (_event, input) => createGroup(input))
+  handle('updateGroup', async (_event, id, patch) => updateGroup(id, patch))
+  handle('removeGroup', async (_event, id, options) => removeGroup(id, options))
 
   handle('addGroupItems', async (_event, id, requests) => ({
     failed: await addToGroup(id, requests)
@@ -332,6 +344,42 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const { dismissedUpdateVersion } = await loadSettings()
     return { ...info, dismissed: info.version === dismissedUpdateVersion }
   })
+
+  // The Test lab (title bar's Debug button) drives the app through the same operations as above.
+  const lab = new Lab({
+    manager,
+    groups,
+    networks,
+    readSettings: loadSettings,
+    ops: {
+      applySettings,
+      createGroup,
+      updateGroup,
+      removeGroup: (id) => removeGroup(id),
+      addGroupItems: async (id, requests) => ({ failed: await addToGroup(id, requests) }),
+      setGroupFileChoice: async (id, fileId, chosen) => groups.choose(id, fileId, chosen),
+      // What the window's Resume does for a group: its paused files go on, and an auto group's
+      // planner is let loose on the files still waiting.
+      resumeGroup: async (id) => {
+        autoScheduler.activate(id)
+        for (const state of manager.groupDownloads(id)) {
+          if (state.status === 'paused') manager.resume(state.id)
+        }
+      }
+    },
+    push: () => {
+      const window = getWindow()
+      if (window && !window.isDestroyed()) {
+        window.webContents.send(IpcChannels.labEvent, { kind: 'state', state: lab.getState() })
+      }
+    }
+  })
+  handle('labList', async () => lab.list())
+  handle('labGetState', async () => lab.getState())
+  handle('labRun', async (_event, planId) => lab.run(planId))
+  handle('labRunAll', async () => lab.runAll())
+  handle('labVerify', async (_event, planId) => lab.verify(planId))
+  handle('labStop', async () => lab.stop())
 
   return manager
 }

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
+import type { LabEvent } from '../shared/lab'
 import type {
   AppSettings,
   DownloadUpdate,
@@ -65,6 +66,19 @@ const plexoApi = {
     invoke('setGroupFileChoice', id, fileId, networks),
   checkForUpdate: () => invoke('checkForUpdate'),
   takePendingLink: () => invoke('takePendingLink'),
+  labList: () => invoke('labList'),
+  labGetState: () => invoke('labGetState'),
+  labRun: (planId: string) => invoke('labRun', planId),
+  labRunAll: () => invoke('labRunAll'),
+  labVerify: (planId: string) => invoke('labVerify', planId),
+  labStop: () => invoke('labStop'),
+
+  /** The Test lab's state changed (a step, an assertion, a sample). */
+  onLabEvent: (callback: (event: LabEvent) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, event: LabEvent): void => callback(event)
+    ipcRenderer.on(IpcChannels.labEvent, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.labEvent, listener)
+  },
 
   /** The OS handed Plexo a link (a magnet link, a .torrent): takePendingLink() has it. */
   onLinkReceived: (callback: () => void): (() => void) => {

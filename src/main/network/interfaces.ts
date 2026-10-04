@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
 import { selectableNetworks } from '../../shared/networks'
+import { simNetworks } from '../debug/simNetworks'
 import { testInterfaces } from '../testKnobs'
 import { isVpnInterface } from './vpn'
 
@@ -111,7 +112,7 @@ let labels: {
  * Active non-loopback interfaces, with every usable local address on each device.
  */
 export async function listActiveInterfaces(): Promise<NetworkInterfaceInfo[]> {
-  const overridden = testInterfaces()
+  const overridden = simNetworks.interfaces() ?? testInterfaces()
   if (overridden) return overridden
 
   const all = networkInterfaces()
