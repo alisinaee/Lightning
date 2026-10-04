@@ -409,8 +409,42 @@ export interface PendingGroupItem {
   error?: string
 }
 
+/** One thing the auto planner did or noticed, in plain words. */
+export interface PlanEvent {
+  at: number
+  kind: 'measure' | 'plan' | 'slow' | 'recover' | 'faster' | 'lost' | 'help' | 'release' | 'drop'
+  text: string
+}
+
+export type PlanNetworkState = 'fast' | 'slow' | 'idle' | 'lost'
+
+export interface PlanNetwork {
+  id: string
+  name?: string
+  /** What it delivers now (sustained), bytes a second. */
+  speedBps: number
+  /** The best sustained speed it has shown. */
+  baselineBps: number
+  state: PlanNetworkState
+}
+
+/** How a group is being downloaded and why, for the "How Plexo is downloading this group" panel. */
+export interface GroupPlan {
+  mode: GroupMode
+  measuring: boolean
+  networks: PlanNetwork[]
+  summary: string
+  /** Newest last, at most 50. */
+  log: PlanEvent[]
+}
+
 export interface GroupInfo extends DownloadGroup {
   pending: PendingGroupItem[]
+  plan: GroupPlan
+  /** For each file still waiting (by item id), the network the plan has for it; auto only. */
+  plannedNetworks: Record<string, string>
+  /** Files (downloads or waiting items, by id) whose networks the user chose; Auto leaves them. */
+  pinned: string[]
 }
 
 export interface CreateGroupInput {

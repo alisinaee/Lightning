@@ -65,6 +65,13 @@ export interface IpcContract {
   }
   /** Drops a file of an auto group that hasn't started. */
   removeGroupItem: { args: [id: string, itemId: string]; result: void }
+  /** The user chose the networks of one file of an auto group (`pin`) or gave it back to Auto
+   * (`null`). For a file still waiting its networks are `networks`; a running one was already
+   * switched with setDownloadNetwork. */
+  setGroupFileChoice: {
+    args: [id: string, fileId: string, networks: string[] | null]
+    result: void
+  }
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
   takePendingLink: { args: []; result: string | null }

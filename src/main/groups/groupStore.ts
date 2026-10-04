@@ -5,13 +5,17 @@ import type {
   DownloadGroup,
   GroupInfo,
   GroupMode,
+  GroupPlan,
   PendingGroupItem,
   StartDownloadRequest
 } from '../../shared/types'
+import { log } from '../logger'
 import { readJson, updateJson } from '../jsonFile'
 
 // The groups ("Add several links" batches) and, for an auto group, the files that haven't started
 // yet: they wait here, with what it takes to start them, so the group carries on after a restart.
+
+const EMPTY_PLAN: GroupPlan = { mode: 'auto', measuring: false, networks: [], summary: '', log: [] }
 
 /** A group that has no download for a moment (one is still being set up) isn't dropped at once. */
 const EMPTY_GRACE_MS = 30_000
@@ -19,6 +23,7 @@ const EMPTY_GRACE_MS = 30_000
 interface Saved {
   groups: DownloadGroup[]
   pending: Record<string, PendingGroupItem[]>
+  pins: Record<string, string[]>
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -43,7 +48,7 @@ function isPending(value: unknown): value is PendingGroupItem {
 
 /** The file may be hand-edited or from another version: only what is well formed is kept. */
 function sanitize(parsed: unknown): Saved {
-  const saved: Saved = { groups: [], pending: {} }
+  const saved: Saved = { groups: [], pending: {}, pins: {} }
   if (!isRecord(parsed)) return saved
   if (Array.isArray(parsed.groups)) saved.groups = parsed.groups.filter(isGroup)
   if (isRecord(parsed.pending)) {
@@ -53,11 +58,17 @@ function sanitize(parsed: unknown): Saved {
         saved.pending[group.id] = items.filter(isPending)
     }
   }
+  if (isRecord(parsed.pins)) {
+    for (const group of saved.groups) {
+      const ids = parsed.pins[group.id]
+      if (Array.isArray(ids)) saved.pins[group.id] = ids.filter((id) => typeof id === 'string')
+    }
+  }
   return saved
 }
 
 export class GroupStore {
-  private saved: Saved = { groups: [], pending: {} }
+  private saved: Saved = { groups: [], pending: {}, pins: {} }
   readonly loaded: Promise<void>
 
   /** `onChange` runs after every change, to tell the window. */
@@ -79,9 +90,29 @@ export class GroupStore {
     this.onChange()
   }
 
+  /** Set by the scheduler: how a group is being downloaded and why. */
+  planOf: ((group: GroupInfo) => Pick<GroupInfo, 'plan' | 'plannedNetworks'>) | null = null
+
+  /** Tells the window something changed that isn't saved (the plan). */
+  notify(): void {
+    this.onChange()
+  }
+
   list(): GroupInfo[] {
     return structuredClone(
-      this.saved.groups.map((group) => ({ ...group, pending: this.saved.pending[group.id] ?? [] }))
+      this.saved.groups.map((group) => {
+        const base = {
+          ...group,
+          pending: this.saved.pending[group.id] ?? [],
+          pinned: this.saved.pins[group.id] ?? []
+        }
+        const plan = this.planOf?.({ ...base, plan: EMPTY_PLAN, plannedNetworks: {} })
+        return {
+          ...base,
+          plan: plan?.plan ?? EMPTY_PLAN,
+          plannedNetworks: plan?.plannedNetworks ?? {}
+        }
+      })
     )
   }
 
@@ -121,9 +152,34 @@ export class GroupStore {
     this.save()
   }
 
+  /** The user picked a file's networks (`networks`), or gave it back to Auto (null). */
+  choose(groupId: string, fileId: string, networks: string[] | null): void {
+    const pins = new Set(this.saved.pins[groupId] ?? [])
+    const item = this.saved.pending[groupId]?.find((entry) => entry.id === fileId)
+    if (networks && networks.length > 0) {
+      pins.add(fileId)
+      if (item) item.request.interfaceIds = networks
+      log.info('auto', `You chose ${networks.join(' + ')} for a file, so Auto leaves it alone.`)
+    } else {
+      pins.delete(fileId)
+      log.info('auto', 'A file was given back to Auto.')
+    }
+    if (pins.size > 0) this.saved.pins[groupId] = [...pins]
+    else delete this.saved.pins[groupId]
+    this.save()
+  }
+
+  /** A pinned waiting file started as a download: the pin goes with it. */
+  movePin(groupId: string, itemId: string, downloadId: string): void {
+    const pins = this.saved.pins[groupId]
+    if (!pins?.includes(itemId)) return
+    this.saved.pins[groupId] = [...pins.filter((id) => id !== itemId), downloadId]
+  }
+
   remove(id: string): void {
     this.saved.groups = this.saved.groups.filter((group) => group.id !== id)
     delete this.saved.pending[id]
+    delete this.saved.pins[id]
     this.save()
   }
 

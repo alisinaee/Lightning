@@ -61,6 +61,8 @@ const plexoApi = {
   addGroupItems: (id: string, requests: IpcContract['addGroupItems']['args'][1]) =>
     invoke('addGroupItems', id, requests),
   removeGroupItem: (id: string, itemId: string) => invoke('removeGroupItem', id, itemId),
+  setGroupFileChoice: (id: string, fileId: string, networks: string[] | null) =>
+    invoke('setGroupFileChoice', id, fileId, networks),
   checkForUpdate: () => invoke('checkForUpdate'),
   takePendingLink: () => invoke('takePendingLink'),
 

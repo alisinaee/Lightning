@@ -20,6 +20,7 @@ import {
 } from '../utils/format'
 import { linksIn, probeLinks, requestFor } from '../utils/links'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
+import { chooseConnection, networksOf, type GroupFile } from '../utils/groupFiles'
 import { ConnectionPicker } from './ConnectionPicker'
 import {
   AlertDialog,
@@ -40,6 +41,11 @@ type FileRow =
   | { key: string; name: string; kind: 'live'; download: DownloadState }
   | { key: string; name: string; kind: 'done'; download: DownloadState | FinishedDownload }
   | { key: string; name: string; kind: 'waiting'; item: PendingGroupItem }
+
+const fileOf = (row: Extract<FileRow, { kind: 'live' | 'waiting' }>): GroupFile =>
+  row.kind === 'live'
+    ? { kind: 'download', download: row.download }
+    : { kind: 'waiting', item: row.item }
 
 /** Rename a group, add links to it, take files out, and change which networks each file uses. */
 export function GroupDialog(): React.JSX.Element {
@@ -72,7 +78,10 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
   const networkOptions = useNetworkOptions()
 
   const [name, setName] = useState(group.name)
-  const [text, setText] = useState('')
+  // In the store, so what is typed survives anything that remounts the form.
+  const text = useAppStore((store) => store.groupDrafts[group.id] ?? '')
+  const setDraft = useAppStore((store) => store.setGroupDraft)
+  const setText = (value: string): void => setDraft(group.id, value)
   const [adding, setAdding] = useState(false)
   const [addErrors, setAddErrors] = useState<string[]>([])
   const [removing, setRemoving] = useState<DownloadState | null>(null)
@@ -111,8 +120,6 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     }))
   ]
   const manual = group.mode === 'manual'
-  const nameOf = (id: string): string =>
-    networkOptions.find((option) => option.id === id)?.name ?? id
 
   const run = async (action: () => Promise<unknown>): Promise<void> => {
     setActionError(null)
@@ -131,22 +138,6 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 
   const setMode = (mode: GroupMode): void => {
     if (mode !== group.mode) void run(() => window.plexo.updateGroup(group.id, { mode }))
-  }
-
-  /** Switches the file's networks on and off until they are the ones given. */
-  const setConnection = (download: DownloadState, next: string[]): void => {
-    const current = download.networks
-      .filter((network) => network.enabled)
-      .map((network) => network.id)
-    void run(async () => {
-      // The new ones first, so the file is never left with none (which would pause it).
-      for (const id of next) {
-        if (!current.includes(id)) await window.plexo.setDownloadNetwork(download.id, id, true)
-      }
-      for (const id of current) {
-        if (!next.includes(id)) await window.plexo.setDownloadNetwork(download.id, id, false)
-      }
-    })
   }
 
   const handleAdd = (): void => {
@@ -280,23 +271,31 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
                   {statusOf(row)}
                 </div>
               </div>
-              {row.kind === 'live' &&
-                (manual ? (
-                  <ConnectionPicker
-                    options={networkOptions}
-                    value={row.download.networks
-                      .filter((network) => network.enabled)
-                      .map((network) => network.id)}
-                    label={row.name}
-                    onChange={(ids) => setConnection(row.download, ids)}
-                  />
-                ) : (
-                  <span className="shrink-0 text-[11.5px] text-muted-foreground">
-                    {laneLabel(row.download, nameOf)}
-                  </span>
-                ))}
-              {row.kind === 'waiting' && !manual && (
-                <span className="shrink-0 text-[11.5px] text-muted-foreground">Auto</span>
+              {row.kind !== 'done' && (
+                <ConnectionPicker
+                  options={networkOptions}
+                  value={networksOf(
+                    group,
+                    row.kind === 'live'
+                      ? { kind: 'download', download: row.download }
+                      : { kind: 'waiting', item: row.item }
+                  )}
+                  label={row.name}
+                  auto={
+                    manual
+                      ? undefined
+                      : {
+                          pinned: group.pinned.includes(row.key),
+                          onAuto: () => void run(() => chooseConnection(group, fileOf(row), null))
+                        }
+                  }
+                  onChange={(ids) => void run(() => chooseConnection(group, fileOf(row), ids))}
+                />
+              )}
+              {!manual && group.pinned.includes(row.key) && (
+                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-px text-[10.5px] text-primary">
+                  pinned by you
+                </span>
               )}
               <Tooltip>
                 <TooltipTrigger
@@ -400,13 +399,6 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
       </AlertDialog>
     </div>
   )
-}
-
-/** The network or networks a file is on, for an auto group's list. */
-function laneLabel(download: DownloadState, nameOf: (id: string) => string): string {
-  const on = download.networks.filter((network) => network.enabled)
-  if (on.length === 0) return ''
-  return on.length === 1 ? nameOf(on[0].id) : 'All networks'
 }
 
 function statusOf(row: FileRow): string {

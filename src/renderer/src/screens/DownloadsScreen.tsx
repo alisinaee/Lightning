@@ -18,6 +18,8 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { FixLinkDialog } from '../components/FixLinkDialog'
+import { GroupFileRow } from '../components/GroupFileRow'
+import { GroupPlanPanel } from '../components/GroupPlanPanel'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
 import { TorrentBadge } from '../components/TorrentBadge'
@@ -166,7 +168,8 @@ export function DownloadsScreen(): React.JSX.Element {
   const removeDownload = useAppStore((store) => store.removeDownload)
   const filter = useAppStore((store) => store.downloadFilter)
   const setFilter = useAppStore((store) => store.setDownloadFilter)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const selected = useAppStore((store) => store.selectedDownloads)
+  const setSelected = useAppStore((store) => store.setSelectedDownloads)
   const [fixing, setFixing] = useState<DownloadState | null>(null)
   const [confirmation, setConfirmation] = useState<{
     kind: 'cancel' | 'trash'
@@ -214,7 +217,7 @@ export function DownloadsScreen(): React.JSX.Element {
         }
         return next
       }),
-    []
+    [setSelected]
   )
   // Stable, with the colors resolved once here, so a finished row skips every progress push.
   const networkVisual = useNetworkVisuals()
@@ -532,7 +535,7 @@ export function DownloadsScreen(): React.JSX.Element {
                   selecting={chosen.length > 0}
                   networkVisual={networkVisual}
                   onToggle={toggle}
-                  renderItem={renderItem}
+                  onOpen={openRow}
                 />
               ))}
             </section>
@@ -660,19 +663,29 @@ function GroupRow({
   selecting,
   networkVisual,
   onToggle,
-  renderItem
+  onOpen
 }: {
   entry: GroupEntry
   selected: Set<string>
   selecting: boolean
   networkVisual: ResolveNetworkVisual
   onToggle: (ids: string[], on: boolean) => void
-  renderItem: (item: Item) => React.JSX.Element
+  onOpen: (id: string) => void
 }): React.JSX.Element {
   const { group, items } = entry
   const homeDir = useAppStore((store) => store.homeDir)
   const editGroup = useAppStore((store) => store.editGroup)
-  const [open, setOpen] = useState(false)
+  // In the store, not here: the row moves between sections as its files change state, which
+  // remounts it, and it must stay as the user left it.
+  const open = useAppStore((store) => store.groupUi[group.id]?.open ?? false)
+  const toggleUi = useAppStore((store) => store.toggleGroupUi)
+  const setOpen = (): void => toggleUi(group.id, 'open')
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!open) return
+    const interval = setInterval(() => setNow(Date.now()), 5000)
+    return () => clearInterval(interval)
+  }, [open])
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -683,6 +696,10 @@ function GroupRow({
   const waiting = group.pending.filter((item) => !item.error)
   const done = items.filter((item) => isFinished(item) || item.status === 'completed').length
   const fileCount = items.length + group.pending.length
+  const allDone = fileCount > 0 && done === fileCount
+  const first = items[0]
+  const revealPath =
+    first && 'destinationPath' in first ? first.destinationPath : group.destinationDir
 
   const wanted =
     items.reduce((sum, item) => sum + wantedBytes(item), 0) +
@@ -784,7 +801,7 @@ function GroupRow({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          onClick={setOpen}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card text-muted-foreground">
@@ -853,7 +870,7 @@ function GroupRow({
         <button
           type="button"
           aria-label={open ? `Hide files in ${group.name}` : `Show files in ${group.name}`}
-          onClick={() => setOpen((value) => !value)}
+          onClick={setOpen}
           className="rounded-md p-1 text-muted-foreground transition-colors group-hover/group-row:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
           {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
@@ -865,22 +882,60 @@ function GroupRow({
         </div>
       )}
       {open && (
-        <div className="ml-5 border-l-[0.5px] border-border pl-3">
-          {items.map((item) => renderItem(item))}
-          {group.pending.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 py-2.5 text-[12.5px]">
-              <span className="min-w-0 flex-1 truncate font-medium">
-                {item.request.suggestedFileName}
-              </span>
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-[11.5px]',
-                  item.error ? 'text-[var(--color-danger)]' : 'text-muted-foreground'
-                )}
-              >
-                {item.error ? describeError(item.error) : 'Waiting for a network'}
-              </span>
+        <div className="ml-5 border-l-[0.5px] border-border py-1 pl-3">
+          {group.mode === 'auto' ? (
+            <GroupPlanPanel group={group} live={live} now={now} />
+          ) : (
+            <div className="mb-2 text-[12px] text-muted-foreground">
+              Manual: each file uses the connections you chose. Use the network button on a file to
+              change them.
             </div>
+          )}
+          {allDone && (
+            <div className="mb-1 flex items-center gap-2 text-[12px] text-muted-foreground">
+              <span>All {fileCount} files finished.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => void window.plexo.revealInFolder(revealPath)}
+              >
+                Open folder
+              </Button>
+            </div>
+          )}
+          {fileCount === 0 && (
+            <div className="py-3 text-[12px] text-muted-foreground">No files in this group.</div>
+          )}
+          {items.map((item) => (
+            <GroupFileRow
+              key={item.id}
+              group={group}
+              entry={
+                isFinished(item) || item.status === 'completed'
+                  ? { kind: 'finished', download: item }
+                  : { kind: 'download', download: item }
+              }
+              selected={selected.has(item.id)}
+              selecting={selecting}
+              networkVisual={networkVisual}
+              onSelect={(id, on) => onToggle([id], on)}
+              onOpen={onOpen}
+              onError={setError}
+            />
+          ))}
+          {group.pending.map((item) => (
+            <GroupFileRow
+              key={item.id}
+              group={group}
+              entry={{ kind: 'waiting', item }}
+              selected={false}
+              selecting={selecting}
+              networkVisual={networkVisual}
+              onSelect={() => {}}
+              onOpen={onOpen}
+              onError={setError}
+            />
           ))}
         </div>
       )}

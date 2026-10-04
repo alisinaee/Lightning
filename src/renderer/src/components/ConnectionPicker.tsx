@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react'
+import { Cable, ChevronDown } from 'lucide-react'
 import type { NetworkOption } from '../hooks/useNetworkOptions'
 import { VpnBadge } from './VpnBadge'
 import { Button } from './ui/button'
@@ -13,7 +13,9 @@ export function ConnectionPicker({
   onChange,
   single = false,
   disabled = false,
-  label
+  label,
+  auto,
+  iconOnly = false
 }: {
   options: NetworkOption[]
   value: string[]
@@ -22,6 +24,10 @@ export function ConnectionPicker({
   disabled?: boolean
   /** What the button is called for a screen reader, e.g. the file's name. */
   label: string
+  /** In an Auto group: whether the user pinned this file, and how to give it back to Auto. */
+  auto?: { pinned: boolean; onAuto: () => void }
+  /** A small button with a network icon, for a row of actions. */
+  iconOnly?: boolean
 }): React.JSX.Element {
   const chosen = options.filter((option) => value.includes(option.id))
   const summary =
@@ -43,20 +49,40 @@ export function ConnectionPicker({
     <Popover>
       <PopoverTrigger
         render={
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={disabled || options.length === 0}
-            aria-label={`Networks for ${label}`}
-            className="max-w-[170px] shrink-0 justify-between"
-          >
-            <span className="truncate">{summary}</span>
-            <ChevronDown data-icon="inline-end" />
-          </Button>
+          iconOnly ? (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              disabled={disabled || options.length === 0}
+              aria-label={`Networks for ${label}`}
+              title={auto && !auto.pinned ? 'Choose connections (now Auto)' : 'Choose connections'}
+              className={auto?.pinned ? 'text-primary' : 'text-muted-foreground'}
+            >
+              <Cable />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={disabled || options.length === 0}
+              aria-label={`Networks for ${label}`}
+              className="max-w-[170px] shrink-0 justify-between"
+            >
+              <span className="truncate">{summary}</span>
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          )
         }
       />
       <PopoverContent align="end" className="w-56 gap-1">
+        {auto && (
+          <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] font-medium hover:bg-muted">
+            <Checkbox checked={!auto.pinned} onCheckedChange={(on) => on && auto.onAuto()} />
+            Auto (Plexo decides)
+          </label>
+        )}
         {!single && options.length > 1 && (
           <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] font-medium hover:bg-muted">
             <Checkbox

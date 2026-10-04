@@ -24,6 +24,7 @@ export const IpcChannels = {
   removeGroup: 'group:remove',
   addGroupItems: 'group:add-items',
   removeGroupItem: 'group:remove-item',
+  setGroupFileChoice: 'group:set-file-choice',
   groupsChanged: 'group:changed',
   torrentFiles: 'download:torrent-files',
   pauseDownload: 'download:pause',

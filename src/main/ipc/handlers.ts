@@ -280,6 +280,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     failed: await addToGroup(id, requests)
   }))
 
+  handle('setGroupFileChoice', async (_event, id, fileId, networks) =>
+    groups.choose(id, fileId, networks)
+  )
+
   handle('removeGroupItem', async (_event, id, itemId) => groups.removePending(id, itemId))
 
   handle('clearHistory', async () => manager.clearHistory())

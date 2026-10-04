@@ -14,6 +14,22 @@ import type {
 } from '@shared/types'
 import { create } from 'zustand'
 
+export interface GroupUi {
+  open: boolean
+  decisions: boolean
+}
+
+const GROUP_UI_KEY = 'plexo.groupUi'
+
+function loadGroupUi(): Record<string, GroupUi> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(GROUP_UI_KEY) ?? '{}')
+    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, GroupUi>) : {}
+  } catch {
+    return {}
+  }
+}
+
 export type DownloadFilter = 'all' | 'progress' | 'finished' | 'failed'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -87,6 +103,16 @@ interface AppStore {
   /** Finished downloads as main lists them; any that finished leave `downloads`. */
   receiveHistory: (history: FinishedDownload[]) => void
   receiveGroups: (groups: GroupInfo[]) => void
+  /** Which groups are open in the list, and which have their decisions list open. Kept here (not
+   * in the row) so a row that moves between sections, or remounts, stays as the user left it. */
+  groupUi: Record<string, GroupUi>
+  toggleGroupUi: (id: string, key: keyof GroupUi) => void
+  /** Text typed into a group's "Add links" box, kept while the dialog is open or pushes arrive. */
+  groupDrafts: Record<string, string>
+  setGroupDraft: (id: string, text: string) => void
+  /** The ticked downloads of the list. */
+  selectedDownloads: Set<string>
+  setSelectedDownloads: (next: Set<string> | ((previous: Set<string>) => Set<string>)) => void
   editGroup: (id: string | null) => void
   /** Removes a download (cancelling one under way), or forgets a finished one. */
   removeDownload: (id: string, options?: { trashFile?: boolean }) => void
@@ -230,7 +256,31 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ history, downloads })
   },
 
-  receiveGroups: (groups) => set({ groups }),
+  receiveGroups: (groups) => {
+    // Keep what the window already holds when nothing changed, so a push that brings the same
+    // groups again re-renders nothing.
+    const before = get().groups
+    if (JSON.stringify(before) === JSON.stringify(groups)) return
+    set({ groups })
+  },
+  groupUi: loadGroupUi(),
+  toggleGroupUi: (id, key) => {
+    const current = get().groupUi[id] ?? { open: false, decisions: false }
+    const groupUi = { ...get().groupUi, [id]: { ...current, [key]: !current[key] } }
+    set({ groupUi })
+    try {
+      localStorage.setItem(GROUP_UI_KEY, JSON.stringify(groupUi))
+    } catch {
+      // Not remembered across launches; still kept for this one.
+    }
+  },
+  groupDrafts: {},
+  setGroupDraft: (id, text) => set({ groupDrafts: { ...get().groupDrafts, [id]: text } }),
+  selectedDownloads: new Set<string>(),
+  setSelectedDownloads: (next) =>
+    set({
+      selectedDownloads: typeof next === 'function' ? next(get().selectedDownloads) : next
+    }),
   editGroup: (editingGroupId) => set({ editingGroupId }),
 
   removeDownload: (id, options) => {
