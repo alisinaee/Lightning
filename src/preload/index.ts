@@ -37,7 +37,7 @@ const plexoApi = {
   /** Where a file dropped on the window is on disk ('' for one that isn't a file). */
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   readClipboardText: () => invoke('readClipboardText'),
-  revealInFolder: (filePath: string) => invoke('revealInFolder', filePath),
+  revealDownload: (id: string) => invoke('revealDownload', id),
   openDownloadedFile: (id: string) => invoke('openDownloadedFile', id),
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>
     invoke('startDownload', request),
@@ -48,6 +48,8 @@ const plexoApi = {
   resetNetworkUsage: (id) => invoke('resetNetworkUsage', id),
   freeSpace: (dir: string) => invoke('freeSpace', dir),
   torrentFiles: (downloadId: string) => invoke('torrentFiles', downloadId),
+  chooseTorrentFiles: (downloadId: string, selected: number[]) =>
+    invoke('chooseTorrentFiles', downloadId, selected),
   pauseDownload: (downloadId: string) => invoke('pauseDownload', downloadId),
   resumeDownload: (downloadId: string) => invoke('resumeDownload', downloadId),
   relinkDownload: (downloadId: string, url: string) => invoke('relinkDownload', downloadId, url),

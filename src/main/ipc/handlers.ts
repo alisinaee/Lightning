@@ -254,9 +254,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('readClipboardText', async () => clipboard.readText())
 
-  handle('revealInFolder', async (_event, filePath) => {
-    shell.showItemInFolder(filePath)
-  })
+  handle('revealDownload', async (_event, id) => manager.reveal(id))
 
   // Only a download Plexo knows can be opened: the window sends an id, never a path to run.
   handle('openDownloadedFile', async (_event, id) => {
@@ -327,6 +325,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('freeSpace', async (_event, dir) => freeSpace(dir))
 
   handle('torrentFiles', async (_event, id) => manager.torrentFiles(id))
+  handle('chooseTorrentFiles', async (_event, id, selected) =>
+    manager.chooseTorrentFiles(id, selected)
+  )
 
   handle('pauseDownload', async (_event, id) => {
     await manager.pause(id)

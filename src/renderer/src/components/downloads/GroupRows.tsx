@@ -82,8 +82,8 @@ export function GroupTableRow({
   const fileCount = items.length + group.pending.length
   const allDone = fileCount > 0 && done === fileCount
   const first = items[0]
-  const revealPath =
-    first && 'destinationPath' in first ? first.destinationPath : group.destinationDir
+  // Shown by one of its files (main reveals a download by its id, never a path from here).
+  const revealId = first && 'destinationPath' in first ? first.id : undefined
 
   const wanted =
     items.reduce((sum, item) => sum + wantedBytes(item), 0) +
@@ -287,14 +287,16 @@ export function GroupTableRow({
             {allDone && (
               <div className="mt-2 flex items-center gap-2 text-[12px] text-muted-foreground">
                 <span>All {fileCount} files finished.</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void window.plexo.revealInFolder(revealPath)}
-                >
-                  Open folder
-                </Button>
+                {revealId && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void window.plexo.revealDownload(revealId)}
+                  >
+                    Open folder
+                  </Button>
+                )}
               </div>
             )}
             {fileCount === 0 && (

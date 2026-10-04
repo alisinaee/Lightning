@@ -97,7 +97,7 @@ export const DownloadRow = memo(function DownloadRow({
   const finished = info.status === 'completed'
   const name = item.fileName
   const host = item.kind === 'torrent' ? 'Torrent' : sourceOf(item.url)
-  const reveal = (): void => void window.plexo.revealInFolder(item.destinationPath)
+  const reveal = (): void => void window.plexo.revealDownload(item.id)
   const pause = (): void => void window.plexo.pauseDownload(item.id)
   const resume = (): void => void window.plexo.resumeDownload(item.id)
 
