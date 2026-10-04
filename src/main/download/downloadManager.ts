@@ -29,6 +29,7 @@ import {
   type TorrentInfo
 } from '../../shared/types'
 import { Limits } from '../network/limits'
+import { selectableNetworks } from '../../shared/networks'
 import { loadSettings } from '../settings'
 import { addToHistory, findInHistory, listHistory, removeFromHistory } from './history'
 import { testKnobs } from '../testKnobs'
@@ -741,7 +742,9 @@ export class DownloadManager {
     await this.initialization
 
     const available = await this.networks.refresh()
-    const selected = available.filter((iface) => requestPayload.interfaceIds.includes(iface.id))
+    const selected = selectableNetworks(available, this.networks.useVpn).filter((iface) =>
+      requestPayload.interfaceIds.includes(iface.id)
+    )
     if (selected.length === 0) {
       throw new Error('Select at least one network')
     }

@@ -91,7 +91,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const target = folderName
     ? `${destinationDir.replace(/[\\/]+$/, '')}${separator}${folderName}`
     : destinationDir
-  const enabledIds = defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
+  const enabledIds = defaultNetworkIds(
+    interfaces,
+    useAppStore.getState().networkPreferences,
+    useAppStore.getState().useVpn
+  )
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
   const connectionOf = (url: string): string[] => connections[url] ?? enabledIds
 

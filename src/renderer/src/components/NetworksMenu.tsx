@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { isNetworkOff } from '@shared/networks'
+import { VpnSwitch } from './VpnSwitch'
 import { VpnBadge } from './VpnBadge'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
@@ -79,9 +80,6 @@ export function NetworksMenu({
             New downloads combine the networks turned on here. You can change this for any single
             download.
           </div>
-          {interfaces.some((iface) => iface.kind === 'vpn') && (
-            <div className="text-[12px] text-muted-foreground">VPN: off unless you turn it on.</div>
-          )}
         </div>
         {interfaces.map((iface) => {
           const visual = networkVisual(iface.id, iface.kind, iface.displayName)
@@ -157,6 +155,7 @@ export function NetworksMenu({
             </div>
           )
         })}
+        <VpnSwitch />
         <button
           type="button"
           className="px-4 py-3 text-[13px] font-medium text-primary hover:underline"

@@ -85,6 +85,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const slowModeSpeed = byteCount(parsed.slowModeSpeed)
   if (slowModeSpeed !== undefined) settings.slowModeSpeed = slowModeSpeed
   if (parsed.slowMode === true) settings.slowMode = true
+  if (parsed.useVpn === true) settings.useVpn = true
   return settings
 }
 

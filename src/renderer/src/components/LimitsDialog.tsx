@@ -24,6 +24,7 @@ import {
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
+import { VpnSwitch } from './VpnSwitch'
 import { Switch } from './ui/switch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
@@ -263,6 +264,8 @@ function GeneralPage({
           </label>
         </div>
       </section>
+
+      <VpnSection />
 
       <section className={sectionClass}>
         <h4 className={headingClass}>Downloads at once</h4>
@@ -692,5 +695,19 @@ function LimitsEditor({
         </Button>
       </div>
     </>
+  )
+}
+
+/** Shown only while a VPN is detected. */
+function VpnSection(): React.JSX.Element | null {
+  const detected = useAppStore((store) => store.allInterfaces.some((iface) => iface.kind === 'vpn'))
+  if (!detected) return null
+  return (
+    <section className={sectionClass}>
+      <h4 className={headingClass}>VPN</h4>
+      <div className="-mx-4">
+        <VpnSwitch />
+      </div>
+    </section>
   )
 }

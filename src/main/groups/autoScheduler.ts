@@ -106,7 +106,7 @@ export class AutoScheduler {
   }
 
   private async schedule(group: GroupInfo): Promise<void> {
-    const present = new Set((this.networks.current ?? []).map((iface) => iface.id))
+    const present = new Set(this.networks.selectable().map((iface) => iface.id))
     const lanes = group.interfaceIds.filter((id) => present.has(id))
     const states = this.manager.groupDownloads(group.id).filter(isLive)
     this.learnSpeeds(states)

@@ -108,6 +108,7 @@ export function NewDownloadDialog(): React.JSX.Element {
 function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const interfaces = useAppStore((store) => store.interfaces)
   const networkPreferences = useAppStore((store) => store.networkPreferences)
+  const useVpn = useAppStore((store) => store.useVpn)
   const homeDir = useAppStore((store) => store.homeDir)
   const url = useAppStore((store) => store.draftUrl)
   const setUrl = useAppStore((store) => store.setDraftUrl)
@@ -193,7 +194,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
 
   const detectedIds = interfaces.map((iface) => iface.id)
-  const defaultIds = defaultNetworkIds(interfaces, networkPreferences)
+  const defaultIds = defaultNetworkIds(interfaces, networkPreferences, useVpn)
   const enabledIds = detectedIds.filter((id) => overrides[id] ?? defaultIds.includes(id))
   const selectedInterfaceIds = isSingleStreamOnly ? enabledIds.slice(0, 1) : enabledIds
 

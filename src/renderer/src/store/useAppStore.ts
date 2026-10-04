@@ -1,3 +1,4 @@
+import { selectableNetworks } from '@shared/networks'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
 import type {
   AppSettings,
@@ -21,7 +22,10 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type View = { name: 'list' } | { name: 'download'; id: string }
 
 interface AppStore {
+  /** What the UI offers as connections: VPN tunnels left out unless useVpn is on. */
   interfaces: NetworkInterfaceInfo[]
+  /** Everything detected, VPN tunnels included. */
+  allInterfaces: NetworkInterfaceInfo[]
   interfacesStatus: LoadStatus
   interfacesError: string | null
   latencies: Record<string, number | null>
@@ -59,6 +63,9 @@ interface AppStore {
   speedLimit: number | undefined
   slowMode: boolean
   slowModeSpeed: number
+  /** Persisted — whether VPN tunnels may be used as connections. */
+  useVpn: boolean
+  setUseVpn: (useVpn: boolean) => void
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
   draftUrl: string
@@ -110,6 +117,7 @@ function persist(patch: AppSettings): void {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   interfaces: [],
+  allInterfaces: [],
   interfacesStatus: 'idle',
   interfacesError: null,
   latencies: {},
@@ -133,6 +141,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   speedLimit: initial.speedLimit,
   slowMode: initial.slowMode,
   slowModeSpeed: initial.slowModeSpeed,
+  useVpn: initial.useVpn,
+  setUseVpn: (useVpn) => {
+    set({ useVpn, interfaces: selectableNetworks(get().allInterfaces, useVpn) })
+    persist({ useVpn })
+  },
 
   draftUrl: '',
   startedUrl: '',
@@ -152,8 +165,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  receiveInterfaces: (interfaces) =>
-    set({ interfaces, interfacesStatus: 'ready', interfacesError: null }),
+  receiveInterfaces: (allInterfaces) =>
+    set({
+      allInterfaces,
+      interfaces: selectableNetworks(allInterfaces, get().useVpn),
+      interfacesStatus: 'ready',
+      interfacesError: null
+    }),
 
   refreshLatencies: async () => {
     try {

@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { isIP } from 'node:net'
-import type { NetworkInterfaceInfo } from '../shared/types'
+import type { NetworkInterfaceInfo, NetworkInterfaceKind } from '../shared/types'
 
 // Overrides for the end-to-end suite (e2e/), read from the environment. A packaged build ignores
 // all of them, so a shipped app can't be steered through its environment variables.
@@ -44,7 +44,8 @@ export function testStreamsPerNetwork(): number | null {
   return value > 0 ? value : null
 }
 
-/** `PLEXO_E2E_INTERFACES=a=127.0.0.1,b=192.168.1.5` replaces the real interface list. Read on
+/** `PLEXO_E2E_INTERFACES=a=127.0.0.1,b=192.168.1.5` (each `id=address=subnet=kind=name`, kind
+ * one of ethernet, wifi, usb, vpn; name optional) replaces the real interface list. Read on
  * every call rather than once, so a test can make a network "disappear" mid-download by
  * rewriting process.env in the main process. */
 export function testInterfaces(): NetworkInterfaceInfo[] | null {
@@ -55,19 +56,18 @@ export function testInterfaces(): NetworkInterfaceInfo[] | null {
     .split(',')
     .filter(Boolean)
     .map((entry) => {
-      const [id, address, subnet, kind] = entry.split('=')
-      const inferredKind =
-        kind === 'usb'
-          ? ('usb' as const)
-          : kind === 'wifi' ||
-              id.toLowerCase().includes('wi-fi') ||
-              id.toLowerCase().includes('wifi')
-            ? ('wifi' as const)
-            : ('ethernet' as const)
+      const [id, address, subnet, kind, name] = entry.split('=')
+      const lowered = id.toLowerCase()
+      const inferredKind: NetworkInterfaceKind =
+        kind === 'usb' || kind === 'wifi' || kind === 'vpn' || kind === 'ethernet'
+          ? kind
+          : lowered.includes('wi-fi') || lowered.includes('wifi')
+            ? 'wifi'
+            : 'ethernet'
       return {
         id,
         device: id,
-        displayName: id,
+        displayName: name || id,
         addresses: [{ address, family: isIP(address) === 6 ? 6 : 4, subnet: subnet || undefined }],
         kind: inferredKind
       }

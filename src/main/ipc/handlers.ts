@@ -94,6 +94,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.groupsChanged)
   })
+  void loadSettings().then((saved) => {
+    networks.useVpn = saved.useVpn ?? false
+  })
   const autoScheduler = new AutoScheduler(manager, groups, networks)
   void groups.loaded.then(() => autoScheduler.run())
 
@@ -124,7 +127,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('listInterfaces', () => networks.refresh())
 
-  handle('pingInterfaces', async () => measureLatencies(networks.current ?? []))
+  handle('pingInterfaces', async () => measureLatencies(networks.selectable()))
 
   // Started now so it has settled before the first ping or download needs it.
   const bindingSupport = deviceBindingSupported()
@@ -144,7 +147,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     }
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
-    manager.applySettings(await loadSettings())
+    const saved = await loadSettings()
+    networks.useVpn = saved.useVpn ?? false
+    manager.applySettings(saved)
   })
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
@@ -173,6 +178,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         speedLimit: settings.speedLimit,
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
+        useVpn: settings.useVpn ?? false,
         destinationDir: destinationExists ? destinationDir : undefined
       } satisfies InitialState
     } catch (error) {
@@ -185,7 +191,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         networkPreferences: {},
         downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
         slowMode: false,
-        slowModeSpeed: DEFAULT_SLOW_MODE_SPEED
+        slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
+        useVpn: false
       } satisfies InitialState
     }
   })

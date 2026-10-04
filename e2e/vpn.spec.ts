@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { isVpnInterface } from '../src/main/network/vpn'
-import { defaultNetworkIds, isNetworkOff } from '../src/shared/networks'
+import { defaultNetworkIds, isNetworkOff, selectableNetworks } from '../src/shared/networks'
 
 // Which network names are VPN tunnels. Pure, so the names are the inputs.
 
@@ -61,14 +61,24 @@ test('ordinary networks are not VPNs', () => {
   expect(isVpnInterface({ device: 'stf0' })).toBe(false)
 })
 
-test('a VPN is off unless the user turned it on', () => {
+test('a VPN is not a connection unless "Use VPN for downloads" is on', () => {
   const vpn = { id: 'utun4', kind: 'vpn' as const }
   const wifi = { id: 'en0', kind: 'wifi' as const }
-  expect(isNetworkOff(vpn, {})).toBe(true)
+  expect(selectableNetworks([wifi, vpn], false)).toEqual([wifi])
+  expect(selectableNetworks([wifi, vpn], true)).toEqual([wifi, vpn])
+  // Only a VPN connected: kept, so a download can still start.
+  expect(selectableNetworks([vpn], false)).toEqual([vpn])
+  expect(defaultNetworkIds([wifi, vpn], {}, false)).toEqual(['en0'])
+  expect(defaultNetworkIds([wifi, vpn], {}, true)).toEqual(['en0', 'utun4'])
+  expect(defaultNetworkIds([vpn], {}, false)).toEqual(['utun4'])
+})
+
+test("an old per-network choice for a VPN no longer matters; the user's off still does", () => {
+  const vpn = { id: 'utun4', kind: 'vpn' as const }
+  const wifi = { id: 'en0', kind: 'wifi' as const }
   expect(isNetworkOff(vpn, { utun4: { off: false } })).toBe(false)
-  expect(isNetworkOff(wifi, {})).toBe(false)
+  expect(isNetworkOff(vpn, {})).toBe(false)
   expect(isNetworkOff(wifi, { en0: { off: true } })).toBe(true)
-  expect(defaultNetworkIds([wifi, vpn], {})).toEqual(['en0'])
-  expect(defaultNetworkIds([wifi, vpn], { utun4: { off: false } })).toEqual(['en0', 'utun4'])
-  expect(defaultNetworkIds([vpn], {})).toEqual(['utun4'])
+  expect(defaultNetworkIds([wifi, vpn], { utun4: { off: false } }, false)).toEqual(['en0'])
+  expect(defaultNetworkIds([wifi, vpn], { en0: { off: true } }, true)).toEqual(['utun4'])
 })

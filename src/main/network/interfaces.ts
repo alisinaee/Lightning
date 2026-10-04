@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
+import { selectableNetworks } from '../../shared/networks'
 import { testInterfaces } from '../testKnobs'
 import { isVpnInterface } from './vpn'
 
@@ -177,6 +178,14 @@ export class NetworkMonitor {
   constructor(private readonly onChange: (networks: NetworkInterfaceInfo[]) => void) {
     void this.refresh()
     setInterval(() => void this.refresh(), POLL_MS).unref()
+  }
+
+  /** Whether VPN tunnels count as connections (the "Use VPN for downloads" setting). */
+  useVpn = false
+
+  /** The networks a new download or the Auto scheduler may use: VPN tunnels only when on. */
+  selectable(): NetworkInterfaceInfo[] {
+    return selectableNetworks(this.list ?? [], this.useVpn)
   }
 
   /** Null until the first look has finished. */

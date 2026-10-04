@@ -11,7 +11,7 @@ export type ResolveNetworkVisual = (
 /** Colors are assigned across every known network at once (detected interfaces plus any a
  * download, running or finished, used), so each screen agrees on which network is which color. */
 export function useNetworkVisuals(): ResolveNetworkVisual {
-  const interfaces = useAppStore((store) => store.interfaces)
+  const interfaces = useAppStore((store) => store.allInterfaces)
   const downloads = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const preferences = useAppStore((store) => store.networkPreferences)

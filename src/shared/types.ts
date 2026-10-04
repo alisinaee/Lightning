@@ -329,6 +329,8 @@ export interface AppSettings {
   /** While on, slowModeSpeed stands in for speedLimit: a one-click lower limit for calls. */
   slowMode?: boolean
   slowModeSpeed?: number
+  /** Whether downloads may use VPN tunnels as connections. Off: they use the real networks. */
+  useVpn?: boolean
 }
 
 export const DOWNLOADS_AT_ONCE = { default: 2, min: 1, max: 8 }
@@ -345,6 +347,7 @@ export interface InitialState {
   speedLimit?: number
   slowMode: boolean
   slowModeSpeed: number
+  useVpn: boolean
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
 }

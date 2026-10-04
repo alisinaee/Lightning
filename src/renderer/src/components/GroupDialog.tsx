@@ -79,7 +79,11 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
   const [actionError, setActionError] = useState<string | null>(null)
   // The networks the files added next use, in a manual group.
   const [newConnection, setNewConnection] = useState<string[]>(() =>
-    defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
+    defaultNetworkIds(
+      interfaces,
+      useAppStore.getState().networkPreferences,
+      useAppStore.getState().useVpn
+    )
   )
 
   const rows: FileRow[] = [
@@ -169,7 +173,11 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     const failedLinks = new Set<string>()
     const interfaceIds = manual
       ? newConnection
-      : defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences)
+      : defaultNetworkIds(
+          interfaces,
+          useAppStore.getState().networkPreferences,
+          useAppStore.getState().useVpn
+        )
     probeLinks(links, window.plexo.probeUrl, (url, outcome) => {
       if ('result' in outcome) {
         requests.push(requestFor(outcome.result, group.destinationDir, interfaceIds))
