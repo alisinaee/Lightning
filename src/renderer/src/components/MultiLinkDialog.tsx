@@ -11,6 +11,7 @@ import { ConnectionPicker } from './ConnectionPicker'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { VpnSwitch } from './VpnSwitch'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -284,6 +285,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     ))}
                 </div>
               ))}
+            </div>
+
+            <div className="-mx-4 -my-2 shrink-0">
+              <VpnSwitch />
             </div>
 
             <div className="flex flex-col gap-1.5">
