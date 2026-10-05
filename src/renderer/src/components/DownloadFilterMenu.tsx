@@ -9,6 +9,12 @@ const DOWNLOAD_FILTERS: { value: DownloadFilter; label: string }[] = [
   { value: 'failed', label: 'Needs attention' }
 ]
 
+const FINER_LABELS: Partial<Record<DownloadFilter, string>> = {
+  downloading: 'Downloading',
+  queued: 'Queued',
+  paused: 'Paused'
+}
+
 export function DownloadFilterMenu({
   value,
   counts,
@@ -18,7 +24,12 @@ export function DownloadFilterMenu({
   counts: Record<DownloadFilter, number>
   onChange: (value: DownloadFilter) => void
 }): React.JSX.Element {
-  const label = DOWNLOAD_FILTERS.find((filter) => filter.value === value)!.label
+  // The sidebar can set finer filters (Downloading, Queued, Paused) than the menu lists, and an
+  // old saved value can be anything: never assume the value is one of the menu's own.
+  const label =
+    DOWNLOAD_FILTERS.find((filter) => filter.value === value)?.label ??
+    FINER_LABELS[value] ??
+    'All downloads'
   return (
     <Menu.Root>
       <h1>
@@ -51,7 +62,7 @@ export function DownloadFilterMenu({
                   </span>
                   <span className="flex-1">{filter.label}</span>
                   <span className="font-mono text-[11.5px] text-muted-foreground tabular-nums">
-                    {counts[filter.value]}
+                    {counts[filter.value] ?? 0}
                   </span>
                 </Menu.RadioItem>
               ))}

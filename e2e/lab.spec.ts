@@ -69,9 +69,18 @@ test('the Debug button opens the Test lab and a plan runs from it', async () => 
   await expect(card).toContainText('What a pass looks like')
   // The main window stays usable beside the panel.
   await expect(page.getByRole('button', { name: 'New download' }).first()).toBeVisible()
+  // The self-check is over in a fraction of a second, so the banner can come and go between two
+  // polls: watch the lab's own events for the simulation being on, then off again.
+  await page.evaluate(() => {
+    const w = window as unknown as { __simSeen: boolean[] }
+    w.__simSeen = []
+    window.plexo.onLabEvent((event) => w.__simSeen.push(event.state.simActive))
+  })
   await card.getByRole('button', { name: 'Run', exact: true }).click()
-  await expect(page.getByText('Test lab: simulated networks are active')).toBeVisible()
   await expect(card.getByText('PASS', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __simSeen: boolean[] }).__simSeen))
+    .toEqual(expect.arrayContaining([true, false]))
   await expect(page.getByText('Test lab: simulated networks are active')).toBeHidden()
   await expect(card.getByRole('button', { name: 'Copy report' })).toBeVisible()
   if (process.env.LAB_SHOT) await page.screenshot({ path: process.env.LAB_SHOT })

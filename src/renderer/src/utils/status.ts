@@ -24,6 +24,10 @@ export const STATUS_STYLE: Record<StatusKey, { label: string; icon: LucideIcon; 
   attention: { label: 'Needs attention', icon: TriangleAlert, color: 'var(--status-attention)' }
 }
 
+/** A style for any key, even one this version doesn't know: never undefined. */
+export const statusStyle = (key: string): (typeof STATUS_STYLE)[StatusKey] =>
+  STATUS_STYLE[key as StatusKey] ?? STATUS_STYLE.attention
+
 export const isFinished = (item: Item): item is FinishedDownload => 'unitsWritten' in item
 
 export function statusKeyOf(item: Item): StatusKey {
@@ -96,7 +100,13 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     missing: isFinished(item) && item.missing === true
   }
   if (isFinished(item)) {
-    return { ...base, label: STATUS_STYLE.completed.label, bar: false, speed: 0, etaSeconds: null }
+    return {
+      ...base,
+      label: statusStyle('completed').label,
+      bar: false,
+      speed: 0,
+      etaSeconds: null
+    }
   }
   const speed = item.status === 'downloading' ? item.speedBytesPerSec : 0
   // Main's own, smoothed estimate (see updateTimeLeft).
@@ -129,7 +139,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     case 'completed':
       return {
         ...base,
-        label: STATUS_STYLE.completed.label,
+        label: statusStyle('completed').label,
         bar: false,
         speed: 0,
         etaSeconds: null
@@ -138,7 +148,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
       const full = describeError(item.error ?? 'Something went wrong')
       return {
         ...base,
-        label: STATUS_STYLE[status].label,
+        label: statusStyle(status).label,
         reason: shortReason(full),
         reasonFull: full,
         bar: item.bytesDownloaded > 0,

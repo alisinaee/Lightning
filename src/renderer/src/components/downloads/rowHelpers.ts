@@ -1,7 +1,7 @@
 import type { DownloadState } from '@shared/types'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { connectionsOf } from '../../utils/format'
-import { isFinished, STATUS_STYLE, type Item } from '../../utils/status'
+import { isFinished, statusStyle, STATUS_STYLE, type Item } from '../../utils/status'
 import type { ConnectionChip } from './cells'
 
 /** What a row can ask of the screen around it. One stable object, so rows stay memoized. */
@@ -27,7 +27,7 @@ export const ROW_CLASS =
 /** A thin colour down the row's left edge says how it is doing without reading the Status cell. */
 export function stateEdge(status: keyof typeof STATUS_STYLE): React.CSSProperties | undefined {
   return status === 'downloading' || status === 'failed' || status === 'attention'
-    ? { boxShadow: `inset 2px 0 0 ${STATUS_STYLE[status].color}` }
+    ? { boxShadow: `inset 2px 0 0 ${statusStyle(status).color}` }
     : undefined
 }
 

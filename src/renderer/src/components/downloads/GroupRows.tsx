@@ -6,7 +6,7 @@ import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
 import { statusOfGroup, type GroupEntry } from '../../utils/downloadList'
 import { describeError, formatPercent, toDisplayPath, wantedBytes } from '../../utils/format'
-import { isFinished, STATUS_STYLE, type RowInfo } from '../../utils/status'
+import { isFinished, statusStyle, type RowInfo } from '../../utils/status'
 import { GroupFileRow } from '../GroupFileRow'
 import { GroupPlanPanel } from '../GroupPlanPanel'
 import {
@@ -101,7 +101,7 @@ export function GroupTableRow({
           ? `Paused ${percent}%`
           : status === 'failed'
             ? 'Needs attention'
-            : STATUS_STYLE[status].label,
+            : statusStyle(status).label,
     percent,
     bar: !allDone && received > 0 && status !== 'failed',
     received,

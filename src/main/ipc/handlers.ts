@@ -36,7 +36,7 @@ import { NetworkMonitor } from '../network/interfaces'
 import { Lab } from '../debug/lab'
 import { AutoScheduler } from '../groups/autoScheduler'
 import { GroupStore } from '../groups/groupStore'
-import { log } from '../logger'
+import { log, logFilePath } from '../logger'
 import { loadSettings, saveSettings } from '../settings'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
@@ -253,6 +253,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('takePendingLink', async () => takePendingLink())
 
   handle('readClipboardText', async () => clipboard.readText())
+
+  handle('openLogs', async () => {
+    const path = logFilePath()
+    if (path) shell.showItemInFolder(path)
+  })
 
   handle('revealDownload', async (_event, id) => manager.reveal(id))
 

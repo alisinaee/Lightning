@@ -3,7 +3,7 @@ import { Archive, Layers, type LucideIcon } from 'lucide-react'
 import type { DownloadFilter } from '../../store/useAppStore'
 import type { ListCounts } from '../../utils/downloadList'
 import { FILE_KINDS, type FileKind } from '../../utils/fileKind'
-import { STATUS_STYLE, type StatusKey } from '../../utils/status'
+import { statusStyle, type StatusKey } from '../../utils/status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { FileKindIcon } from './FileKindIcon'
 
@@ -26,8 +26,8 @@ const STATUSES: {
   ).map(([value, label, status]) => ({
     value,
     label,
-    icon: STATUS_STYLE[status].icon,
-    color: STATUS_STYLE[status].color,
+    icon: statusStyle(status).icon,
+    color: statusStyle(status).color,
     status
   }))
 ]
@@ -102,7 +102,7 @@ export function DownloadsSidebar({
           <Item
             key={entry.value}
             active={filter === entry.value}
-            count={counts.statuses[entry.value]}
+            count={counts.statuses[entry.value] ?? 0}
             title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
             onClick={() => onFilter(entry.value)}
           >
@@ -120,7 +120,7 @@ export function DownloadsSidebar({
         <Item
           key={entry.kind}
           active={kind === entry.kind}
-          count={counts.kinds[entry.kind]}
+          count={counts.kinds[entry.kind] ?? 0}
           onClick={() => onKind(kind === entry.kind ? null : entry.kind)}
         >
           <FileKindIcon kind={entry.kind} size="sm" className="size-5 [&>svg]:size-3" />

@@ -27,6 +27,7 @@ export interface IpcContract {
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
+  openLogs: { args: []; result: void }
   /** Shows a download's file in its folder, by the download's own path. False when nothing is
    * there any more: history is re-sent, with it marked missing. */
   revealDownload: { args: [id: string]; result: boolean }

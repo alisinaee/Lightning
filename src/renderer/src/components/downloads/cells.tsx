@@ -7,7 +7,7 @@ import {
   formatSpeed,
   formatWhen
 } from '../../utils/format'
-import { STATUS_STYLE, type RowInfo } from '../../utils/status'
+import { statusStyle, type RowInfo } from '../../utils/status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 // One clock for every "Added" cell: they all re-render together once a minute, rather than each
@@ -78,7 +78,7 @@ export function SizeCell({
 
 /** Icon and word, and under them a slim bar while it is under way, or why it failed. */
 export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
-  const style = STATUS_STYLE[info.status] ?? STATUS_STYLE.paused
+  const style = statusStyle(info.status)
   const Icon = style.icon
   const moving = info.status === 'downloading'
   return (

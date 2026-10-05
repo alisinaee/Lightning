@@ -4,7 +4,7 @@ import type { NetworkInterfaceInfo, NetworkInterfaceKind } from '../shared/types
 
 // Overrides for the end-to-end suite (e2e/), read from the environment. A packaged build ignores
 // all of them, so a shipped app can't be steered through its environment variables.
-const env: NodeJS.ProcessEnv = app.isPackaged ? {} : process.env
+const env: NodeJS.ProcessEnv = app?.isPackaged ? {} : process.env
 
 function positiveNumber(name: string, fallback: number): number {
   const value = Number(env[name])
@@ -39,7 +39,7 @@ export const testKnobs = {
  * sizing off, so a test can count requests. Read on every call rather than once, so a test can
  * change it between downloads. */
 export function testStreamsPerNetwork(): number | null {
-  if (app.isPackaged) return null
+  if (app?.isPackaged) return null
   const value = Number(process.env['PLEXO_E2E_STREAMS'])
   return value > 0 ? value : null
 }
@@ -49,7 +49,7 @@ export function testStreamsPerNetwork(): number | null {
  * every call rather than once, so a test can make a network "disappear" mid-download by
  * rewriting process.env in the main process. */
 export function testInterfaces(): NetworkInterfaceInfo[] | null {
-  if (app.isPackaged) return null
+  if (app?.isPackaged) return null
   const raw = process.env['PLEXO_E2E_INTERFACES']
   if (raw === undefined) return null
   return raw

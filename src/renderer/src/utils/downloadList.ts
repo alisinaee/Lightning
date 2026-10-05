@@ -149,7 +149,7 @@ function sortValue(entry: ListEntry, key: SortKey): string | number {
     case 'size':
       return items.reduce((sum, item) => sum + wantedBytes(item), 0)
     case 'status':
-      return STATUS_ORDER[entryStatus(entry)]
+      return STATUS_ORDER[entryStatus(entry)] ?? 9
     case 'speed':
       return items.reduce(
         (sum, item) =>
