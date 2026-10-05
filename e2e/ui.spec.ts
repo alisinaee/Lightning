@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { BLOCK, expect, interfacesEnv, NETWORKS, test, treeSha } from './fixtures'
-import { seededBytes } from './origin'
+import { seededBytes, type Origin } from './origin'
 import { named, Swarm, torrentFileOnDisk } from './torrentSwarm'
 
 // G. A handful of journeys through the real UI, to prove the screens are wired to the main
@@ -574,7 +574,7 @@ test.describe('several links in three steps @smoke', () => {
     dirs
   }) => {
     const names = ['one.bin', 'two.bin', 'three.bin']
-    const origins = []
+    const origins: Origin[] = []
     for (const name of names)
       origins.push(
         await serve({ size: 4 * BLOCK, contentDisposition: `attachment; filename="${name}"` })
