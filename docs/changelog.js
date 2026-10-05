@@ -10,6 +10,41 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.14',
+      items: [
+        {
+          kind: 'new',
+          title: 'Browser extension',
+          text: 'Chrome, Edge, Brave and Firefox can hand downloads to Lightning, with the page and cookies they came from. Pair it once in Settings → Browser.'
+        },
+        {
+          kind: 'new',
+          title: 'Schedule',
+          text: 'Weekly run or pause windows, overnight ones too, each with an optional speed cap. Settings → Schedule.'
+        },
+        {
+          kind: 'new',
+          title: 'Sign-in, cookies and headers',
+          text: 'Basic auth, a Referer, cookies (or a `cookies.txt`), a User-Agent and extra headers per download, for links behind a login.'
+        },
+        {
+          kind: 'new',
+          title: 'Checksums',
+          text: 'Paste a SHA-256, SHA-1 or MD5 and the finished file is verified.'
+        },
+        {
+          kind: 'new',
+          title: 'When downloads finish',
+          text: 'Optionally ask whether to quit, sleep or shut down, and open a file or show it in its folder when it is done.'
+        },
+        {
+          kind: 'new',
+          title: 'Start at login and copied links',
+          text: 'Lightning can start hidden when you sign in, and offer to download a link to a file when you copy one.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.13',
       items: [
         {
