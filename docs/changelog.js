@@ -10,6 +10,21 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.12',
+      items: [
+        {
+          kind: 'new',
+          title: 'Lightning',
+          text: 'Renamed and rebranded, with a new Settings window, download history, group settings, DNS and proxy options, and format badges on every file.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Steadier downloads',
+          text: 'Turning the VPN off now takes it out of running downloads, the last file in a group uses every network, and file names in ISO-8859-1 save correctly.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.11',
       items: [
         {
