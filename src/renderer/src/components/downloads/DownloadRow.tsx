@@ -2,6 +2,7 @@ import { describeItem, isFinished, statusKeyOf, type Item } from '../../utils/st
 import { sourceOf } from '../../utils/format'
 import {
   Copy,
+  Download,
   ExternalLink,
   FileText,
   FolderInput,
@@ -112,12 +113,12 @@ export const DownloadRow = memo(function DownloadRow({
       // Retry always tries the saved link first; Fix link is for when that link is refused.
       if (state.resumable !== false) {
         primary = { label: `Retry ${name}`, icon: RotateCw, run: resume }
-      } else primary = { label: 'Download again', run: () => handlers.again(item) }
+      } else primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
     }
   }
   const fixLink = state && state.status === 'error' && info.status === 'attention'
   if (finished && info.missing) {
-    primary = { label: 'Download again', run: () => handlers.again(item) }
+    primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
   }
 
   const menu: RowAction[] = []
@@ -295,28 +296,23 @@ export const DownloadRow = memo(function DownloadRow({
           </div>
           {columns.map((id) => cells[id])}
           <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
-            {primary &&
-              (primary.icon ? (
-                <IconAction
-                  label={primary.label}
-                  tip={primary.label.split(' ')[0]}
-                  icon={primary.icon}
-                  onClick={primary.run}
-                />
-              ) : (
-                <Button type="button" size="xs" variant="secondary" onClick={primary.run}>
-                  {primary.label}
-                </Button>
-              ))}
+            {primary && (
+              <IconAction
+                label={primary.label}
+                tip={
+                  primary.label.startsWith('Download') ? primary.label : primary.label.split(' ')[0]
+                }
+                icon={primary.icon ?? Download}
+                onClick={primary.run}
+              />
+            )}
             {fixLink && (
-              <Button
-                type="button"
-                size="xs"
-                variant="secondary"
+              <IconAction
+                label="Fix link"
+                tip="Fix link"
+                icon={Link2}
                 onClick={() => handlers.fix(item)}
-              >
-                Fix link
-              </Button>
+              />
             )}
             {finished && !info.missing && (
               <IconAction

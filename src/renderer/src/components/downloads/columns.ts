@@ -19,8 +19,8 @@ export const COLUMNS: ColumnDef[] = [
   {
     id: 'size',
     label: 'Size',
-    width: 132,
-    min: 72,
+    width: 124,
+    min: 84,
     max: 260,
     align: 'right',
     dropOrder: 3,
@@ -30,8 +30,8 @@ export const COLUMNS: ColumnDef[] = [
   {
     id: 'speed',
     label: 'Speed',
-    width: 92,
-    min: 64,
+    width: 96,
+    min: 80,
     max: 180,
     align: 'right',
     dropOrder: 2,
@@ -40,19 +40,19 @@ export const COLUMNS: ColumnDef[] = [
   {
     id: 'eta',
     label: 'Time left',
-    width: 84,
-    min: 60,
+    width: 92,
+    min: 88,
     max: 160,
     align: 'right',
     dropOrder: 4,
     canHide: true
   },
-  { id: 'added', label: 'Added', width: 116, min: 70, max: 220, dropOrder: 5, canHide: true },
+  { id: 'added', label: 'Added', width: 112, min: 84, max: 220, dropOrder: 5, canHide: true },
   {
     id: 'connections',
     label: 'Connections',
-    width: 92,
-    min: 60,
+    width: 104,
+    min: 100,
     max: 240,
     dropOrder: 6,
     canHide: true
@@ -63,8 +63,9 @@ export const columnOf = (id: ColumnId): ColumnDef | undefined =>
   COLUMNS.find((def) => def.id === id)
 
 export const SELECT_WIDTH = 30
-/** Fits the widest set of actions: the "Download again" text button beside the ⋯ menu. */
-export const ACTIONS_WIDTH = 152
+/** Three icon buttons (say retry, fix link and the ⋯ menu): every action is an icon, so a row's
+ * actions never need more, and the usual one or two leave little empty. */
+export const ACTIONS_WIDTH = 100
 /** What the name column keeps at least, before columns start to drop out. */
 export const NAME_MIN = 220
 
