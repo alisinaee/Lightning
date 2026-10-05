@@ -1,6 +1,6 @@
 import type { ProbeResult } from '@shared/types'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen } from 'lucide-react'
+import { AlertTriangle, FolderOpen, ListChecks, ListX } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
@@ -46,6 +46,8 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
 
   const [text, setText] = useState('')
   const [rows, setRows] = useState<Row[] | null>(null)
+  // With links found: first the list is confirmed, then the group's settings are chosen.
+  const [step, setStep] = useState<'files' | 'settings'>('files')
   const [skipped, setSkipped] = useState(0)
   const [unticked, setUnticked] = useState<string[]>([])
   const [folder, setFolder] = useState('')
@@ -80,6 +82,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     const { links, skipped: dropped } = linksIn(text)
     setSkipped(dropped)
     setUnticked([])
+    setStep('files')
     setRows(links.map((url) => ({ url, status: 'checking' })))
     probeLinks(links, window.lightning.probeUrl, (url, outcome) => {
       const row: Row =
@@ -100,6 +103,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     ? `${destinationDir.replace(/[\\/]+$/, '')}${separator}${folderName}`
     : destinationDir
   const enabledIds = defaultNetworkIds(interfaces, useAppStore.getState().networkPreferences, false)
+  const totalBytes = chosen.reduce(
+    (sum, row) => sum + (row.status === 'ready' ? (row.result.totalBytes ?? 0) : 0),
+    0
+  )
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
   const layer = (ids: string[]): string[] =>
     withVpnLayer(ids, useAppStore.getState().allInterfaces, useAppStore.getState().useVpn)
@@ -145,22 +152,58 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setStarting(false)
   }
 
+  const stepNumber = !rows ? 1 : step === 'files' ? 2 : 3
+  const title = !rows
+    ? 'Add several links'
+    : step === 'files'
+      ? 'Choose what to download'
+      : 'Download settings'
+  const plural = chosen.length === 1 ? 'file' : 'files'
+
+  const selectButton = (
+    label: string,
+    Icon: typeof ListChecks,
+    disabled: boolean,
+    onClick: () => void
+  ): React.JSX.Element => (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={label}
+            disabled={disabled}
+            onClick={onClick}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Icon />
+          </Button>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+
   return (
     <form
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
-        if (rows) void handleStart()
-        else if (found.links.length > 0) handleCheck()
+        if (!rows) {
+          if (found.links.length > 0) handleCheck()
+        } else if (step === 'files') {
+          if (chosen.length > 0 && !checking) setStep('settings')
+        } else void handleStart()
       }}
     >
-      <div className="border-b-[0.5px] border-border px-5 py-4">
-        <DialogTitle className="text-[16px] font-semibold">
-          {rows ? 'Choose what to download' : 'Add several links'}
-        </DialogTitle>
+      <div className="flex items-baseline justify-between gap-3 border-b-[0.5px] border-border px-5 py-4">
+        <DialogTitle className="text-[16px] font-semibold">{title}</DialogTitle>
+        <span className="text-[12px] text-muted-foreground">Step {stepNumber} of 3</span>
       </div>
 
-      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto px-5 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
         {!rows ? (
           <>
             <textarea
@@ -180,30 +223,27 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                   (found.skipped > 0 ? `, ${found.skipped} skipped (repeated or not a link)` : '')}
             </div>
           </>
-        ) : (
+        ) : step === 'files' ? (
           <>
-            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-medium">
-              <Checkbox
-                checked={allTicked}
-                indeterminate={chosen.length > 0 && chosen.length < ready.length}
-                disabled={ready.length === 0}
-                onCheckedChange={(checked) =>
-                  setUnticked(checked ? [] : ready.map((row) => row.url))
-                }
-              />
-              <span className="flex-1">
-                {allTicked ? 'Unselect all' : 'Select all'}
-                <span className="ml-2 font-normal text-muted-foreground">
-                  {chosen.length} of {rows.length} selected
-                  {skipped > 0 ? `, ${skipped} skipped` : ''}
-                </span>
+            <div className="flex shrink-0 items-center gap-1 text-[12.5px]">
+              <span className="flex-1 font-medium">
+                {chosen.length} of {rows.length} selected
+                {totalBytes > 0 && (
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {formatBytes(totalBytes)}
+                  </span>
+                )}
+                {skipped > 0 && (
+                  <span className="ml-2 font-normal text-muted-foreground">{skipped} skipped</span>
+                )}
               </span>
-            </label>
-
-            <GroupSettings
-              value={{ ...settings, interfaceIds: groupIds }}
-              onChange={(patch) => setSettings((current) => ({ ...current, ...patch }))}
-            />
+              {selectButton('Select all', ListChecks, ready.length === 0 || allTicked, () =>
+                setUnticked([])
+              )}
+              {selectButton('Unselect all', ListX, chosen.length === 0, () =>
+                setUnticked(ready.map((row) => row.url))
+              )}
+            </div>
 
             <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {rows.map((row) => (
@@ -258,9 +298,34 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       {formatBytes(row.result.totalBytes)}
                     </span>
                   )}
-                  {row.status === 'ready' &&
-                    (perFile ? (
-                      <>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-[12.5px] text-[var(--text-secondary)]">
+              {chosen.length} {plural}
+              {totalBytes > 0 && ` · ${formatBytes(totalBytes)}`}
+            </div>
+
+            <GroupSettings
+              value={{ ...settings, interfaceIds: groupIds }}
+              onChange={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+            />
+
+            {perFile && (
+              <div className="flex min-h-[96px] max-h-[220px] flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
+                {chosen.map(
+                  (row) =>
+                    row.status === 'ready' && (
+                      <div
+                        key={row.url}
+                        className="flex items-center gap-2 border-b-[0.5px] border-border px-3 py-2 text-[12.5px] last:border-b-0"
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {row.result.suggestedFileName}
+                        </span>
                         <ConnectionPicker
                           options={networkOptions}
                           value={connectionOf(row.url)}
@@ -270,15 +335,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                             setConnections((prev) => ({ ...prev, [row.url]: ids }))
                           }
                         />
-                      </>
-                    ) : (
-                      <span className="w-[150px] shrink-0 text-right text-[11.5px] text-muted-foreground">
-                        {mode === 'auto' ? 'Auto' : 'Group rule'}
-                      </span>
-                    ))}
-                </div>
-              ))}
-            </div>
+                      </div>
+                    )
+                )}
+              </div>
+            )}
 
             <div className="-mx-4 -my-2 shrink-0">
               <VpnSwitch />
@@ -325,7 +386,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
             variant="ghost"
             className="mr-auto"
             disabled={starting || started}
-            onClick={() => setRows(null)}
+            onClick={() => (step === 'settings' ? setStep('files') : setRows(null))}
           >
             Back
           </Button>
@@ -333,18 +394,18 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         <Button type="button" variant="secondary" onClick={onDone} disabled={starting}>
           {started ? 'Close' : 'Cancel'}
         </Button>
-        {rows && !started ? (
-          <Button type="submit" disabled={!canStart}>
-            {starting
-              ? 'Starting…'
-              : checking
-                ? 'Checking…'
-                : `Download ${chosen.length} ${chosen.length === 1 ? 'file' : 'files'}`}
+        {!rows ? (
+          <Button type="submit" disabled={found.links.length === 0}>
+            Continue
+          </Button>
+        ) : step === 'files' ? (
+          <Button type="submit" disabled={chosen.length === 0 || checking}>
+            {checking ? 'Checking…' : `Continue with ${chosen.length} ${plural}`}
           </Button>
         ) : (
           !started && (
-            <Button type="submit" disabled={found.links.length === 0}>
-              Continue
+            <Button type="submit" disabled={!canStart}>
+              {starting ? 'Starting…' : `Download ${chosen.length} ${plural}`}
             </Button>
           )
         )}

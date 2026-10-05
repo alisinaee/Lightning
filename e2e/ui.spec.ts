@@ -566,3 +566,50 @@ test.describe('title bar buttons @smoke', () => {
     await expect(debug).toBeHidden()
   })
 })
+
+test.describe('several links in three steps @smoke', () => {
+  test('paste, confirm the list, then choose settings and start', async ({
+    lightning,
+    serve,
+    dirs
+  }) => {
+    const names = ['one.bin', 'two.bin', 'three.bin']
+    const origins = []
+    for (const name of names)
+      origins.push(
+        await serve({ size: 4 * BLOCK, contentDisposition: `attachment; filename="${name}"` })
+      )
+    await stubNativeUi(lightning, dirs.dest)
+    const page = lightning.page
+    await page.getByRole('button', { name: 'New download' }).first().click()
+    await page.getByRole('menuitem', { name: 'Several links' }).click()
+    await page.getByRole('textbox', { name: 'Links' }).fill(origins.map((o) => o.url()).join('\n'))
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 2: only the list. No settings yet.
+    await expect(page.getByText('Choose what to download')).toBeVisible()
+    await expect(page.getByText('3 of 3 selected')).toBeVisible()
+    await expect(page.getByText('Files at once')).toBeHidden()
+    await page.getByRole('button', { name: 'Unselect all', exact: true }).click()
+    await expect(page.getByText('0 of 3 selected')).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Continue with/ })).toBeDisabled()
+    await page.screenshot({
+      path: '/private/tmp/claude-501/-Users-ali-Works-Lightning/30ad7528-e3b6-4612-ac34-c1b533e5f5d1/scratchpad/multi-step2.png'
+    })
+    await page.getByRole('button', { name: 'Select all', exact: true }).click()
+    await expect(page.getByText('3 of 3 selected')).toBeVisible()
+
+    // Step 3: the settings, then start.
+    await page.getByRole('button', { name: 'Continue with 3 files' }).click()
+    await expect(page.getByText('Download settings')).toBeVisible()
+    await expect(page.getByText('Files at once')).toBeVisible()
+    await page.screenshot({
+      path: '/private/tmp/claude-501/-Users-ali-Works-Lightning/30ad7528-e3b6-4612-ac34-c1b533e5f5d1/scratchpad/multi-step3.png'
+    })
+    await page.getByRole('button', { name: 'Back' }).click()
+    await expect(page.getByText('3 of 3 selected')).toBeVisible()
+    await page.getByRole('button', { name: 'Continue with 3 files' }).click()
+    await page.getByRole('button', { name: 'Download 3 files' }).click()
+    await expect(page.getByText('Download settings')).toBeHidden()
+  })
+})
