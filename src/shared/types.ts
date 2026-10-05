@@ -206,6 +206,9 @@ interface DownloadStateBase {
   /** For an error: whether resuming can pick up where it stopped. False when the progress was
    * thrown away, e.g. the file changed on the server. */
   resumable?: boolean
+  /** An error Plexo will try again by itself: when (ms since epoch) and which try it is. */
+  retryAt?: number
+  retryAttempt?: number
   startedAt: number
   /** While queued: its place in the queue, lowest first. */
   queuedAt?: number
@@ -343,6 +346,8 @@ export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
 export interface InitialState {
+  /** "Plexo", or "Plexo Custom" for that build. */
+  appName?: string
   homeDir: string
   downloadsDir: string
   themeSource: ThemeSource
@@ -403,6 +408,8 @@ export interface DownloadGroup {
   createdAt: number
   /** The networks an auto group may use. */
   interfaceIds: string[]
+  /** Plexo made the folder for this group: it may take it away again once it is empty. */
+  ownsFolder?: boolean
 }
 
 /** A file of an auto group that hasn't started yet: it starts when a network is free for it. */
@@ -458,6 +465,7 @@ export interface CreateGroupInput {
   mode: GroupMode
   interfaceIds: string[]
   requests: StartDownloadRequest[]
+  ownsFolder?: boolean
 }
 
 export interface GroupPatch {

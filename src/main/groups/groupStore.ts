@@ -126,6 +126,7 @@ export class GroupStore {
     mode: GroupMode
     interfaceIds: string[]
     fileCount: number
+    ownsFolder?: boolean
   }): DownloadGroup {
     const name =
       input.name.trim() ||
@@ -136,7 +137,8 @@ export class GroupStore {
       destinationDir: input.destinationDir,
       mode: input.mode,
       createdAt: Date.now(),
-      interfaceIds: input.interfaceIds
+      interfaceIds: input.interfaceIds,
+      ...(input.ownsFolder ? { ownsFolder: true } : {})
     }
     this.saved.groups.push(group)
     this.save()

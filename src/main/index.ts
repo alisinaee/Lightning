@@ -7,12 +7,17 @@ import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
+import { appVariant } from './variant'
 import type { DownloadManager } from './download/downloadManager'
 
 // In dev mode the app runs as the raw `electron` binary, which otherwise shows "Electron" in
 // the Dock tooltip/menu bar — must be set before the app is ready. Packaged builds already get
 // this from electron-builder's productName, but setting it here keeps dev and packaged in sync.
-app.setName('Plexo')
+app.setName(appVariant().name)
+// A variant lives beside the normal app, with its own settings, downloads and log.
+if (appVariant().custom) {
+  app.setPath('userData', join(app.getPath('appData'), appVariant().name))
+}
 
 // Each e2e test runs against its own throwaway userData folder (downloads, manifests, settings).
 if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
@@ -74,7 +79,7 @@ function createWindow(): void {
     minHeight: 620,
     show: false,
     autoHideMenuBar: true,
-    title: 'Plexo',
+    title: appVariant().name,
     // Matches the renderer's dark-mode background so a live window resize
     // (which briefly exposes the raw window background) doesn't flash white.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
@@ -100,9 +105,21 @@ function createWindow(): void {
 
   // What the window says when it goes wrong (window.onerror and unhandled rejections reach the
   // console as errors), and when its page dies.
-  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    // 2 = warning, 3 = error
-    if (level >= 2) log[level >= 3 ? 'error' : 'warn']('renderer', message, `${sourceId}:${line}`)
+  mainWindow.webContents.on('console-message', (event) => {
+    // Electron 44 puts these on the event (level is a word); older ones passed them separately.
+    const { level, message, lineNumber, sourceId } = event as unknown as {
+      level: string | number
+      message: string
+      lineNumber: number
+      sourceId: string
+    }
+    const kind =
+      level === 'error' || level === 3
+        ? 'error'
+        : level === 'warning' || level === 2
+          ? 'warn'
+          : null
+    if (kind) log[kind]('renderer', message, `${sourceId}:${lineNumber}`)
   })
   mainWindow.webContents.on('render-process-gone', (_event, details) =>
     log.error('renderer', 'render-process-gone', details)
@@ -111,7 +128,12 @@ function createWindow(): void {
     log.error('renderer', 'did-fail-load', { code, description, url })
   )
 
+  // The page's own <title> would otherwise rename the window back to "Plexo".
+  mainWindow.on('page-title-updated', (event) => event.preventDefault())
+  log.info('window', 'created')
+  mainWindow.webContents.on('did-finish-load', () => log.info('window', 'page loaded'))
   mainWindow.on('closed', () => {
+    log.info('window', 'closed')
     mainWindow = null
   })
 
@@ -131,12 +153,16 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.plexo.app')
-  log.info('app', `Plexo ${app.getVersion()} on ${process.platform} ${process.arch}`, {
-    userData: app.getPath('userData'),
-    log: logFilePath(),
-    packaged: app.isPackaged
-  })
+  electronApp.setAppUserModelId(appVariant().custom ? 'com.plexo.custom' : 'com.plexo.app')
+  log.info(
+    'app',
+    `${appVariant().name} ${app.getVersion()} on ${process.platform} ${process.arch}`,
+    {
+      userData: app.getPath('userData'),
+      log: logFilePath(),
+      packaged: app.isPackaged
+    }
+  )
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
   await migrateLegacyNetworkPreferences().catch((error) =>
@@ -168,6 +194,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   if (quitAfterSuspending || !downloadManager) return
+  log.info('app', 'quitting: pausing downloads')
 
   event.preventDefault()
 
@@ -179,6 +206,7 @@ app.on('before-quit', (event) => {
   void downloadManager.suspendAll().finally(() => {
     clearTimeout(forceQuitTimeout)
     quitAfterSuspending = true
+    log.info('app', 'quit')
     app.exit(0)
   })
 })

@@ -1,4 +1,5 @@
-import { BugIcon } from 'lucide-react'
+import { BugIcon, ScrollTextIcon } from 'lucide-react'
+import { useLogsStore } from '../store/useLogsStore'
 import { useLabStore } from '../store/useLabStore'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { Button } from './ui/button'
@@ -28,6 +29,25 @@ function Debug(): React.JSX.Element {
   )
 }
 
+/** Opens the Logs window (see LogsDialog), beside Debug. */
+function Logs(): React.JSX.Element {
+  const setOpen = useLogsStore((store) => store.setOpen)
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      aria-label="Open the logs"
+      onClick={() => setOpen(true)}
+      className={`absolute top-1/2 -translate-y-1/2 [-webkit-app-region:no-drag] ${
+        isMac ? 'right-[88px]' : 'right-[228px]'
+      }`}
+    >
+      <ScrollTextIcon data-icon="inline-start" />
+      Logs
+    </Button>
+  )
+}
+
 /** The window's title bar, the same on every OS: its name, centered, on a strip the window is
  * dragged by. The OS's own controls sit over it (see main/index.ts): macOS's traffic lights at
  * the left, Windows' and Linux's minimize/maximize/close at the right. */
@@ -41,8 +61,9 @@ export function TitleBar(): React.JSX.Element {
       }`}
     >
       <div className="truncate font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">
-        Plexo
+        {window.plexo.initialState.appName ?? 'Plexo'}
       </div>
+      <Logs />
       <Debug />
     </div>
   )

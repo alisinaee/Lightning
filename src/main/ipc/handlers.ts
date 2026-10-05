@@ -1,4 +1,4 @@
-import { stat, statfs } from 'node:fs/promises'
+import { rmdir, stat, statfs } from 'node:fs/promises'
 import {
   app,
   clipboard,
@@ -36,7 +36,11 @@ import { NetworkMonitor } from '../network/interfaces'
 import { Lab } from '../debug/lab'
 import { AutoScheduler } from '../groups/autoScheduler'
 import { GroupStore } from '../groups/groupStore'
-import { log, logFilePath } from '../logger'
+import { clearLog, log, logFilePath, readLog } from '../logger'
+import { redactUrl } from '../../shared/urlTools'
+import { diagnosticReport } from '../diagnostics'
+import { findDuplicates } from '../download/findDuplicates'
+import { appVariant } from '../variant'
 import { loadSettings, saveSettings } from '../settings'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
@@ -159,6 +163,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (patch?.themeSource === 'light' || patch?.themeSource === 'dark') {
       nativeTheme.themeSource = patch.themeSource
     }
+    log.info('settings', 'changed', { keys: Object.keys(patch ?? {}) })
+    if (patch && 'useVpn' in patch) log.info('action', `use VPN ${patch.useVpn ? 'on' : 'off'}`)
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
     const saved = await loadSettings()
@@ -195,6 +201,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
           new Promise<boolean>((resolve) => setTimeout(resolve, DESTINATION_CHECK_MS, false))
         ]))
       event.returnValue = {
+        appName: appVariant().name,
         homeDir: getHomeDir(),
         downloadsDir: getDefaultDownloadsDir(),
         themeSource: currentThemeSource(),
@@ -254,6 +261,32 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('readClipboardText', async () => clipboard.readText())
 
+  handle('readLog', async (_event, limit) => readLog(limit))
+  handle('openLogFolder', async () => {
+    const path = logFilePath()
+    if (path) shell.showItemInFolder(path)
+  })
+  handle('clearLog', async () => {
+    clearLog()
+    log.info('app', 'log cleared by the user')
+  })
+  handle('diagnosticReport', async () =>
+    diagnosticReport({
+      networks: (await networks.refresh()).slice(),
+      statuses: manager.liveStates().map((state) => state.status),
+      history: await listHistory()
+    })
+  )
+  handle('findDuplicates', async (_event, urls, destinationDir, options) =>
+    findDuplicates(
+      await manager.knownDownloads(),
+      await groups.loaded.then(() => groups.list()),
+      urls,
+      destinationDir,
+      options
+    )
+  )
+
   handle('openLogs', async () => {
     const path = logFilePath()
     if (path) shell.showItemInFolder(path)
@@ -271,7 +304,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (failure) throw new Error(failure)
   })
 
-  handle('startDownload', async (_event, request) => manager.start(request))
+  handle('startDownload', async (_event, request) => {
+    log.info('action', 'new download', {
+      url: redactUrl(request.url),
+      kind: request.kind,
+      group: request.groupId
+    })
+    return manager.start(request)
+  })
 
   handle('listDownloads', async () => manager.listDownloads())
 
@@ -288,6 +328,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   ): Promise<{ group: GroupInfo; failed: string[] }> => {
     await groups.loaded
     const created = groups.create({ ...input, fileCount: input.requests.length })
+    log.info('action', `group created ${created.name}`, {
+      id: created.id,
+      files: input.requests.length,
+      mode: input.mode
+    })
     const failed = await addToGroup(created.id, input.requests)
     const group = groups.get(created.id)
     if (!group) throw new Error('The group could not be created.')
@@ -295,6 +340,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   }
 
   const updateGroup = async (id: string, patch: GroupPatch): Promise<void> => {
+    log.info('action', 'group edited', { id, keys: Object.keys(patch) })
     groups.update(id, patch)
     const group = groups.get(id)
     if (!group) return
@@ -302,10 +348,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     else if (patch.mode === 'auto') autoScheduler.activate(id)
   }
 
-  const removeGroup = async (id: string, options?: { trashFiles?: boolean }): Promise<void> => {
+  const removeGroup = async (
+    id: string,
+    options?: IpcContract['removeGroup']['args'][1]
+  ): Promise<void> => {
+    log.info('action', 'group removed', { id, ...options })
+    const group = groups.get(id)
     autoScheduler.forget(id)
     groups.remove(id)
-    await manager.removeGroupDownloads(id, options?.trashFiles === true)
+    await manager.removeGroupDownloads(id, options)
+    // The folder Plexo made for the group goes too, once nothing is left in it (rmdir refuses
+    // a folder that still holds anything).
+    if (options?.removeFolder && group?.ownsFolder)
+      await rmdir(group.destinationDir).catch(() => {})
   }
 
   handle('createGroup', async (_event, input) => createGroup(input))
@@ -335,31 +390,44 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   )
 
   handle('pauseDownload', async (_event, id) => {
+    log.info('action', 'pause', { id })
     await manager.pause(id)
   })
 
   handle('resumeDownload', async (_event, id) => {
+    log.info('action', 'resume / retry', { id })
     manager.resume(id)
   })
 
-  handle('relinkDownload', async (_event, id, url) => manager.relink(id, url))
+  handle('relinkDownload', async (_event, id, url) => {
+    log.info('action', 'fix link', { id, url: redactUrl(url) })
+    return manager.relink(id, url)
+  })
 
   handle('setDownloadNetwork', async (_event, id, networkId, enabled) => {
     await manager.setNetworkEnabled(id, networkId, enabled)
   })
 
-  handle('cancelDownload', async (_event, id) => manager.cancel(id))
+  handle('cancelDownload', async (_event, id) => {
+    log.info('action', 'cancel', { id })
+    return manager.cancel(id)
+  })
 
-  handle('removeDownload', async (_event, id, options) =>
-    manager.remove(id, options?.trashFile === true)
-  )
+  handle('removeDownload', async (_event, id, options) => {
+    log.info('action', 'remove', { id, ...options })
+    return manager.remove(id, options?.trashFile === true, options?.keepEntry === true)
+  })
 
   // Kicked off once at startup, not per-call — later renderer calls (e.g. a remount) just await
   // the same in-flight/settled check instead of re-hitting the GitHub API.
   const updateCheckPromise = (async () => {
+    // Plexo Custom is not the upstream app: its releases are not updates to it.
+    if (appVariant().custom) return null
+    log.info('update', 'checking for a newer version')
     const info = testKnobs.forceUpdateVersion
       ? { version: testKnobs.forceUpdateVersion, url: UPDATE_PAGE_URL }
       : await checkForUpdate(app.getVersion())
+    log.info('update', info ? `newer version ${info.version} found` : 'up to date')
     return info
   })()
 

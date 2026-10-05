@@ -38,6 +38,15 @@ const plexoApi = {
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   readClipboardText: () => invoke('readClipboardText'),
   openLogs: () => invoke('openLogs'),
+  readLog: (limit: number) => invoke('readLog', limit),
+  openLogFolder: () => invoke('openLogFolder'),
+  clearLog: () => invoke('clearLog'),
+  diagnosticReport: () => invoke('diagnosticReport'),
+  findDuplicates: (
+    urls: string[],
+    destinationDir?: string,
+    options?: IpcContract['findDuplicates']['args'][2]
+  ) => invoke('findDuplicates', urls, destinationDir, options),
   revealDownload: (id: string) => invoke('revealDownload', id),
   openDownloadedFile: (id: string) => invoke('openDownloadedFile', id),
   startDownload: (request: IpcContract['startDownload']['args'][0]) =>
@@ -57,12 +66,12 @@ const plexoApi = {
   setDownloadNetwork: (downloadId: string, networkId: string, enabled: boolean) =>
     invoke('setDownloadNetwork', downloadId, networkId, enabled),
   cancelDownload: (downloadId: string) => invoke('cancelDownload', downloadId),
-  removeDownload: (downloadId: string, options?: { trashFile?: boolean }) =>
+  removeDownload: (downloadId: string, options?: { trashFile?: boolean; keepEntry?: boolean }) =>
     invoke('removeDownload', downloadId, options),
   listGroups: () => invoke('listGroups'),
   createGroup: (input: IpcContract['createGroup']['args'][0]) => invoke('createGroup', input),
   updateGroup: (id: string, patch: GroupPatch) => invoke('updateGroup', id, patch),
-  removeGroup: (id: string, options?: { trashFiles?: boolean }) =>
+  removeGroup: (id: string, options?: IpcContract['removeGroup']['args'][1]) =>
     invoke('removeGroup', id, options),
   addGroupItems: (id: string, requests: IpcContract['addGroupItems']['args'][1]) =>
     invoke('addGroupItems', id, requests),

@@ -1,3 +1,4 @@
+import type { DuplicateMatch, DuplicateOptions } from './duplicates'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
@@ -28,6 +29,17 @@ export interface IpcContract {
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
   openLogs: { args: []; result: void }
+  /** The newest `limit` lines of the app log, oldest first. */
+  readLog: { args: [limit: number]; result: string[] }
+  openLogFolder: { args: []; result: void }
+  clearLog: { args: []; result: void }
+  /** A text report for support: versions, networks, settings, counts, recent log and errors. */
+  diagnosticReport: { args: []; result: string }
+  /** Existing downloads, group files, finished entries and files on disk that these links repeat. */
+  findDuplicates: {
+    args: [urls: string[], destinationDir?: string, options?: DuplicateOptions]
+    result: DuplicateMatch[]
+  }
   /** Shows a download's file in its folder, by the download's own path. False when nothing is
    * there any more: history is re-sent, with it marked missing. */
   revealDownload: { args: [id: string]; result: boolean }
@@ -58,15 +70,26 @@ export interface IpcContract {
   cancelDownload: { args: [id: string]; result: void }
   /** Removes a download, cancelling one under way. A finished one's file stays, unless
    * `trashFile`: then it goes to the Trash. */
-  removeDownload: { args: [id: string, options?: { trashFile?: boolean }]; result: void }
+  removeDownload: {
+    args: [id: string, options?: { trashFile?: boolean; keepEntry?: boolean }]
+    result: void
+  }
   /** Every group, with the files of an auto group still waiting to start. */
   listGroups: { args: []; result: GroupInfo[] }
   /** Makes a group of the requests and starts it; `failed` says which files couldn't start. */
   createGroup: { args: [input: CreateGroupInput]; result: { group: GroupInfo; failed: string[] } }
   updateGroup: { args: [id: string, patch: GroupPatch]; result: void }
   /** Removes the group and its downloads, cancelling those under way. Finished files stay,
-   * unless `trashFiles`: then they go to the Trash. */
-  removeGroup: { args: [id: string, options?: { trashFiles?: boolean }]; result: void }
+   * unless `trashFiles`: then they go to the Trash. Unfinished files are cancelled and their
+   * partial data deleted only with `deletePartial`; otherwise they stay in the list, paused and
+   * out of the group. `removeFolder` also removes the group's folder when it ends up empty. */
+  removeGroup: {
+    args: [
+      id: string,
+      options?: { trashFiles?: boolean; deletePartial?: boolean; removeFolder?: boolean }
+    ]
+    result: void
+  }
   /** Adds files to a group: started at once in a manual group, queued for a network in an auto one. */
   addGroupItems: {
     args: [id: string, requests: StartDownloadRequest[]]

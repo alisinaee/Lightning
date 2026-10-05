@@ -1,5 +1,8 @@
 import { trashDownload } from './trashDownload'
 import { describeError } from '../../shared/errors'
+import { AUTO_RETRY_ATTEMPTS, autoRetryDelaySeconds, isTransientFailure } from '../../shared/retry'
+import type { KnownDownload } from '../../shared/duplicates'
+import { redactUrl } from '../../shared/urlTools'
 import { randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
@@ -93,6 +96,8 @@ interface RuntimeFields {
   bestSpeedSeen: number
   /** Changes asked of a torrent's choice of files, counted: only the latest applies. */
   fileChoices: number
+  /** Waiting to try a failed download again by itself (see scheduleAutoRetry). */
+  retryTimer?: NodeJS.Timeout
 }
 
 interface HttpDownloadRuntime extends RuntimeFields, HttpTransferTarget {
@@ -362,13 +367,73 @@ export class DownloadManager {
     return ids
   }
 
-  /** Removes every download of a group, finished ones from the list too (their files stay,
-   * unless `trashFiles`). */
-  async removeGroupDownloads(groupId: string, trashFiles: boolean): Promise<void> {
+  /** Ends a group's downloads. Finished ones leave the list (their files stay, unless
+   * `trashFiles`). Unfinished ones are cancelled and their partial data deleted with
+   * `deletePartial`; otherwise they are paused and let out of the group, partial data kept. */
+  async removeGroupDownloads(
+    groupId: string,
+    options: { trashFiles?: boolean; deletePartial?: boolean } = {}
+  ): Promise<void> {
     await this.initialization
+    const trashFiles = options.trashFiles === true
     const ids = new Set(this.groupDownloads(groupId).map((state) => state.id))
     for (const entry of await listHistory()) if (entry.groupId === groupId) ids.add(entry.id)
-    for (const id of ids) await this.remove(id, trashFiles)
+    for (const id of ids) {
+      const runtime = this.runtimes.get(id)
+      const unfinished = !!runtime && runtime.state.status !== 'completed'
+      if (unfinished && options.deletePartial !== true) await this.detach(runtime)
+      else await this.remove(id, trashFiles)
+    }
+  }
+
+  /** Lets an unfinished download out of its group, paused, with what it has downloaded. */
+  private async detach(runtime: DownloadRuntime): Promise<void> {
+    await this.pause(runtime.state.id)
+    runtime.state.groupId = undefined
+    runtime.requestPayload.groupId = undefined
+    runtime.requestPayload.groupLane = false
+    this.pushUpdate(runtime)
+    await this.persistNow(runtime)
+  }
+
+  /** What duplicate checks compare a new link with: every download in the list and every
+   * finished one (its file checked), as plain facts. */
+  async knownDownloads(): Promise<KnownDownload[]> {
+    await this.initialization
+    const known: KnownDownload[] = []
+    for (const { state } of this.runtimes.values()) {
+      const total = state.totalBytes
+      known.push({
+        id: state.id,
+        url: state.url,
+        kind:
+          state.status === 'downloading'
+            ? 'downloading'
+            : state.status === 'queued'
+              ? 'queued'
+              : state.status === 'completed'
+                ? 'history'
+                : 'paused',
+        fileName: state.fileName,
+        destinationPath: state.destinationPath,
+        totalBytes: total,
+        percent: total > 0 ? Math.min(100, Math.round((state.bytesDownloaded / total) * 100)) : 0,
+        completedAt: state.completedAt
+      })
+    }
+    for (const entry of await listHistory()) {
+      known.push({
+        id: entry.id,
+        url: entry.url,
+        kind: 'history',
+        fileName: entry.fileName,
+        destinationPath: entry.destinationPath,
+        totalBytes: entry.totalBytes,
+        completedAt: entry.completedAt,
+        missing: entry.missing
+      })
+    }
+    return known
   }
 
   /** Starts queued downloads, first queued first, while fewer than downloadsAtOnce run. Called
@@ -679,6 +744,7 @@ export class DownloadManager {
       state.queuedAt = undefined
     }
     clearSpeeds(state)
+    state.retryAt = undefined
     for (const unit of units) {
       if (unit.status === 'downloading') unit.status = 'pending'
       if (unit.kind === 'torrent') unit.provisionalBytes = 0
@@ -880,6 +946,8 @@ export class DownloadManager {
     this.runtimes.set(id, runtime)
     log.info('download', `start ${runtime.state.fileName} (${room ? 'running' : 'queued'})`, {
       id,
+      url: redactUrl(requestPayload.url),
+      group: requestPayload.groupId,
       networks: runtime.state.networks.filter((n) => n.enabled).map((n) => n.id)
     })
     await this.persistNow(runtime)
@@ -968,6 +1036,8 @@ export class DownloadManager {
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
 
     log.info('download', `resume ${runtime.state.fileName}`, { id })
+    runtime.state.retryAttempt = undefined
+    this.clearRetry(runtime)
     void this.resumeAfterVerifying(runtime, false)
   }
 
@@ -1013,6 +1083,7 @@ export class DownloadManager {
   /** Starts a run of a paused, failed or queued download, from where it stopped. */
   private begin(runtime: DownloadRuntime): void {
     const { networks } = runtime.state
+    this.clearRetry(runtime)
     runtime.state.status = 'downloading'
     runtime.state.queuedAt = undefined
     runtime.state.error = undefined
@@ -1241,6 +1312,7 @@ export class DownloadManager {
     )
       return
 
+    this.clearRetry(runtime)
     runtime.cancelPromise = this.cancelRuntime(runtime)
     try {
       await runtime.cancelPromise
@@ -1287,7 +1359,7 @@ export class DownloadManager {
   /** Removes a download, cancelling one under way. A finished one's file stays where it is,
    * unless `trashFile`: then it goes to the Trash, where the user can still get it back. The
    * path is the download's own, never one the window names. */
-  async remove(id: string, trashFile = false): Promise<void> {
+  async remove(id: string, trashFile = false, keepEntry = false): Promise<void> {
     await this.initialization
     let runtime = this.runtimes.get(id)
     if (runtime?.state.status === 'completed') {
@@ -1304,6 +1376,11 @@ export class DownloadManager {
         runtime.state.status === 'error')
     ) {
       await this.cancel(id)
+    }
+    if (runtime && keepEntry && runtime.state.status === 'completed') {
+      // Still being filed in history: wait for that, then treat it as a finished entry.
+      await runtime.runPromise?.catch(() => {})
+      runtime = this.runtimes.get(id)
     }
     if (runtime) {
       if (trashFile && runtime.state.status === 'completed') {
@@ -1326,7 +1403,11 @@ export class DownloadManager {
     // A finished one, from history.
     const entry = trashFile ? await findInHistory(id) : undefined
     if (entry && !entry.missing) await trashDownload(entry)
-    await removeFromHistory([id])
+    log.info('download', `${keepEntry ? 'trashed file of' : 'removed'} ${entry?.fileName ?? id}`, {
+      id
+    })
+    // Kept as a record whose file is now gone, when asked.
+    if (!keepEntry) await removeFromHistory([id])
     this.historyChanged()
   }
 
@@ -1348,6 +1429,7 @@ export class DownloadManager {
   async suspendAll(): Promise<void> {
     await this.initialization
     this.suspending = true
+    for (const runtime of this.runtimes.values()) this.clearRetry(runtime)
     await Promise.all(
       [...this.runtimes.values()].map(async (runtime) => {
         if (runtime.state.status === 'downloading') await this.pause(runtime.state.id)
@@ -1417,6 +1499,7 @@ export class DownloadManager {
       // Paused, errored, or cancelled — nothing left to do right now. An error keeps what it has
       // unless it can't be resumed (see failDownload); cancel() discards it.
       if (runtime.state.status === 'error') {
+        this.scheduleAutoRetry(runtime)
         this.pushUpdate(runtime)
         if (runtime.state.resumable === false) await runtime.file.discard()
       }
@@ -1442,6 +1525,7 @@ export class DownloadManager {
       runtime.state.destinationPath = publishedPath
       runtime.state.fileName = basename(publishedPath)
       runtime.state.status = 'completed'
+      runtime.state.retryAttempt = undefined
       runtime.state.completedAt = Date.now()
       log.info('download', `complete ${runtime.state.fileName}`, { id: runtime.state.id })
       // Done before it held a speed for long: the best it showed.
@@ -1466,6 +1550,36 @@ export class DownloadManager {
 
     this.pushUpdate(runtime)
     if (runtime.state.status === 'completed') await this.moveToHistory(runtime)
+  }
+
+  /** A download that failed for a reason a later try may fix (the network, a busy server) is
+   * tried again by itself, a little later each time, and the window shows when. What it has
+   * downloaded is kept all along. A refused link or a full disk is the user's to deal with. */
+  private scheduleAutoRetry(runtime: DownloadRuntime): void {
+    const { state } = runtime
+    const override = app.isPackaged ? undefined : process.env['PLEXO_E2E_AUTO_RETRY_MS']
+    if (override === '0' || runtime.retryTimer || runtime.kind !== 'http') return
+    if (state.resumable === false || !isTransientFailure(state.error)) return
+    const attempt = (state.retryAttempt ?? 0) + 1
+    if (attempt > AUTO_RETRY_ATTEMPTS) return
+    const wait = override ? Number(override) : autoRetryDelaySeconds(attempt) * 1000
+    state.retryAttempt = attempt
+    state.retryAt = Date.now() + wait
+    log.info('download', `retry ${attempt} of ${state.fileName} in ${Math.round(wait / 1000)} s`, {
+      id: state.id
+    })
+    runtime.retryTimer = setTimeout(() => {
+      runtime.retryTimer = undefined
+      if (runtime.state.status === 'error' && !runtime.cancelPromise && !this.suspending) {
+        void this.resumeAfterVerifying(runtime, false)
+      }
+    }, wait)
+  }
+
+  private clearRetry(runtime: DownloadRuntime): void {
+    clearTimeout(runtime.retryTimer)
+    runtime.retryTimer = undefined
+    runtime.state.retryAt = undefined
   }
 
   /** Stops the current run: every stream, and the run's own wait. */

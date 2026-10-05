@@ -1,5 +1,13 @@
 import { app } from 'electron'
-import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { redactUrlsIn } from '../shared/urlTools'
 import { join } from 'node:path'
 
 // One plain-text log, <userData>/logs/plexo.log, for watching what the app decides. Rotated at
@@ -35,7 +43,11 @@ function write(level: string, scope: string, message: string, data?: unknown): v
       extra = ' [unprintable]'
     }
   }
-  const line = `${new Date().toISOString()} ${level.padEnd(5)} [${scope}] ${message}${extra}\n`
+  // Links in a log never carry their query string or credentials.
+  const line =
+    redactUrlsIn(
+      `${new Date().toISOString()} ${level.padEnd(5)} [${scope}] ${message}${extra}`
+    ).replace(/\n(?=.)/g, '\n    ') + '\n'
   if (!app.isPackaged) process.stdout.write(line)
   const path = open()
   if (!path) return
@@ -58,4 +70,40 @@ export const log = {
     write('WARN', scope, message, data),
   error: (scope: string, message: string, data?: unknown): void =>
     write('ERROR', scope, message, data)
+}
+
+/** The newest `limit` lines of the log, oldest first. A stack trace's indented lines stay with
+ * the line they belong to. */
+export function readLog(limit: number): string[] {
+  const path = open()
+  if (!path) return []
+  let text = ''
+  try {
+    text = readFileSync(path, 'utf8')
+    if (text.split('\n').length < limit) {
+      text = readFileSync(`${path}.1`, 'utf8').concat(text)
+    }
+  } catch {
+    // No older copy.
+  }
+  const entries: string[] = []
+  for (const line of text.split('\n')) {
+    if (line === '') continue
+    if (/^\s/.test(line) && entries.length > 0) entries[entries.length - 1] += `\n${line}`
+    else entries.push(line)
+  }
+  return entries.slice(-Math.max(1, limit))
+}
+
+/** Empties the log (and its old copy). */
+export function clearLog(): void {
+  const path = open()
+  if (!path) return
+  try {
+    writeFileSync(path, '')
+    writeFileSync(`${path}.1`, '')
+    size = 0
+  } catch {
+    // Nothing to clear.
+  }
 }

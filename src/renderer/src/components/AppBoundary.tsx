@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { TitleBar } from './TitleBar'
+import { useLogsStore } from '../store/useLogsStore'
 import { Button } from './ui/button'
 
 interface State {
@@ -61,8 +62,12 @@ export class AppBoundary extends Component<{ children: ReactNode }, State> {
             <Button type="button" variant="secondary" onClick={this.copy}>
               {this.state.copied ? 'Copied' : 'Copy error'}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => void window.plexo.openLogs()}>
-              Open logs
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => useLogsStore.getState().setOpen(true)}
+            >
+              View logs
             </Button>
           </div>
         </div>
