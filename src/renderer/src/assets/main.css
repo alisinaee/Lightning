@@ -143,9 +143,9 @@
   --radius: 8px;
 }
 
-/* Maps shadcn/Base UI's expected semantic tokens onto Plexo's existing palette above, instead of
+/* Maps shadcn/Base UI's expected semantic tokens onto Lightning's existing palette above, instead of
    introducing a second, parallel color system. Tailwind only generates `bg-primary`-style
-   utilities for names declared here, in `@theme` — so this can freely reuse Plexo's own custom
+   utilities for names declared here, in `@theme` — so this can freely reuse Lightning's own custom
    property *values* (e.g. --color-accent) without colliding with their names, since only the
    left-hand names below become Tailwind tokens. */
 @theme inline {
@@ -181,7 +181,7 @@
   :root {
     --hero-bg: linear-gradient(180deg, #202325 0%, #1b1e20 100%);
     --hero-border: #2b2f33;
-    /* Graphite instrument-panel background — exact hex values from the "Plexo v2" design doc. */
+    /* Graphite instrument-panel background — exact hex values from the "Lightning v2" design doc. */
     --bg: #1b1e20;
     --bg-secondary: #202325;
     --bg-tertiary: #202325;
@@ -321,19 +321,19 @@
   }
 }
 
-@keyframes plexo-dash {
+@keyframes lightning-dash {
   to {
     stroke-dashoffset: -60;
   }
 }
 
-@keyframes plexo-stripes {
+@keyframes lightning-stripes {
   to {
     background-position: 16px 0;
   }
 }
 
-@keyframes plexo-glow {
+@keyframes lightning-glow {
   0%,
   100% {
     opacity: 0.45;
@@ -343,7 +343,7 @@
   }
 }
 
-@keyframes plexo-popover-in {
+@keyframes lightning-popover-in {
   from {
     opacity: 0;
     transform: translateY(-4px) scale(0.97);
@@ -361,5 +361,49 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Accent the user picks in Settings. Amber is the default, so it needs no override. */
+:root[data-accent='blue'] {
+  --color-accent: #2563eb;
+  --color-accent-onsolid: #ffffff;
+}
+:root[data-accent='teal'] {
+  --color-accent: #0f766e;
+  --color-accent-onsolid: #ffffff;
+}
+:root[data-accent='green'] {
+  --color-accent: #15803d;
+  --color-accent-onsolid: #ffffff;
+}
+:root[data-accent='violet'] {
+  --color-accent: #6d28d9;
+  --color-accent-onsolid: #ffffff;
+}
+:root[data-accent='rose'] {
+  --color-accent: #be123c;
+  --color-accent-onsolid: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-accent='blue'] {
+    --color-accent: #8eb4ff;
+    --color-accent-onsolid: #0d1424;
+  }
+  :root[data-accent='teal'] {
+    --color-accent: #5dcec2;
+    --color-accent-onsolid: #0c1c1a;
+  }
+  :root[data-accent='green'] {
+    --color-accent: #7dce96;
+    --color-accent-onsolid: #0e1c12;
+  }
+  :root[data-accent='violet'] {
+    --color-accent: #c4b5fd;
+    --color-accent-onsolid: #160f24;
+  }
+  :root[data-accent='rose'] {
+    --color-accent: #fda4af;
+    --color-accent-onsolid: #240810;
   }
 }

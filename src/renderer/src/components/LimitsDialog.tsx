@@ -270,7 +270,7 @@ function NetworkPage({
     setError(null)
     try {
       if (reset === 'usage') {
-        await window.plexo.resetNetworkUsage(id)
+        await window.lightning.resetNetworkUsage(id)
         onUsageReset()
       } else change({ speedLimit: undefined, dataLimit: undefined })
       setReset(null)
@@ -291,7 +291,7 @@ function NetworkPage({
       <div className="flex flex-col gap-1 pb-3">
         <h3 className="font-sans text-[18px] leading-none font-semibold">{name}</h3>
         <div className="font-mono text-[12px] text-muted-foreground">
-          {formatBytes(used)} used by Plexo {dataUsageLabel(period)}
+          {formatBytes(used)} used by Lightning {dataUsageLabel(period)}
         </div>
       </div>
 

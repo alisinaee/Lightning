@@ -24,7 +24,7 @@ export async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-function sanitizeFileName(fileName: string): string {
+export function sanitizeFileName(fileName: string): string {
   // A server-provided name is one component, never a path or NTFS data stream.
   let safe = fileName.replace(/[\\/]/g, '_').replace(/\p{Cc}/gu, '_')
   if (process.platform === 'win32') {
@@ -84,7 +84,7 @@ async function claimName(
 }
 
 /**
- * Claims a download by exclusively creating <final name>.plexo. The final name
+ * Claims a download by exclusively creating <final name>.lightning. The final name
  * itself does not appear until the file is complete. An existing partial file
  * also claims its corresponding final name, including after a restart.
  */
@@ -92,12 +92,12 @@ export async function reserveDestinationPath(directory: string, fileName: string
   return claimName(
     directory,
     fileName,
-    { suffix: '.plexo', extension: true },
+    { suffix: '.lightning', extension: true },
     async (candidate) => {
-      const handle = await open(`${candidate}.plexo`, 'wx+')
+      const handle = await open(`${candidate}.lightning`, 'wx+')
       await handle.close()
       if (!(await pathExists(candidate))) return true
-      await rm(`${candidate}.plexo`)
+      await rm(`${candidate}.lightning`)
       return false
     }
   )

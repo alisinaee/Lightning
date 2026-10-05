@@ -1,4 +1,6 @@
 import type { ProbeResult } from '@shared/types'
+import { DnsPicker } from './DnsPicker'
+import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -9,7 +11,6 @@ import {
   acceptedLink,
   describeError,
   describeFileCount,
-  fileExtensionBadge,
   formatBytes,
   toDisplayPath
 } from '../utils/format'
@@ -62,6 +63,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const url = useAppStore((store) => store.draftUrl)
   const setUrl = useAppStore((store) => store.setDraftUrl)
   const destinationDir = useAppStore((store) => store.destinationDir)
+  const [dnsId, setDnsId] = useState<string | null>(null)
   const setDestinationDir = useAppStore((store) => store.setDestinationDir)
   const full = useAppStore(
     (store) =>
@@ -86,7 +88,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   // managers have long assumed. Anything else on the clipboard is left alone.
   useEffect(() => {
     if (useAppStore.getState().draftUrl) return
-    void window.plexo
+    void window.lightning
       .readClipboardText()
       .then((text) => {
         const link = acceptedLink(text)
@@ -115,7 +117,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     setSkippedFiles([])
     const timer = setTimeout(async () => {
       try {
-        const result = await window.plexo.probeUrl(trimmed)
+        const result = await window.lightning.probeUrl(trimmed)
         if (stale) return
         setProbe({ status: 'ready', result })
       } catch (error) {
@@ -194,17 +196,17 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   }
 
   const handleBrowse = async (): Promise<void> => {
-    const chosen = await window.plexo.chooseDestinationFolder(destinationDir)
+    const chosen = await window.lightning.chooseDestinationFolder(destinationDir)
     if (chosen) setDestinationDir(chosen)
   }
 
   // A .torrent file goes in the link field as its path; the probe reads it from there.
   const handleOpenTorrent = async (): Promise<void> => {
-    const path = await window.plexo.chooseTorrentFile()
+    const path = await window.lightning.chooseTorrentFile()
     if (path) setUrl(path)
   }
 
-  const handleStart = async (): Promise<void> => {
+  const handleStart = async (later = false): Promise<void> => {
     if (probe.status !== 'ready' || !canStart) return
     setStarting(true)
     setStartError(null)
@@ -216,10 +218,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         totalBytes: probe.result.totalBytes ?? 0,
         supportsRanges: multiChunkAllowed,
         interfaceIds: startIds,
+        ...(dnsId ? { dnsId } : {}),
+        ...(later ? { startPaused: true } : {}),
         etag: probe.result.etag,
         lastModified: probe.result.lastModified
       }
-      const id = await window.plexo.startDownload(
+      const id = await window.lightning.startDownload(
         probe.result.kind === 'torrent'
           ? {
               ...common,
@@ -238,7 +242,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       useAppStore.setState({
         startedUrl: url.trim(),
         draftUrl: '',
-        ...(full ? {} : { view: { name: 'download', id } as const })
+        ...(full || later ? {} : { view: { name: 'download', id } as const })
       })
       onDone()
     } catch (error) {
@@ -319,9 +323,13 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
         {ready && (
           <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-border bg-card font-mono text-[10px] font-semibold text-muted-foreground">
-              {torrent && torrent.files.length > 1 ? 'DIR' : fileExtensionBadge(fileName)}
-            </div>
+            <FormatBadge
+              name={fileName}
+              className="size-10 rounded-lg text-[10px]"
+              kind={torrent && torrent.files.length > 1 ? 'torrent' : undefined}
+            >
+              {torrent && torrent.files.length > 1 ? 'DIR' : undefined}
+            </FormatBadge>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               {torrent ? (
                 <div className="truncate text-[14px] font-medium">{ready.suggestedFileName}</div>
@@ -407,6 +415,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           </div>
         </div>
 
+        <div className="flex items-center gap-3">
+          <div className={labelClass}>DNS</div>
+          <DnsPicker value={dnsId} followLabel="Default" onChange={setDnsId} />
+        </div>
+
         {/* A torrent's speed comes from its peers, and an unsplittable file has one stream. */}
         {ready && !torrent && !isSingleStreamOnly && (
           <div className="flex items-center gap-3">
@@ -459,6 +472,14 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         )}
         <Button type="button" variant="secondary" onClick={onDone}>
           Cancel
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={!canStart}
+          onClick={() => void handleStart(true)}
+        >
+          Download later
         </Button>
         <Button type="submit" disabled={!canStart}>
           {startLabel}

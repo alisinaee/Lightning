@@ -1,10 +1,10 @@
-// A local server for trying Plexo without a real download. Every path is a file of zeros:
+// A local server for trying Lightning without a real download. Every path is a file of zeros:
 //   http://<this computer's address>:8099/movie.part1.rar?mb=200
 // Query options: mb=<size in MB, default 100>, kbps=<cap per connection, default none>,
 // fail=N (answer 500 to the first N requests of that exact link), norange=1 (no range support).
 //
 // Speed is limited per NETWORK, shared by all of that network's connections. A network is named
-// by the request header X-Plexo-Network (sent by the dev fake-network copy of Plexo), else by the
+// by the request header X-Lightning-Network (sent by the dev fake-network copy of Lightning), else by the
 // client's source address (e.g. Wi-Fi 192.168.1.4 vs. tunnel 198.18.0.1 when a VPN is up).
 // Open http://127.0.0.1:<port>/ for the control page: live sliders, scenarios, ready-made links.
 // Control URLs: /__speed?net=<key>&kbps=<n> (0 unlimited, -1 block), /__state, /__reset,
@@ -223,7 +223,7 @@ const server = createServer((req, res) => {
   }
 
   const key =
-    req.headers['x-plexo-network'] || (req.socket.remoteAddress ?? '?').replace(/^::ffff:/, '')
+    req.headers['x-lightning-network'] || (req.socket.remoteAddress ?? '?').replace(/^::ffff:/, '')
   const n = net(String(key))
   const size = Math.round(Number(q.get('mb') ?? 100) * 1024 * 1024)
   const kbps = Number(q.get('kbps') ?? 0)
@@ -275,7 +275,7 @@ const server = createServer((req, res) => {
 })
 
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Plexo fake server</title>
+<title>Lightning fake server</title>
 <style>
 :root{color-scheme:light dark;font:15px system-ui,sans-serif}
 body{max-width:760px;margin:20px auto;padding:0 14px}
@@ -284,7 +284,7 @@ button{font:inherit;padding:6px 11px;margin:3px;border-radius:7px;border:1px sol
 input[type=range]{width:100%}textarea{width:100%;height:150px;font:12px monospace;box-sizing:border-box}
 .row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}small,.m{opacity:.7}
 </style>
-<h2>Plexo fake server <small id=sc></small></h2>
+<h2>Lightning fake server <small id=sc></small></h2>
 <div class=card><b>Scenarios</b> <small>(need the networks to have been seen: start a download on each)</small><br>
 <span id=scs></span><button onclick="go('/__reset')">reset</button><div id=err style="color:#e55"></div></div>
 <div id=nets></div>

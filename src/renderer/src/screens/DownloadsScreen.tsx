@@ -1,8 +1,19 @@
 import type { DownloadState } from '@shared/types'
-import { CirclePause, CirclePlay, ListPlus, Plus, Search, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Link2,
+  ListPlus,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  Settings,
+  X
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombineDiagram } from '../components/CombineDiagram'
-import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
+import { filterLabel } from '../components/downloadFilterLabels'
 import { DownloadRow } from '../components/downloads/DownloadRow'
 import type { RowHandlers } from '../components/downloads/rowHelpers'
 import { TableBoundary } from '../components/downloads/TableBoundary'
@@ -23,6 +34,12 @@ import {
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
 import { Button, buttonVariants } from '../components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../components/ui/dropdown-menu'
 import { Input } from '../components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { VpnControl } from '../components/VpnControl'
@@ -34,8 +51,7 @@ import {
   entryItems,
   filterEntries,
   queuePositions,
-  sortEntries,
-  summaryOf
+  sortEntries
 } from '../utils/downloadList'
 import { describeError, linkExpired } from '../utils/format'
 import { isFinished, type Item } from '../utils/status'
@@ -49,7 +65,8 @@ const EMPTY_MESSAGES: Partial<Record<DownloadFilter, string>> = {
   paused: 'Nothing is paused'
 }
 
-const platformTrash = (): string => (window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash')
+const platformTrash = (): string =>
+  window.lightning.platform === 'win32' ? 'Recycle Bin' : 'Trash'
 
 const isUnfinished = (item: Item): boolean => !isFinished(item) && item.status !== 'completed'
 const isTrashable = (item: Item): boolean =>
@@ -57,7 +74,26 @@ const isTrashable = (item: Item): boolean =>
   !(isFinished(item) && item.missing) &&
   (item.kind !== 'torrent' || !item.folder || !isFinished(item) || !!item.downloadedFiles?.length)
 
-export function DownloadsScreen(): React.JSX.Element {
+function SettingsButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button type="button" size="icon" variant="ghost" aria-label="Settings" onClick={onClick}>
+            <Settings />
+          </Button>
+        }
+      />
+      <TooltipContent>Settings</TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function DownloadsScreen({
+  onOpenSettings
+}: {
+  onOpenSettings: () => void
+}): React.JSX.Element {
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const groupInfos = useAppStore((store) => store.groups)
@@ -79,7 +115,7 @@ export function DownloadsScreen(): React.JSX.Element {
   const groupUi = useAppStore((store) => store.groupUi)
   const [fixing, setFixing] = useState<DownloadState | null>(null)
   const [confirmation, setConfirmation] = useState<{
-    kind: 'cancel' | 'trash'
+    kind: 'cancel' | 'trash' | 'remove' | 'again'
     ids: string[]
   } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -87,7 +123,6 @@ export function DownloadsScreen(): React.JSX.Element {
   const [limitsOpen, setLimitsOpen] = useState(false)
   const [limitsPage, setLimitsPage] = useState<string | null>(null)
   const searchInput = useRef<HTMLInputElement>(null)
-
   const downloads = useMemo(
     () =>
       Object.values(downloadsById)
@@ -105,7 +140,19 @@ export function DownloadsScreen(): React.JSX.Element {
     () => sortEntries(filterEntries(entries, filter, kindFilter, search), sort),
     [entries, filter, kindFilter, search, sort]
   )
-  const filtering = filter !== 'all' || kindFilter !== null || search.trim() !== ''
+  const [matchIndex, setMatchIndex] = useState(0)
+  const matchCount = search.trim() === '' ? 0 : shown.length
+  const stepMatch = (dir: 1 | -1): void => {
+    if (matchCount === 0) return
+    setMatchIndex((index) => (index + dir + matchCount) % matchCount)
+  }
+  useEffect(() => setMatchIndex(0), [search])
+  useEffect(() => {
+    if (matchCount === 0) return
+    const row = document.querySelectorAll<HTMLElement>('[data-row-entry]')[matchIndex]
+    row?.scrollIntoView({ block: 'nearest' })
+  }, [matchIndex, matchCount, shown])
+
   // Every file of what is listed, a group's included, open or not.
   const items = useMemo(() => shown.flatMap(entryItems), [shown])
   // What is on screen top to bottom, for a Shift-click range.
@@ -160,10 +207,10 @@ export function DownloadsScreen(): React.JSX.Element {
     setActionError(null)
     try {
       for (const item of targets) {
-        if (action === 'pause') await window.plexo.pauseDownload(item.id)
-        else if (action === 'resume') await window.plexo.resumeDownload(item.id)
+        if (action === 'pause') await window.lightning.pauseDownload(item.id)
+        else if (action === 'resume') await window.lightning.resumeDownload(item.id)
         else {
-          await window.plexo.removeDownload(item.id, { trashFile: action === 'trash' })
+          await window.lightning.removeDownload(item.id, { trashFile: action === 'trash' })
           useAppStore.setState((store) => {
             const { [item.id]: removed, ...rest } = store.downloads
             void removed
@@ -188,8 +235,14 @@ export function DownloadsScreen(): React.JSX.Element {
   }
   // Rows get these as one object that never changes, so a progress push re-renders only its row.
   const actionRef = useRef(runAction)
+  // A right-click on a row that is part of a selection acts on the whole selection.
+  const targetsRef = useRef<(item: Item, applies: (item: Item) => boolean) => string[]>(() => [])
   useEffect(() => {
     actionRef.current = runAction
+    targetsRef.current = (item, applies) =>
+      selected.has(item.id) && chosen.length > 1
+        ? chosen.filter(applies).map((one) => one.id)
+        : [item.id]
   })
   const handlers = useMemo<RowHandlers>(
     () => ({
@@ -223,15 +276,15 @@ export function DownloadsScreen(): React.JSX.Element {
       fix: (item) => {
         if (!isFinished(item)) setFixing(item)
       },
-      again: (item) => {
-        removeDownload(item.id)
-        openNewDownload(item.url)
-      },
-      cancel: (item) => setConfirmation({ kind: 'cancel', ids: [item.id] }),
-      removeFromList: (item) => void actionRef.current([item], 'remove'),
-      trash: (item) => setConfirmation({ kind: 'trash', ids: [item.id] })
+      again: (item) => setConfirmation({ kind: 'again', ids: [item.id] }),
+      cancel: (item) =>
+        setConfirmation({ kind: 'cancel', ids: targetsRef.current(item, isUnfinished) }),
+      removeFromList: (item) =>
+        setConfirmation({ kind: 'remove', ids: targetsRef.current(item, (i) => !isUnfinished(i)) }),
+      trash: (item) =>
+        setConfirmation({ kind: 'trash', ids: targetsRef.current(item, isTrashable) })
     }),
-    [toggle, setSelected, selectRow, openRow, removeDownload, openNewDownload]
+    [toggle, setSelected, selectRow, openRow]
   )
 
   // Colors are assigned across every network at once, so a row repaints only when that changes.
@@ -259,25 +312,30 @@ export function DownloadsScreen(): React.JSX.Element {
     (item): item is DownloadState =>
       !isFinished(item) && item.status === 'error' && item.resumable !== false && !linkExpired(item)
   )
-  const unfinished = chosen.filter(isUnfinished)
-  const finished = chosen.filter((item) => !isUnfinished(item))
-  const trashable = finished.filter(isTrashable)
   const confirmationItems = confirmation
     ? allItems.filter(
         (item) =>
           confirmation.ids.includes(item.id) &&
-          (confirmation.kind === 'cancel' ? isUnfinished(item) : isTrashable(item))
+          (confirmation.kind === 'cancel'
+            ? isUnfinished(item)
+            : confirmation.kind === 'trash'
+              ? isTrashable(item)
+              : confirmation.kind === 'remove'
+                ? !isUnfinished(item)
+                : true)
       )
     : []
   const pausableAll = downloads.filter(
     (download) => download.status === 'downloading' || download.status === 'queued'
   )
   const resumableAll = downloads.filter((download) => download.status === 'paused')
+  // One button for both: it pauses while anything is running, and resumes once all is paused.
+  const pausing = pausableAll.length > 0 || resumableAll.length === 0
 
   // Keyboard, as a file manager has it: Esc lets go of the selection, ⌘/Ctrl+A takes everything
   // listed, ⌘/Ctrl+F goes to the search box.
   useEffect(() => {
-    const mod = window.plexo.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
+    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
     const onKeyDown = (event: KeyboardEvent): void => {
       const target = event.target
       const typing =
@@ -310,110 +368,152 @@ export function DownloadsScreen(): React.JSX.Element {
 
   const noDownloadsAtAll = entries.length === 0
 
+  const count = confirmationItems.length
+  const noun = count === 1 ? 'download' : 'downloads'
+  const confirmTitle =
+    confirmation?.kind === 'cancel'
+      ? `Cancel ${count} ${noun}?`
+      : confirmation?.kind === 'trash'
+        ? `Move ${count === 1 ? 'this file' : `${count} files`} to ${platformTrash()}?`
+        : confirmation?.kind === 'remove'
+          ? `Remove ${count} ${noun} from the list?`
+          : 'Download this again?'
+  const confirmText =
+    confirmation?.kind === 'cancel'
+      ? 'This stops the selected unfinished downloads and deletes their downloaded data. Finished downloads stay unchanged.'
+      : confirmation?.kind === 'trash'
+        ? `This moves the files to the ${platformTrash()} and removes them from the list. Unrelated files stay in place.`
+        : confirmation?.kind === 'remove'
+          ? 'Only the list entry goes. The downloaded files stay on your computer.'
+          : 'It is taken off the list, any partly downloaded data is deleted, and the link opens in New download to start over.'
+  const confirmButton =
+    confirmation?.kind === 'cancel'
+      ? 'Cancel downloads'
+      : confirmation?.kind === 'trash'
+        ? `Move to ${platformTrash()}`
+        : confirmation?.kind === 'remove'
+          ? 'Remove from list'
+          : 'Start again'
+
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="@container flex h-full flex-col bg-background">
       {chosen.length === 0 ? (
         <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
-          <DownloadFilterMenu value={filter} counts={counts.statuses} onChange={chooseFilter} />
-          {!noDownloadsAtAll && (
-            <>
-              <div className="relative w-[220px] min-w-[72px] shrink">
-                <Search
-                  aria-hidden
-                  className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  ref={searchInput}
-                  type="search"
-                  aria-label="Search downloads"
-                  placeholder="Search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      setSearch('')
-                      event.currentTarget.blur()
-                    }
-                  }}
-                  className="h-8 pr-2 pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
-                />
-              </div>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Pause all"
-                      disabled={pausableAll.length === 0}
-                      onClick={() => void runAction(pausableAll, 'pause')}
-                    >
-                      <CirclePause />
-                    </Button>
+          <h1 className="sr-only">{filterLabel(filter)}</h1>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  aria-label={pausing ? 'Pause all' : 'Resume all'}
+                  disabled={noDownloadsAtAll || (!pausing && resumableAll.length === 0)}
+                  onClick={() =>
+                    void (pausing
+                      ? runAction(pausableAll, 'pause')
+                      : runAction(resumableAll, 'resume'))
                   }
-                />
-                <TooltipContent>Pause all</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Resume all"
-                      disabled={resumableAll.length === 0}
-                      onClick={() => void runAction(resumableAll, 'resume')}
-                    >
-                      <CirclePlay />
-                    </Button>
-                  }
-                />
-                <TooltipContent>Resume all</TooltipContent>
-              </Tooltip>
-              {entries.length > 1 && (
-                <div className="hidden truncate font-mono text-[11.5px] leading-none text-muted-foreground @min-[1100px]:block">
-                  {summaryOf(downloads)}
-                </div>
-              )}
-            </>
-          )}
-          <div className="flex-1" />
+                >
+                  {pausing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
+                </Button>
+              }
+            />
+            <TooltipContent>{pausing ? 'Pause all' : 'Resume all'}</TooltipContent>
+          </Tooltip>
           <NetworksMenu
             onOpenLimits={(page) => {
               setLimitsPage(page)
               setLimitsOpen(true)
             }}
           />
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={<Button type="button" size="icon" aria-label="New download" />}
+                  >
+                    <Plus />
+                  </DropdownMenuTrigger>
+                }
+              />
+              <TooltipContent>New download</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => openNewDownload()}>
+                <Link2 />
+                One link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openMultiLinks()}>
+                <ListPlus />
+                Several links
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* After the + button, so a VPN turning up doesn't move it. */}
           <VpnControl />
-          <Tooltip>
-            <TooltipTrigger
-              render={
+          <div className="flex-1" />
+          <div className="relative w-[260px] min-w-[140px] shrink">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              ref={searchInput}
+              type="search"
+              disabled={noDownloadsAtAll}
+              aria-label="Search downloads"
+              placeholder="Search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSearch('')
+                  event.currentTarget.blur()
+                } else if (event.key === 'Enter') {
+                  event.preventDefault()
+                  stepMatch(event.shiftKey ? -1 : 1)
+                }
+              }}
+              className="h-8 pr-[92px] pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
+            />
+            {search.trim() !== '' && (
+              <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
+                <span className="px-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {matchCount === 0 ? '0/0' : `${matchIndex + 1}/${matchCount}`}
+                </span>
                 <Button
                   type="button"
-                  variant="secondary"
-                  size="icon"
-                  aria-label="Add several links"
-                  onClick={() => openMultiLinks()}
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Previous result"
+                  disabled={matchCount === 0}
+                  onClick={() => stepMatch(-1)}
                 >
-                  <ListPlus />
+                  <ChevronUp />
                 </Button>
-              }
-            />
-            <TooltipContent>Add several links</TooltipContent>
-          </Tooltip>
-          <Button type="button" onClick={() => openNewDownload()}>
-            <Plus data-icon="inline-start" />
-            New download
-          </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Next result"
+                  disabled={matchCount === 0}
+                  onClick={() => stepMatch(1)}
+                >
+                  <ChevronDown />
+                </Button>
+              </span>
+            )}
+          </div>
+          <SettingsButton onClick={onOpenSettings} />
         </div>
       ) : (
         <div
           role="toolbar"
           aria-label="Selected downloads"
           aria-busy={busy}
-          className="flex h-12 shrink-0 items-center gap-3 border-b-[0.5px] border-border px-5"
+          className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
         >
           <Tooltip>
             <TooltipTrigger
@@ -479,51 +579,21 @@ export function DownloadsScreen(): React.JSX.Element {
                 Retry ({retryable.length})
               </Button>
             )}
-            {finished.length > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void runAction(finished, 'remove')}
-              >
-                Remove from list ({finished.length})
-              </Button>
-            )}
-            {unfinished.length > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                disabled={busy}
-                onClick={() =>
-                  setConfirmation({ kind: 'cancel', ids: unfinished.map((item) => item.id) })
-                }
-              >
-                Cancel downloads… ({unfinished.length})
-              </Button>
-            )}
-            {trashable.length > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                disabled={busy}
-                onClick={() =>
-                  setConfirmation({ kind: 'trash', ids: trashable.map((item) => item.id) })
-                }
-              >
-                Move files to {platformTrash()}… ({trashable.length})
-              </Button>
-            )}
           </div>
+          <SettingsButton onClick={onOpenSettings} />
         </div>
       )}
-      {actionError && (
-        <div role="alert" className="border-b border-border px-5 py-2 text-[12px] text-destructive">
-          {actionError}
-        </div>
-      )}
+      {/* Laid over the table, not above it, so it doesn't push the table down. */}
+      <div className="relative z-20 h-0">
+        {actionError && (
+          <div
+            role="alert"
+            className="absolute inset-x-0 top-0 border-b border-border bg-background px-5 py-2 text-[12px] text-destructive shadow-sm"
+          >
+            {actionError}
+          </div>
+        )}
+      </div>
 
       <div className="@container flex min-h-0 flex-1">
         {noDownloadsAtAll ? (
@@ -542,7 +612,7 @@ export function DownloadsScreen(): React.JSX.Element {
                 setSelected(new Set())
               }}
               canClear={history.length > 0}
-              onClear={() => void window.plexo.clearHistory()}
+              onClear={() => void window.lightning.clearHistory()}
             />
             <TableBoundary>
               <DownloadsTable
@@ -596,17 +666,6 @@ export function DownloadsScreen(): React.JSX.Element {
           </>
         )}
       </div>
-      {filtering && !noDownloadsAtAll && shown.length > 0 && (
-        <div className="flex h-7 shrink-0 items-center gap-3 border-t-[0.5px] border-border px-4 text-[11.5px] text-muted-foreground">
-          <span>
-            Showing {shown.length} of {entries.length}
-          </span>
-          <button type="button" className="hover:text-foreground hover:underline" onClick={showAll}>
-            Show all downloads
-          </button>
-        </div>
-      )}
-
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />
       <LimitsDialog
         open={limitsOpen}
@@ -621,32 +680,34 @@ export function DownloadsScreen(): React.JSX.Element {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmation?.kind === 'cancel' ? 'Cancel' : `Move files to ${platformTrash()} for`}{' '}
-              {confirmationItems.length} {confirmationItems.length === 1 ? 'download' : 'downloads'}
-              ?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmation?.kind === 'cancel'
-                ? 'This stops the selected unfinished downloads and deletes their downloaded data. Finished downloads stay unchanged.'
-                : `This moves the selected finished downloads’ files to the ${platformTrash()} and removes them from the list. Unrelated files stay in place.`}
-            </AlertDialogDescription>
+            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmText}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={busy || confirmationItems.length === 0}
-              className={buttonVariants({ variant: 'destructive', size: 'sm' })}
-              onClick={() =>
+              className={buttonVariants({
+                variant: confirmation?.kind === 'remove' ? 'default' : 'destructive',
+                size: 'sm'
+              })}
+              onClick={() => {
+                if (confirmation?.kind === 'again') {
+                  const [item] = confirmationItems
+                  setConfirmation(null)
+                  if (item) {
+                    removeDownload(item.id)
+                    openNewDownload(item.url)
+                  }
+                  return
+                }
                 void runAction(
                   confirmationItems,
-                  confirmation?.kind === 'cancel' ? 'remove' : 'trash'
+                  confirmation?.kind === 'trash' ? 'trash' : 'remove'
                 )
-              }
+              }}
             >
-              {confirmation?.kind === 'cancel'
-                ? 'Cancel downloads'
-                : `Move files to ${platformTrash()}`}
+              {confirmButton}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -662,8 +723,8 @@ const PLACEHOLDER_NETWORKS = [
   { solid: 'var(--icon-muted)', label: 'USB' },
   { solid: 'var(--icon-muted)', label: 'Ethernet' }
 ]
-const PASTE_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
-const NEW_SHORTCUT = window.plexo.platform === 'darwin' ? '⌘N' : 'Ctrl+N'
+const PASTE_SHORTCUT = window.lightning.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
+const NEW_SHORTCUT = window.lightning.platform === 'darwin' ? '⌘N' : 'Ctrl+N'
 
 /** Nothing listed yet: how to start one — or, with no network connected, how to get one. */
 function EmptyState(): React.JSX.Element {
@@ -684,7 +745,7 @@ function EmptyState(): React.JSX.Element {
         <>
           <div className="font-sans text-[16px] leading-[1.2] font-bold">No networks connected</div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-            Plexo needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
+            Lightning needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
             connect your phone using USB tethering.
           </div>
           <div className="mt-1 flex gap-2">
@@ -694,7 +755,7 @@ function EmptyState(): React.JSX.Element {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => window.plexo.openNetworkSettings()}
+              onClick={() => window.lightning.openNetworkSettings()}
             >
               Network settings…
             </Button>

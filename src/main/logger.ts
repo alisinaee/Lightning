@@ -10,8 +10,8 @@ import {
 import { redactUrlsIn } from '../shared/urlTools'
 import { join } from 'node:path'
 
-// One plain-text log, <userData>/logs/plexo.log, for watching what the app decides. Rotated at
-// about 2 MB (one old copy, plexo.log.1). Also printed to stdout when running unpackaged.
+// One plain-text log, <userData>/logs/lightning.log, for watching what the app decides. Rotated at
+// about 2 MB (one old copy, lightning.log.1). Also printed to stdout when running unpackaged.
 const MAX_BYTES = 2 * 1024 * 1024
 
 let file: string | null = null
@@ -22,7 +22,7 @@ function open(): string | null {
   try {
     const dir = join(app.getPath('userData'), 'logs')
     mkdirSync(dir, { recursive: true })
-    file = join(dir, 'plexo.log')
+    file = join(dir, 'lightning.log')
     size = statSync(file, { throwIfNoEntry: false })?.size ?? 0
   } catch {
     file = null

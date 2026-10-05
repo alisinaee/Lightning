@@ -5,7 +5,9 @@ import type {
   DownloadGroup,
   GroupInfo,
   GroupMode,
+  GroupPatch,
   GroupPlan,
+  GroupRule,
   PendingGroupItem,
   StartDownloadRequest
 } from '../../shared/types'
@@ -116,6 +118,11 @@ export class GroupStore {
     )
   }
 
+  /** How many files of the group may run at once, when it has a limit. Cheap: asked often. */
+  limitOf(id: string): number | undefined {
+    return this.saved.groups.find((group) => group.id === id)?.maxAtOnce
+  }
+
   get(id: string): GroupInfo | undefined {
     return this.list().find((group) => group.id === id)
   }
@@ -125,6 +132,9 @@ export class GroupStore {
     destinationDir: string
     mode: GroupMode
     interfaceIds: string[]
+    maxAtOnce?: number
+    rule?: GroupRule
+    dnsId?: string
     fileCount: number
     ownsFolder?: boolean
   }): DownloadGroup {
@@ -138,6 +148,9 @@ export class GroupStore {
       mode: input.mode,
       createdAt: Date.now(),
       interfaceIds: input.interfaceIds,
+      ...(input.maxAtOnce && input.maxAtOnce > 0 ? { maxAtOnce: Math.floor(input.maxAtOnce) } : {}),
+      ...(input.mode === 'manual' ? { rule: input.rule ?? 'perFile' } : {}),
+      ...(input.dnsId ? { dnsId: input.dnsId } : {}),
       ...(input.ownsFolder ? { ownsFolder: true } : {})
     }
     this.saved.groups.push(group)
@@ -145,12 +158,43 @@ export class GroupStore {
     return group
   }
 
-  update(id: string, patch: { name?: string; mode?: GroupMode }): void {
+  update(id: string, patch: GroupPatch): void {
     const group = this.saved.groups.find((entry) => entry.id === id)
     if (!group) return
     const name = patch.name?.trim()
     if (name) group.name = name
-    if (patch.mode === 'auto' || patch.mode === 'manual') group.mode = patch.mode
+    if (patch.mode === 'auto' || patch.mode === 'manual') {
+      group.mode = patch.mode
+      // A group made before the rule existed keeps working per file until one is chosen.
+      if (patch.mode === 'manual') group.rule ??= 'perFile'
+    }
+    if (patch.rule === 'general' || patch.rule === 'perFile') group.rule = patch.rule
+    if (
+      Array.isArray(patch.interfaceIds) &&
+      patch.interfaceIds.length > 0 &&
+      patch.interfaceIds.every((value) => typeof value === 'string')
+    ) {
+      group.interfaceIds = [...new Set(patch.interfaceIds)]
+    }
+    if (patch.dnsId === null) delete group.dnsId
+    else if (typeof patch.dnsId === 'string' && patch.dnsId) group.dnsId = patch.dnsId
+    if (patch.maxAtOnce === null) delete group.maxAtOnce
+    else if (typeof patch.maxAtOnce === 'number' && patch.maxAtOnce >= 1) {
+      group.maxAtOnce = Math.min(64, Math.floor(patch.maxAtOnce))
+    }
+    this.save()
+  }
+
+  /** The DNS a group asks for, if it asks. */
+  dnsOf(id: string): string | undefined {
+    return this.saved.groups.find((group) => group.id === id)?.dnsId
+  }
+
+  /** The networks every waiting file of the group will start on (a general rule). */
+  setPendingNetworks(groupId: string, networks: string[]): void {
+    const items = this.saved.pending[groupId]
+    if (!items || items.length === 0) return
+    for (const item of items) item.request.interfaceIds = networks
     this.save()
   }
 

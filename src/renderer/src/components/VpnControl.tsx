@@ -17,19 +17,16 @@ export function VpnControl(): React.JSX.Element | null {
   return (
     <Popover>
       <PopoverTrigger
+        title={`VPN is ${on ? 'on' : 'off'}`}
         aria-label={`VPN: ${on ? 'on' : 'off'}`}
-        className="flex h-8 items-center gap-1.5 rounded-lg border-[0.5px] px-2.5 text-[12.5px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-8 items-center justify-center rounded-lg border-[0.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{
           background: on ? 'var(--color-vpn-bg)' : 'transparent',
           borderColor: on ? 'var(--color-vpn-border)' : 'var(--border-strong)',
           color: on ? 'var(--color-vpn-text)' : 'var(--text-secondary)'
         }}
       >
-        <Icon aria-hidden className="size-3.5" />
-        VPN
-        <span className="text-[11px] font-semibold tracking-wide uppercase">
-          {on ? 'on' : 'off'}
-        </span>
+        <Icon aria-hidden className="size-4" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[300px] gap-0 p-0">
         <div className="flex items-start gap-3 p-4">

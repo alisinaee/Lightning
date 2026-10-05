@@ -2,6 +2,7 @@ import { Cable, ChevronDown } from 'lucide-react'
 import type { NetworkOption } from '../hooks/useNetworkOptions'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 
 /** Which networks one file uses: all of them, or the ones ticked. At least one stays ticked.
@@ -46,40 +47,48 @@ export function ConnectionPicker({
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={
-          iconOnly ? (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              disabled={disabled || options.length === 0}
-              aria-label={`Networks for ${label}`}
-              title={auto && !auto.pinned ? 'Choose connections (now Auto)' : 'Choose connections'}
-              className={auto?.pinned ? 'text-primary' : 'text-muted-foreground'}
-            >
-              <Cable />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={disabled || options.length === 0}
-              aria-label={`Networks for ${label}`}
-              className="max-w-[170px] shrink-0 justify-between"
-            >
-              <span className="truncate">{summary}</span>
-              <ChevronDown data-icon="inline-end" />
-            </Button>
-          )
-        }
-      />
+      <Tooltip disabled={!iconOnly}>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                iconOnly ? (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={disabled || options.length === 0}
+                    aria-label={`Networks for ${label}`}
+                    className={auto?.pinned ? 'text-primary' : 'text-muted-foreground'}
+                  >
+                    <Cable />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={disabled || options.length === 0}
+                    aria-label={`Networks for ${label}`}
+                    className="max-w-[170px] shrink-0 justify-between"
+                  >
+                    <span className="truncate">{summary}</span>
+                    <ChevronDown data-icon="inline-end" />
+                  </Button>
+                )
+              }
+            />
+          }
+        />
+        <TooltipContent>
+          {auto && !auto.pinned ? 'Choose connections (now Auto)' : 'Choose connections'}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent align="end" className="w-56 gap-1">
         {auto && (
           <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] font-medium hover:bg-muted">
             <Checkbox checked={!auto.pinned} onCheckedChange={(on) => on && auto.onAuto()} />
-            Auto (Plexo decides)
+            Auto (Lightning decides)
           </label>
         )}
         {!single && options.length > 1 && (

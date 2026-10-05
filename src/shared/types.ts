@@ -206,7 +206,7 @@ interface DownloadStateBase {
   /** For an error: whether resuming can pick up where it stopped. False when the progress was
    * thrown away, e.g. the file changed on the server. */
   resumable?: boolean
-  /** An error Plexo will try again by itself: when (ms since epoch) and which try it is. */
+  /** An error Lightning will try again by itself: when (ms since epoch) and which try it is. */
   retryAt?: number
   retryAttempt?: number
   startedAt: number
@@ -223,6 +223,9 @@ interface DownloadStateBase {
   peakSpeedBytesPerSec?: number
   /** The group (an "Add several links" batch) it belongs to, if any; see DownloadGroup. */
   groupId?: string
+  /** The DNS it resolves names with (a DnsProfile id, or 'system'); unset follows its group, then
+   * the app's default. */
+  dnsId?: string
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }
@@ -303,7 +306,7 @@ export interface NetworkPreference {
   off?: boolean
   /** Bytes a second all downloads together may take over it. */
   speedLimit?: number
-  /** Bytes Plexo may receive in the chosen calendar period. */
+  /** Bytes Lightning may receive in the chosen calendar period. */
   dataLimit?: number
   /** Defaults to month for existing settings. Weeks start Monday in local time. */
   dataLimitPeriod?: DataLimitPeriod
@@ -320,11 +323,50 @@ export interface UpdateInfo {
   dismissed: boolean
 }
 
+/** Choices from Settings. Absent fields mean the defaults in DEFAULT_PREFS. */
+export type AccentId = 'amber' | 'blue' | 'teal' | 'green' | 'violet' | 'rose'
+
+export interface AppPrefs {
+  uiScale?: number
+  accent?: AccentId
+  notifyAdded?: boolean
+  notifyCompleted?: boolean
+  notifyFailed?: boolean
+  notifyWhenInactive?: boolean
+  preventSleep?: boolean
+  closeToBackground?: boolean
+  hideDock?: boolean
+  /** system: the OS proxy. direct: none. manual: the addresses below. */
+  proxyMode?: 'system' | 'direct' | 'manual'
+  proxyHttp?: string
+  proxyHttps?: string
+  proxyFtp?: string
+  proxySocks?: string
+}
+
+export const DEFAULT_PREFS: Required<AppPrefs> = {
+  uiScale: 1,
+  accent: 'amber',
+  notifyAdded: true,
+  notifyCompleted: true,
+  notifyFailed: false,
+  notifyWhenInactive: true,
+  preventSleep: true,
+  closeToBackground: true,
+  hideDock: false,
+  proxyMode: 'system',
+  proxyHttp: '',
+  proxyHttps: '',
+  proxyFtp: '',
+  proxySocks: ''
+}
+
 /** What app-settings.json holds, and what the renderer sends to change it (merged over the saved
  * values, `undefined` clearing one). A missing field was never set. */
 export interface AppSettings {
   themeSource?: ThemeSource
   dismissedUpdateVersion?: string
+  prefs?: AppPrefs
   /** The last destination folder picked. */
   destinationDir?: string
   /** User customizations (name/color) per network interface id. */
@@ -346,7 +388,7 @@ export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
 export interface InitialState {
-  /** "Plexo", or "Plexo Custom" for that build. */
+  /** "Lightning", or "Lightning" for that build. */
   appName?: string
   homeDir: string
   downloadsDir: string
@@ -359,6 +401,10 @@ export interface InitialState {
   useVpn: boolean
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
+  version: string
+  prefs: Required<AppPrefs>
+  /** The Test lab (the title bar's Debug button) is there: not in a packaged build. */
+  labEnabled: boolean
 }
 
 interface StartDownloadRequestBase {
@@ -374,6 +420,10 @@ interface StartDownloadRequestBase {
   lastModified: string | null
   /** The group it belongs to, if any. */
   groupId?: string
+  /** The DNS to resolve with; see DownloadState.dnsId. */
+  dnsId?: string
+  /** Added to the list and left paused, for the user to start later. */
+  startPaused?: boolean
   /** Set for a download an auto group runs on one network of its own: it doesn't count towards
    * downloadsAtOnce, which would otherwise keep two networks from each running a file. */
   groupLane?: boolean
@@ -395,9 +445,13 @@ export interface StartTorrentDownloadRequest extends StartDownloadRequestBase {
 
 export type StartDownloadRequest = StartHttpDownloadRequest | StartTorrentDownloadRequest
 
-/** `auto`: Plexo gives each file a network of its own to finish the group soonest. `manual`: each
+/** `auto`: Lightning gives each file a network of its own to finish the group soonest. `manual`: each
  * file uses the networks the user picked for it. */
 export type GroupMode = 'auto' | 'manual'
+
+/** In a manual group: `general`, every file uses the group's networks; `perFile`, only what is
+ * set on each file counts (a file nobody set uses the group's networks to begin with). */
+export type GroupRule = 'general' | 'perFile'
 
 /** A batch of links added together, kept in one folder. */
 export interface DownloadGroup {
@@ -406,9 +460,17 @@ export interface DownloadGroup {
   destinationDir: string
   mode: GroupMode
   createdAt: number
-  /** The networks an auto group may use. */
+  /** The networks the group uses: all of them in a general rule, or the ones an auto group may
+   * use. */
   interfaceIds: string[]
-  /** Plexo made the folder for this group: it may take it away again once it is empty. */
+  /** How many of its files run at once; unset, the group follows the general limit (manual) or
+   * runs one file on each network (auto). */
+  maxAtOnce?: number
+  /** Manual groups only; unset means `perFile`, as groups were before there was a choice. */
+  rule?: GroupRule
+  /** The DNS its files use (a DnsProfile id, or 'system'); unset follows the app's default. */
+  dnsId?: string
+  /** Lightning made the folder for this group: it may take it away again once it is empty. */
   ownsFolder?: boolean
 }
 
@@ -439,7 +501,7 @@ export interface PlanNetwork {
   state: PlanNetworkState
 }
 
-/** How a group is being downloaded and why, for the "How Plexo is downloading this group" panel. */
+/** How a group is being downloaded and why, for the "How Lightning is downloading this group" panel. */
 export interface GroupPlan {
   mode: GroupMode
   measuring: boolean
@@ -464,6 +526,9 @@ export interface CreateGroupInput {
   destinationDir: string
   mode: GroupMode
   interfaceIds: string[]
+  maxAtOnce?: number
+  rule?: GroupRule
+  dnsId?: string
   requests: StartDownloadRequest[]
   ownsFolder?: boolean
 }
@@ -471,6 +536,12 @@ export interface CreateGroupInput {
 export interface GroupPatch {
   name?: string
   mode?: GroupMode
+  interfaceIds?: string[]
+  /** `null` goes back to no limit of its own. */
+  maxAtOnce?: number | null
+  rule?: GroupRule
+  /** `null` goes back to following the app's default. */
+  dnsId?: string | null
 }
 
 /** The settings the window shows, as main pushes them when something other than the window
@@ -479,3 +550,20 @@ export type SettingsPush = Pick<
   InitialState,
   'downloadsAtOnce' | 'speedLimit' | 'slowMode' | 'slowModeSpeed' | 'useVpn'
 >
+
+/** A DNS setup the user named: the servers names are looked up with instead of the system's. */
+export interface DnsProfile {
+  id: string
+  name: string
+  /** One to four IP addresses (IPv4 or IPv6). */
+  servers: string[]
+  /** When it was last picked; the most recent come first in lists. */
+  usedAt?: number
+}
+
+/** The saved DNS profiles, and which one the app uses unless a group or download says otherwise. */
+export interface DnsConfig {
+  profiles: DnsProfile[]
+  /** A profile id; unset is the system's DNS. */
+  defaultId?: string
+}

@@ -4,6 +4,7 @@ import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
 import { ConnectionPicker } from '../components/ConnectionPicker'
+import { DnsPicker } from '../components/DnsPicker'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
@@ -12,6 +13,7 @@ import { DetailHeader } from '../components/DetailHeader'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { TorrentFiles } from '../components/TorrentFiles'
 import { TorrentBadge } from '../components/TorrentBadge'
+import { FormatBadge } from '../components/downloads/FileKindIcon'
 import { ThroughVpn } from '../components/ThroughVpn'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
@@ -26,7 +28,6 @@ import {
   connectionsOf,
   describeFileCount,
   dirnameOf,
-  fileExtensionBadge,
   formatBytes,
   formatEta,
   formatPercent,
@@ -142,12 +143,12 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   useEffect(() => {
     if (isPaused) {
       const label = isQueued ? 'Queued' : 'Paused'
-      document.title = knownSize ? `Plexo — ${label} (${percent}%)` : `Plexo — ${label}`
+      document.title = knownSize ? `Lightning — ${label} (${percent}%)` : `Lightning — ${label}`
     } else {
-      document.title = knownSize ? `Plexo — ${percent}%` : 'Plexo — downloading'
+      document.title = knownSize ? `Lightning — ${percent}%` : 'Lightning — downloading'
     }
     return () => {
-      document.title = 'Plexo'
+      document.title = 'Lightning'
     }
   }, [percent, knownSize, isPaused, isQueued])
 
@@ -160,9 +161,9 @@ export const DownloadingScreen = memo(function DownloadingScreen({
     // A queued one is paused out of the queue, as a running one is.
     if (isPaused && !isQueued) {
       setResuming(true)
-      void window.plexo.resumeDownload(download.id)
+      void window.lightning.resumeDownload(download.id)
     } else {
-      void window.plexo.pauseDownload(download.id)
+      void window.lightning.pauseDownload(download.id)
     }
   }
 
@@ -186,6 +187,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   )
   const [chooseError, setChooseError] = useState<string | null>(null)
   const inAutoGroup = group?.mode === 'auto'
+  const splittable = isTorrent || (download.totalBytes > 0 && download.totalBlocks > 1)
   const pinned = inAutoGroup && group.pinned.includes(download.id)
   const attemptChoose = (work: () => Promise<unknown>): void => {
     setChooseError(null)
@@ -328,13 +330,15 @@ export const DownloadingScreen = memo(function DownloadingScreen({
       {/* File info — always visible, never shrinks */}
       <div className="shrink-0 p-[16px_20px_0px]">
         <div className="flex items-center gap-[14px]">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] border-[var(--border-strong)] bg-card font-mono text-[10.5px] leading-none font-bold tracking-[0.04em] text-[var(--text-secondary)]">
+          <FormatBadge
+            name={download.fileName}
+            size="lg"
+            kind={isFolder(download) ? 'torrent' : undefined}
+          >
             {isFolder(download) ? (
               <Folder aria-label="Folder" className="size-[18px]" />
-            ) : (
-              fileExtensionBadge(download.fileName)
-            )}
-          </div>
+            ) : undefined}
+          </FormatBadge>
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex min-w-0 items-center gap-2">
               <TruncatedText
@@ -465,6 +469,10 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 .filter((network) => network.enabled)
                 .map((network) => network.id)}
               label={download.fileName}
+              // A file that can't be split across networks is one or the other.
+              single={!splittable}
+              // A general rule decides for every file.
+              disabled={group?.mode === 'manual' && group.rule === 'general'}
               auto={
                 group && inAutoGroup
                   ? {
@@ -483,6 +491,15 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                     : switchNetworks(download, ids)
                 )
               }
+            />
+            <span className="ml-3 font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground uppercase">
+              DNS
+            </span>
+            <DnsPicker
+              value={download.dnsId ?? null}
+              followLabel={group?.dnsId ? "Group's DNS" : 'Default'}
+              label={`DNS for ${download.fileName}`}
+              onChange={(id) => void window.lightning.setDownloadDns(download.id, id)}
             />
             {chooseError && (
               <span className="truncate text-[11.5px] text-[var(--color-danger)]">
@@ -558,7 +575,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                       chooseConnection(group, { kind: 'download', download }, next)
                     )
                   } else {
-                    void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
+                    void window.lightning.setDownloadNetwork(download.id, row.id, enabled)
                   }
                 }}
               />

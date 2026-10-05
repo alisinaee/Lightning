@@ -114,7 +114,7 @@ export class Lab {
         planLog: [],
         feed: [],
         samples: [],
-        awaiting: 'Plexo was reopened. Press Verify to check that everything came back right.'
+        awaiting: 'Lightning was reopened. Press Verify to check that everything came back right.'
       }
       this.emit()
     } catch {
@@ -257,7 +257,7 @@ export class Lab {
         const done = steps.find((step) => step.name === name)
         if (done) {
           done.status = 'pass'
-          done.notes.push('Done before Plexo was restarted.')
+          done.notes.push('Done before Lightning was restarted.')
         }
       }
     }
@@ -311,7 +311,8 @@ export class Lab {
       await rm(plan.fixedDir, { recursive: true, force: true }).catch(() => {})
     }
     const dir =
-      plan.fixedDir ?? (await mkdtemp(join(tmpdir(), `plexo-lab-${plan.id.replace(/\W/g, '')}-`)))
+      plan.fixedDir ??
+      (await mkdtemp(join(tmpdir(), `lightning-lab-${plan.id.replace(/\W/g, '')}-`)))
     await mkdir(dir, { recursive: true })
 
     let ctx: RunContext | null = null
@@ -459,7 +460,7 @@ export class Lab {
    * go, loudly. (The restart plan's own files are not touched.) */
   private async sweepLeftovers(hooks: RunHooks): Promise<void> {
     const mine = (path: string): boolean =>
-      path.includes('plexo-lab-') && !path.includes('plexo-lab-restart')
+      path.includes('lightning-lab-') && !path.includes('lightning-lab-restart')
     const ids = this.deps.manager
       .liveStates()
       .filter((s) => mine(s.destinationPath))
@@ -544,7 +545,7 @@ export class Lab {
     const seconds =
       run.endedAt && run.startedAt ? ((run.endedAt - run.startedAt) / 1000).toFixed(0) : '?'
     const lines = [
-      `Plexo Test lab: ${plan.id} ${plan.title} (${plan.difficulty})`,
+      `Lightning Test lab: ${plan.id} ${plan.title} (${plan.difficulty})`,
       `Result: ${run.status.toUpperCase()} in ${seconds} s`
     ]
     for (const step of run.steps) {

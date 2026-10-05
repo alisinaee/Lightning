@@ -21,7 +21,7 @@ export interface GroupUi {
   decisions: boolean
 }
 
-const GROUP_UI_KEY = 'plexo.groupUi'
+const GROUP_UI_KEY = 'lightning.groupUi'
 
 function loadGroupUi(): Record<string, GroupUi> {
   try {
@@ -43,10 +43,17 @@ export interface TableLayout {
   sort: { key: SortKey; dir: 'asc' | 'desc' }
   widths: Partial<Record<ColumnId, number>>
   hidden: ColumnId[]
+  /** Whole file names over as many lines as they need, not cut with "…". */
+  wrapNames: boolean
 }
 
-const TABLE_KEY = 'plexo.table'
-const DEFAULT_TABLE: TableLayout = { sort: { key: 'status', dir: 'asc' }, widths: {}, hidden: [] }
+const TABLE_KEY = 'lightning.table'
+const DEFAULT_TABLE: TableLayout = {
+  sort: { key: 'status', dir: 'asc' },
+  widths: {},
+  hidden: [],
+  wrapNames: false
+}
 
 const COLUMN_IDS: ColumnId[] = ['name', 'size', 'status', 'speed', 'eta', 'added', 'connections']
 
@@ -73,7 +80,8 @@ export function sanitizeTable(raw: unknown): TableLayout {
         ? { key: sort.key, dir: sort.dir }
         : DEFAULT_TABLE.sort,
     widths,
-    hidden
+    hidden,
+    wrapNames: parsed.wrapNames === true
   }
 }
 
@@ -151,6 +159,9 @@ interface AppStore {
   tableLayout: TableLayout
   sortBy: (key: SortKey) => void
   setColumnWidth: (id: ColumnId, width: number) => void
+  /** Several columns at once, e.g. two that trade width across a divider. */
+  setColumnWidths: (widths: Partial<Record<ColumnId, number>>) => void
+  setWrapNames: (on: boolean) => void
   toggleColumn: (id: ColumnId) => void
   /** Back to the default layout, forgetting the saved one. */
   resetTableLayout: () => void
@@ -221,13 +232,13 @@ interface AppStore {
 }
 
 // Settings saved by the main process, read once before the first paint (see InitialState).
-const initial = window.plexo.initialState
+const initial = window.lightning.initialState
 
 /** Every setting changes optimistically: the store is updated first so the UI feels instant,
  * then this saves it. The store stays the source of truth either way — a failed save just means
  * the change isn't remembered next launch. */
 function persist(patch: AppSettings): void {
-  window.plexo.updateSettings(patch).catch(() => {})
+  window.lightning.updateSettings(patch).catch(() => {})
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -277,6 +288,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ tableLayout })
     saveTable(tableLayout)
   },
+  setColumnWidths: (widths) => {
+    const rounded = Object.fromEntries(
+      Object.entries(widths).map(([id, width]) => [id, Math.round(width)])
+    )
+    const tableLayout = {
+      ...get().tableLayout,
+      widths: { ...get().tableLayout.widths, ...rounded }
+    }
+    set({ tableLayout })
+    saveTable(tableLayout)
+  },
+
+  setWrapNames: (wrapNames) => {
+    const tableLayout = { ...get().tableLayout, wrapNames }
+    set({ tableLayout })
+    saveTable(tableLayout)
+  },
+
   toggleColumn: (id) => {
     const { hidden } = get().tableLayout
     const tableLayout = {
@@ -312,7 +341,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (get().interfacesStatus !== 'ready') set({ interfacesStatus: 'loading' })
     set({ interfacesError: null })
     try {
-      get().receiveInterfaces(await window.plexo.listInterfaces())
+      get().receiveInterfaces(await window.lightning.listInterfaces())
     } catch (error) {
       set({
         interfacesStatus: 'error',
@@ -332,7 +361,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   refreshLatencies: async () => {
     try {
-      const latencies = await window.plexo.pingInterfaces()
+      const latencies = await window.lightning.pingInterfaces()
       set({ latencies })
     } catch {
       // Latency is a nice-to-have readout — a failed probe just leaves stale values.
@@ -356,7 +385,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   checkForUpdate: async () => {
     try {
-      const availableUpdate = await window.plexo.checkForUpdate()
+      const availableUpdate = await window.lightning.checkForUpdate()
       set({ availableUpdate })
     } catch {
       // Best-effort — a failed check just leaves the banner hidden.
@@ -418,7 +447,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const { [id]: removed, ...downloads } = get().downloads
     void removed
     set({ downloads, history: get().history.filter((entry) => entry.id !== id) })
-    void window.plexo.removeDownload(id, options).catch(() => {})
+    void window.lightning.removeDownload(id, options).catch(() => {})
   },
 
   setView: (view) => set({ view }),

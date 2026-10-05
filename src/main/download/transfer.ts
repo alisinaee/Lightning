@@ -1,3 +1,4 @@
+import type { ResolveHost } from '../network/routes'
 import type {
   DownloadNetwork,
   DownloadState,
@@ -77,6 +78,9 @@ export interface TransferHost {
   failDownload(message: string, discard?: boolean): void
   failNetwork(network: DownloadNetwork, message: string): void
   scheduleUpdate(): void
+  /** How this download looks names up: its own DNS, its group's, or the app's. Asked for at each
+   * new connection, so a change applies from the next one. */
+  resolveHost: ResolveHost
 }
 
 // Raw per-event deltas are too noisy to display (socket buffers flush in

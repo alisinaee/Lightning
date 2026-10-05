@@ -31,12 +31,12 @@ async function launch(): Promise<void> {
     args: [PROJECT_ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
     env: {
       ...(process.env as Record<string, string>),
-      PLEXO_USER_DATA: userData,
-      PLEXO_E2E_HIDE_WINDOW: '1',
-      PLEXO_E2E_DHT: '0',
+      LIGHTNING_USER_DATA: userData,
+      LIGHTNING_E2E_HIDE_WINDOW: '1',
+      LIGHTNING_E2E_DHT: '0',
       // Pretend an update exists that was already dismissed, so the real check can't raise a
       // dialog over the window part way through.
-      PLEXO_FORCE_UPDATE_VERSION: '0.0.1-lab'
+      LIGHTNING_FORCE_UPDATE_VERSION: '0.0.1-lab'
     }
   })
   page = await app.firstWindow()
@@ -44,7 +44,7 @@ async function launch(): Promise<void> {
 }
 
 test.beforeAll(async () => {
-  userData = await mkdtemp(join(tmpdir(), 'plexo-lab-e2e-'))
+  userData = await mkdtemp(join(tmpdir(), 'lightning-lab-e2e-'))
   await writeFile(
     join(userData, 'app-settings.json'),
     JSON.stringify({ dismissedUpdateVersion: '0.0.1-lab' })
@@ -58,7 +58,7 @@ test.afterAll(async () => {
 })
 
 const runPlan = (id: string): Promise<LabPlanRun> =>
-  page.evaluate((planId) => window.plexo.labRun(planId), id)
+  page.evaluate((planId) => window.lightning.labRun(planId), id)
 
 test('the Debug button opens the Test lab and a plan runs from it', async () => {
   test.setTimeout(90_000)
@@ -74,7 +74,7 @@ test('the Debug button opens the Test lab and a plan runs from it', async () => 
   await page.evaluate(() => {
     const w = window as unknown as { __simSeen: boolean[] }
     w.__simSeen = []
-    window.plexo.onLabEvent((event) => w.__simSeen.push(event.state.simActive))
+    window.lightning.onLabEvent((event) => w.__simSeen.push(event.state.simActive))
   })
   await card.getByRole('button', { name: 'Run', exact: true }).click()
   await expect(card.getByText('PASS', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
@@ -87,7 +87,7 @@ test('the Debug button opens the Test lab and a plan runs from it', async () => 
 })
 
 test('the lab lists its plans', async () => {
-  const plans = await page.evaluate(() => window.plexo.labList())
+  const plans = await page.evaluate(() => window.lightning.labList())
   expect(plans.map((plan) => plan.id)).toEqual(
     expect.arrayContaining([
       '0',
@@ -145,9 +145,9 @@ for (const id of [
     console.log(`plan ${id}: ${run.status} in ${((Date.now() - began) / 1000).toFixed(0)} s`)
     expect(run.status, run.report).toBe('pass')
     // The lab puts everything back.
-    const state = await page.evaluate(() => window.plexo.labGetState())
+    const state = await page.evaluate(() => window.lightning.labGetState())
     expect(state.simActive).toBe(false)
-    expect(await page.evaluate(() => window.plexo.listDownloads())).toEqual([])
+    expect(await page.evaluate(() => window.lightning.listDownloads())).toEqual([])
   })
 }
 
@@ -158,9 +158,9 @@ test('plan 16 survives a restart', async () => {
   expect(first.status, first.report).toBe('awaiting')
   await app.close()
   await launch()
-  const state = await page.evaluate(() => window.plexo.labGetState())
+  const state = await page.evaluate(() => window.lightning.labGetState())
   expect(state.runs['16']?.status).toBe('awaiting')
-  const second = await page.evaluate(() => window.plexo.labVerify('16'))
+  const second = await page.evaluate(() => window.lightning.labVerify('16'))
   expect(second.status, second.report).toBe('pass')
 })
 
@@ -168,7 +168,7 @@ test('Run all completes end to end', async () => {
   test.skip(!PLANS.includes('runall'), 'set LAB_PLANS=runall (about 12 minutes)')
   test.setTimeout(30 * 60_000)
   const began = Date.now()
-  const state = await page.evaluate(() => window.plexo.labRunAll())
+  const state = await page.evaluate(() => window.lightning.labRunAll())
   console.log(`Run all took ${((Date.now() - began) / 1000).toFixed(0)} s\n${state.report}`)
   const failed = Object.values(state.runs).filter((run) => run.status !== 'pass')
   expect(failed.map((run) => run.report)).toEqual([])

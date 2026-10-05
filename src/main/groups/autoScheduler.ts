@@ -119,7 +119,7 @@ export class AutoScheduler {
         mode: 'auto',
         measuring: false,
         networks: [],
-        summary: 'Plexo picks a connection for each file as it starts.',
+        summary: 'Lightning picks a connection for each file as it starts.',
         log: []
       },
       plannedNetworks: {}
@@ -150,9 +150,12 @@ export class AutoScheduler {
 
   /** The group went manual: the files waiting start now, through the normal queue. */
   async startPending(group: GroupInfo): Promise<void> {
+    const manualRule = group.rule === 'general'
     for (const item of group.pending) {
       if (item.error || this.starting.has(item.id)) continue
-      await this.startItem(group, item, group.interfaceIds, false)
+      // A general rule gives every file the group's networks; per file, a file keeps its own.
+      const own = !manualRule && group.pinned.includes(item.id)
+      await this.startItem(group, item, own ? item.request.interfaceIds : group.interfaceIds, false)
     }
   }
 
@@ -281,6 +284,26 @@ export class AutoScheduler {
       // The downloads show the new networks next tick; files start then.
       return
     }
+    const live = states.filter(
+      (state) => state.status === 'downloading' || state.status === 'queued'
+    )
+    // One file left is quicker over every network than stuck on the single one it started on.
+    if (lanes.length > 1 && waiting.length === 0 && live.length === 1) {
+      const only = live[0]
+      if (only && !group.pinned.includes(only.id)) {
+        for (const lane of lanes) {
+          const network = only.networks.find((entry) => entry.id === lane)
+          if (network && !network.enabled) {
+            await this.manager.setNetworkEnabled(only.id, lane, true).catch(() => {})
+          }
+        }
+      }
+      return
+    }
+    if (waiting.length === 1 && live.length === 0 && !group.pinned.includes(waiting[0].id)) {
+      await this.startItem(group, waiting[0], lanes, true)
+      return
+    }
     if (waiting.length === 0) return
 
     // Lanes with a file on them; a file on several networks holds them all.
@@ -288,7 +311,17 @@ export class AutoScheduler {
     for (const state of states) {
       for (const network of state.networks) if (network.enabled) busy.add(network.id)
     }
+    // The group's own limit: how many more files may start now (no limit: as many as there are
+    // free networks, one on each).
+    const cap = group.maxAtOnce
+    const active = states.filter(
+      (state) => state.status === 'downloading' || state.status === 'queued'
+    ).length
+    const beingStarted = group.pending.filter((item) => this.starting.has(item.id)).length
+    let room = cap ? Math.max(0, cap - active - beingStarted) : Number.POSITIVE_INFINITY
+    const startedNow = new Set<string>()
     for (const item of waiting) {
+      if (room <= 0) break
       if (!group.pinned.includes(item.id)) continue
       const ids = item.request.interfaceIds.filter((id) => lanes.includes(id))
       if (ids.length === 0 || ids.some((id) => busy.has(id))) continue
@@ -299,17 +332,49 @@ export class AutoScheduler {
         for (const key of keys) this.starting.delete(key)
       })
       for (const id of ids) busy.add(id)
+      startedNow.add(item.id)
+      room--
     }
     for (const lane of lanes) {
+      if (room <= 0) break
       const key = `${group.id}:${lane}`
       if (busy.has(lane) || this.starting.has(key)) continue
       const id = result.order.find(
-        (candidate) => result.assignments[candidate] === lane && !group.pinned.includes(candidate)
+        (candidate) =>
+          result.assignments[candidate] === lane &&
+          !group.pinned.includes(candidate) &&
+          !startedNow.has(candidate)
       )
       const item = waiting.find((entry) => entry.id === id)
       if (!item) continue
       this.starting.add(key)
       void this.startItem(group, item, [lane], true).finally(() => this.starting.delete(key))
+      busy.add(lane)
+      startedNow.add(item.id)
+      room--
+    }
+    // A limit above the number of networks: more files than networks, so files share a network,
+    // each new one on the network with the fewest files.
+    if (cap && room > 0 && lanes.length > 0) {
+      const load = new Map<string, number>(lanes.map((lane) => [lane, 0]))
+      for (const state of states) {
+        if (state.status !== 'downloading' && state.status !== 'queued') continue
+        for (const network of state.networks) {
+          if (network.enabled && load.has(network.id))
+            load.set(network.id, load.get(network.id)! + 1)
+        }
+      }
+      for (const lane of lanes) if (busy.has(lane) && load.get(lane) === 0) load.set(lane, 1)
+      for (const item of waiting) {
+        if (room <= 0) break
+        if (startedNow.has(item.id) || group.pinned.includes(item.id)) continue
+        const lane = [...load.entries()].sort((a, b) => a[1] - b[1])[0]?.[0]
+        if (!lane) break
+        void this.startItem(group, item, [lane], true)
+        load.set(lane, (load.get(lane) ?? 0) + 1)
+        startedNow.add(item.id)
+        room--
+      }
     }
   }
 

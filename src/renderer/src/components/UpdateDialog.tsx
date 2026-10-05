@@ -30,7 +30,7 @@ export function UpdateDialog(): React.JSX.Element | null {
       {/* Focus Download, not the first button (Not now), so the primary action is the default. */}
       <AlertDialogContent initialFocus={downloadRef}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Plexo {availableUpdate.version} is available</AlertDialogTitle>
+          <AlertDialogTitle>Lightning {availableUpdate.version} is available</AlertDialogTitle>
           <AlertDialogDescription>A new version is ready to download.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

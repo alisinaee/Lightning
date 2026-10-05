@@ -1,12 +1,12 @@
 import type { DownloadState } from '@shared/types'
 import { cn } from 'cn'
 import { ChevronDown, ChevronRight, Folder, Pause, Pencil, Play, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
-import { statusOfGroup, type GroupEntry } from '../../utils/downloadList'
+import { sortItems, sortPending, statusOfGroup, type GroupEntry } from '../../utils/downloadList'
 import { describeError, formatPercent, toDisplayPath, wantedBytes } from '../../utils/format'
-import { isFinished, statusStyle, type RowInfo } from '../../utils/status'
+import { isFinished, statusStyle, type Item, type RowInfo } from '../../utils/status'
 import { GroupFileRow } from '../GroupFileRow'
 import { GroupPlanPanel } from '../GroupPlanPanel'
 import {
@@ -57,6 +57,15 @@ export function GroupTableRow({
 }): React.JSX.Element {
   const { group, items } = entry
   const columns = useColumns()
+  const sort = useAppStore((store) => store.tableLayout.sort)
+  // The files follow the column the user sorted by, like the rows of the list itself.
+  // Whatever is downloading right now comes first; the chosen sort orders the rest.
+  const sortedItems = useMemo(() => {
+    const sorted = sortItems(items, sort)
+    const live = (item: Item): boolean => !isFinished(item) && item.status === 'downloading'
+    return [...sorted.filter(live), ...sorted.filter((item) => !live(item))]
+  }, [items, sort])
+  const sortedPending = useMemo(() => sortPending(group.pending, sort), [group.pending, sort])
   const homeDir = useAppStore((store) => store.homeDir)
   const editGroup = useAppStore((store) => store.editGroup)
   // In the store, not here: the row moves around the table as its files change state, which can
@@ -143,7 +152,7 @@ export function GroupTableRow({
   const confirmRemoval = async (): Promise<void> => {
     setRemoving(false)
     await run(async () => {
-      await window.plexo.removeGroup(group.id)
+      await window.lightning.removeGroup(group.id)
       useAppStore.setState((store) => ({
         downloads: Object.fromEntries(
           Object.entries(store.downloads).filter(([, download]) => download.groupId !== group.id)
@@ -179,7 +188,7 @@ export function GroupTableRow({
 
   const cells: Record<string, React.JSX.Element> = {
     name: (
-      <div key="name" role="cell" className={cn(cellClass, 'gap-2')}>
+      <div key="name" role="cell" className={cn(cellClass, 'gap-2 pl-0')}>
         <button
           type="button"
           aria-expanded={open}
@@ -224,6 +233,7 @@ export function GroupTableRow({
     <div role="rowgroup">
       <div
         role="row"
+        data-row-entry={group.id}
         data-group={group.id}
         onClick={(event) => {
           if (!onControl(event.target)) toggleOpen()
@@ -248,7 +258,7 @@ export function GroupTableRow({
               <Pause />,
               () =>
                 void run(() =>
-                  Promise.all(pausable.map((item) => window.plexo.pauseDownload(item.id)))
+                  Promise.all(pausable.map((item) => window.lightning.pauseDownload(item.id)))
                 )
             )}
           {paused.length > 0 &&
@@ -258,7 +268,7 @@ export function GroupTableRow({
               <Play />,
               () =>
                 void run(() =>
-                  Promise.all(paused.map((item) => window.plexo.resumeDownload(item.id)))
+                  Promise.all(paused.map((item) => window.lightning.resumeDownload(item.id)))
                 )
             )}
           {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
@@ -292,7 +302,7 @@ export function GroupTableRow({
                     type="button"
                     size="sm"
                     variant="secondary"
-                    onClick={() => void window.plexo.revealDownload(revealId)}
+                    onClick={() => void window.lightning.revealDownload(revealId)}
                   >
                     Open folder
                   </Button>
@@ -303,7 +313,7 @@ export function GroupTableRow({
               <div className="py-1 text-[12px] text-muted-foreground">No files in this group.</div>
             )}
           </div>
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <GroupFileRow
               key={item.id}
               group={group}
@@ -319,7 +329,7 @@ export function GroupTableRow({
               onError={setError}
             />
           ))}
-          {group.pending.map((item) => (
+          {sortedPending.map((item) => (
             <GroupFileRow
               key={item.id}
               group={group}

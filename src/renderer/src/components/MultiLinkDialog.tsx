@@ -1,4 +1,4 @@
-import type { GroupMode, ProbeResult } from '@shared/types'
+import type { ProbeResult } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -8,11 +8,11 @@ import { describeError, formatBytes, toDisplayPath } from '../utils/format'
 import { folderNameOf, isSplittable, linksIn, probeLinks, requestFor } from '../utils/links'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import { ConnectionPicker } from './ConnectionPicker'
+import { GroupSettings, type GroupSettingsValue } from './GroupSettings'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { VpnSwitch } from './VpnSwitch'
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 type Row =
@@ -53,13 +53,20 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [startError, setStartError] = useState<string | null>(null)
   // Some files started, some didn't: starting again would repeat the ones that did.
   const [started, setStarted] = useState(false)
-  const [mode, setMode] = useState<GroupMode>('auto')
+  const [settings, setSettings] = useState<GroupSettingsValue>(() => ({
+    mode: 'auto',
+    rule: 'general',
+    interfaceIds: [],
+    maxAtOnce: null,
+    dnsId: null
+  }))
+  const { mode } = settings
   // The networks picked for a file in manual mode, by link; left out: every enabled network.
   const [connections, setConnections] = useState<Record<string, string[]>>({})
 
   // A link on the clipboard is most likely what this is for.
   useEffect(() => {
-    void window.plexo
+    void window.lightning
       .readClipboardText()
       .then((clip) => {
         if (linksIn(clip).links.length > 0) setText((current) => current || clip)
@@ -74,7 +81,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setSkipped(dropped)
     setUnticked([])
     setRows(links.map((url) => ({ url, status: 'checking' })))
-    probeLinks(links, window.plexo.probeUrl, (url, outcome) => {
+    probeLinks(links, window.lightning.probeUrl, (url, outcome) => {
       const row: Row =
         'result' in outcome
           ? { url, status: 'ready', result: outcome.result }
@@ -96,10 +103,13 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const canStart = chosen.length > 0 && !checking && Boolean(destinationDir) && !starting
   const layer = (ids: string[]): string[] =>
     withVpnLayer(ids, useAppStore.getState().allInterfaces, useAppStore.getState().useVpn)
-  const connectionOf = (url: string): string[] => connections[url] ?? enabledIds
+  // The group's networks until the user picks: the ones switched on in the networks menu.
+  const groupIds = settings.interfaceIds.length > 0 ? settings.interfaceIds : enabledIds
+  const perFile = mode === 'manual' && settings.rule === 'perFile'
+  const connectionOf = (url: string): string[] => connections[url] ?? groupIds
 
   const handleBrowse = async (): Promise<void> => {
-    const picked = await window.plexo.chooseDestinationFolder(destinationDir)
+    const picked = await window.lightning.chooseDestinationFolder(destinationDir)
     if (picked) setDestinationDir(picked)
   }
 
@@ -109,21 +119,18 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setStartError(null)
     const requests = chosen.flatMap((row) =>
       row.status === 'ready'
-        ? [
-            requestFor(
-              row.result,
-              target,
-              layer(mode === 'manual' ? connectionOf(row.url) : enabledIds)
-            )
-          ]
+        ? [requestFor(row.result, target, layer(perFile ? connectionOf(row.url) : groupIds))]
         : []
     )
     try {
-      const { failed } = await window.plexo.createGroup({
+      const { failed } = await window.lightning.createGroup({
         name: folderName,
         destinationDir: target,
         mode,
-        interfaceIds: layer(enabledIds),
+        rule: mode === 'manual' ? settings.rule : undefined,
+        maxAtOnce: settings.maxAtOnce ?? undefined,
+        dnsId: settings.dnsId ?? undefined,
+        interfaceIds: layer(groupIds),
         requests
       })
       if (failed.length === 0) {
@@ -193,28 +200,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               </span>
             </label>
 
-            <div className="flex items-center gap-3 text-[12.5px]">
-              <span className="w-24 shrink-0 text-[var(--text-secondary)]">Connections</span>
-              <ToggleGroup
-                aria-label="How files are given networks"
-                value={[mode]}
-                onValueChange={(values) => {
-                  const next = values[0]
-                  if (next === 'auto' || next === 'manual') setMode(next)
-                }}
-                size="sm"
-                spacing={0.5}
-                className="bg-secondary p-0.5"
-              >
-                <ToggleGroupItem value="auto">Auto</ToggleGroupItem>
-                <ToggleGroupItem value="manual">Manual</ToggleGroupItem>
-              </ToggleGroup>
-              <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
-                {mode === 'auto'
-                  ? 'Each file gets a network of its own, matched to how fast it is.'
-                  : 'Pick the networks each file uses.'}
-              </span>
-            </div>
+            <GroupSettings
+              value={{ ...settings, interfaceIds: groupIds }}
+              onChange={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+            />
 
             <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {rows.map((row) => (
@@ -270,7 +259,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     </span>
                   )}
                   {row.status === 'ready' &&
-                    (mode === 'manual' ? (
+                    (perFile ? (
                       <>
                         <ConnectionPicker
                           options={networkOptions}
@@ -284,7 +273,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       </>
                     ) : (
                       <span className="w-[150px] shrink-0 text-right text-[11.5px] text-muted-foreground">
-                        Auto
+                        {mode === 'auto' ? 'Auto' : 'Group rule'}
                       </span>
                     ))}
                 </div>

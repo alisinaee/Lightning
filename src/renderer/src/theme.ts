@@ -21,7 +21,7 @@ function makeKindPalette(name: string, label: string): KindPalette {
   }
 }
 
-// Teal / amber / steel per network, per the "Plexo v2" design — exact hex values live as
+// Teal / amber / steel per network, per the "Lightning v2" design — exact hex values live as
 // CSS custom properties (main.css) so dark mode reproduces the design precisely while light
 // mode gets a coherent, hand-tuned counterpart in the same hues.
 export const KIND_PALETTE: Record<NetworkInterfaceKind, KindPalette> = {
@@ -177,4 +177,4 @@ export function resolveNetworkVisual(
 }
 
 /** In px. Drawn inside the window, so popups have to keep clear of it themselves. */
-export const TITLE_BAR_HEIGHT = window.plexo.platform === 'darwin' ? 32 : 44
+export const TITLE_BAR_HEIGHT = window.lightning.platform === 'darwin' ? 32 : 44

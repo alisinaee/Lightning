@@ -13,10 +13,10 @@ const SIZE = 24 * BLOCK
 
 /** The destination picker and "Reveal in Finder" go through native OS UI — replace both. */
 async function stubNativeUi(
-  plexo: import('./fixtures').PlexoApp,
+  lightning: import('./fixtures').LightningApp,
   destination: string
 ): Promise<void> {
-  await plexo.evaluateMain(({ dialog, shell }, dest) => {
+  await lightning.evaluateMain(({ dialog, shell }, dest) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dest] })) as never
     const revealed: string[] = []
     ;(globalThis as Record<string, unknown>).__revealed = revealed
@@ -25,7 +25,7 @@ async function stubNativeUi(
 }
 
 test.describe('a torrent through the UI', () => {
-  test('choose its files, watch its peers, finish', async ({ plexo, dirs }) => {
+  test('choose its files, watch its peers, finish', async ({ lightning, dirs }) => {
     const swarm = await new Swarm().start()
     try {
       const files = ['a.bin', 'b.bin', 'c.bin'].map((name, index) =>
@@ -35,19 +35,19 @@ test.describe('a torrent through the UI', () => {
       const options = { folder: 'Trio', pieceLength: 64 * 1024, uploadLimit: 200 * 1024 }
       await swarm.seed(files, options)
       const torrent = await swarm.seed(files, options)
-      await stubNativeUi(plexo, dirs.dest)
-      const page = plexo.page
+      await stubNativeUi(lightning, dirs.dest)
+      const page = lightning.page
 
-      const link = await plexo.newDownload()
+      const link = await lightning.newDownload()
       await page.getByRole('button', { name: 'Change…' }).click()
       await link.fill(await torrentFileOnDisk(torrent))
       await page.getByRole('checkbox', { name: /b\.bin/ }).click()
-      await plexo.expectNextDownload(
+      await lightning.expectNextDownload(
         treeSha(
           [files[0], files[2]].map((data) => ({ path: (data as { name?: string }).name!, data }))
         )
       )
-      await page.getByRole('button', { name: 'Download' }).click()
+      await page.getByRole('button', { name: 'Download', exact: true }).click()
 
       // Running: its connections are peers, and its blocks pieces.
       const peers = page.getByRole('button', { name: /^\d+ peers?/ }).first()
@@ -114,27 +114,27 @@ test.describe('a torrent through the UI', () => {
 
 test.describe('UI journeys @smoke', () => {
   test('paste a link, start, pause, resume, finish, reveal the file', async ({
-    plexo,
+    lightning,
     serve,
     dirs
   }) => {
     const origin = await serve({ size: SIZE })
-    await stubNativeUi(plexo, dirs.dest)
-    const page = plexo.page
+    await stubNativeUi(lightning, dirs.dest)
+    const page = lightning.page
 
-    const link = await plexo.newDownload()
+    const link = await lightning.newDownload()
     await page.getByRole('button', { name: 'Change…' }).click()
     await link.fill(origin.url())
-    const start = page.getByRole('button', { name: 'Download' })
+    const start = page.getByRole('button', { name: 'Download', exact: true })
     await expect(start).toBeEnabled()
     await page.getByRole('group', { name: 'Streams' }).getByRole('button', { name: '8' }).click()
 
     const reached = origin.hold(6 * BLOCK)
-    await plexo.expectNextDownload(origin.sha256)
+    await lightning.expectNextDownload(origin.sha256)
     await start.click()
     await reached
     // The streams picked in the dialog reach the download.
-    const { id } = (await plexo.current())!
+    const { id } = (await lightning.current())!
     const manifestPath = join(dirs.userData, 'downloads', id, 'manifest.json')
     await expect
       .poll(async () => JSON.parse(await readFile(manifestPath, 'utf-8')).requestPayload)
@@ -154,28 +154,28 @@ test.describe('UI journeys @smoke', () => {
     await expect(page.getByText('Streams', { exact: true })).toBeVisible()
     await expect(page.getByText(/^written in \d+ chunks/)).toBeVisible()
     await reveal.click()
-    const { destinationPath } = (await plexo.current())!
+    const { destinationPath } = (await lightning.current())!
     await expect
       .poll(() =>
-        plexo.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
+        lightning.evaluateMain(() => (globalThis as Record<string, unknown>).__revealed, null)
       )
       .toEqual([destinationPath])
   })
 
   test('delete through the confirmation dialog, then download it again', async ({
-    plexo,
+    lightning,
     serve,
     dirs
   }) => {
     const origin = await serve({ size: SIZE })
-    await stubNativeUi(plexo, dirs.dest)
-    const page = plexo.page
-    let link = await plexo.newDownload()
+    await stubNativeUi(lightning, dirs.dest)
+    const page = lightning.page
+    let link = await lightning.newDownload()
     await page.getByRole('button', { name: 'Change…' }).click()
     await link.fill(origin.url())
 
     const reached = origin.hold(6 * BLOCK)
-    await page.getByRole('button', { name: 'Download' }).click()
+    await page.getByRole('button', { name: 'Download', exact: true }).click()
     await reached
     await page.getByRole('button', { name: 'Cancel download…' }).click()
     await page.getByRole('button', { name: 'Cancel download', exact: true }).click()
@@ -183,46 +183,48 @@ test.describe('UI journeys @smoke', () => {
     // Gone, with what it had downloaded.
     await expect(page.getByText('No downloads yet')).toBeVisible()
 
-    link = await plexo.newDownload()
+    link = await lightning.newDownload()
     await link.fill(origin.url())
-    await plexo.expectNextDownload(origin.sha256)
-    await page.getByRole('button', { name: 'Download' }).click({ timeout: 5000 })
-    await plexo.waitForStatus('completed')
+    await lightning.expectNextDownload(origin.sha256)
+    await page.getByRole('button', { name: 'Download', exact: true }).click({ timeout: 5000 })
+    await lightning.waitForStatus('completed')
   })
 
   test('a link the server rejects shows the error and keeps Download disabled', async ({
-    plexo,
+    lightning,
     serve
   }) => {
     const origin = await serve({ size: SIZE })
     origin.setRule(() => ({ status: 404 }))
-    const page = plexo.page
-    await (await plexo.newDownload()).fill(origin.url())
+    const page = lightning.page
+    await (await lightning.newDownload()).fill(origin.url())
     await expect(page.getByText(/couldn’t be found/)).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeDisabled()
   })
 
-  test('a completed download is shown again after a restart', async ({ plexo, serve }) => {
+  test('a completed download is shown again after a restart', async ({ lightning, serve }) => {
     const origin = await serve({ size: SIZE })
-    await plexo.start(origin.url(), origin.sha256)
-    const { fileName } = await plexo.waitForStatus('completed')
-    await plexo.relaunch()
+    await lightning.start(origin.url(), origin.sha256)
+    const { fileName } = await lightning.waitForStatus('completed')
+    await lightning.relaunch()
     // Listed under Finished; opened, it shows as it did when it finished.
-    await plexo.page.getByRole('button', { name: `Open ${fileName}` }).click()
-    await expect(plexo.page.getByRole('button', { name: /Show in (Finder|folder)/ })).toBeVisible()
+    await lightning.page.getByRole('button', { name: `Open ${fileName}` }).click()
+    await expect(
+      lightning.page.getByRole('button', { name: /Show in (Finder|folder)/ })
+    ).toBeVisible()
   })
 })
 
 // What a user sets is still set after they reload or restart — checked only through what they see.
 test.describe('settings @smoke', () => {
   test.describe('with an update available', () => {
-    test.use({ appEnv: { PLEXO_FORCE_UPDATE_VERSION: '9.9.9' } })
+    test.use({ appEnv: { LIGHTNING_FORCE_UPDATE_VERSION: '9.9.9' } })
 
     test('every choice survives a reload and a restart, even made right before', async ({
-      plexo,
+      lightning,
       dirs
     }) => {
-      const page = (): Page => plexo.page
+      const page = (): Page => lightning.page
       await page().getByRole('button', { name: 'Not now' }).click()
 
       const themeToggle = page().getByRole('button', { name: /^Switch to (dark|light) theme$/ })
@@ -232,8 +234,8 @@ test.describe('settings @smoke', () => {
         : 'Switch to dark theme'
       await themeToggle.click()
 
-      await stubNativeUi(plexo, dirs.dest)
-      await plexo.newDownload()
+      await stubNativeUi(lightning, dirs.dest)
+      await lightning.newDownload()
       await page().getByRole('button', { name: 'Change…' }).click()
       await page().keyboard.press('Escape')
       // A function: the window, and so the page, is a new one after a relaunch.
@@ -255,7 +257,7 @@ test.describe('settings @smoke', () => {
         await expect(page().getByRole('link', { name: 'Update available: 9.9.9' })).toBeVisible()
         await expect(page().getByRole('alertdialog')).toBeHidden()
         await expect(page().getByRole('button', { name: labelAfterSwitch })).toBeVisible()
-        await plexo.newDownload()
+        await lightning.newDownload()
         await expect(page().getByText(dirs.dest)).toBeVisible()
         await page().keyboard.press('Escape')
         await networksMenu().click()
@@ -272,59 +274,62 @@ test.describe('settings @smoke', () => {
       // No waiting for saves: a user doesn't either.
       await page().reload()
       await expectAllKept()
-      await plexo.relaunch()
+      await lightning.relaunch()
       await expectAllKept()
     })
   })
 
   test('a broken settings file falls back to what a fresh install shows', async ({
-    plexo,
+    lightning,
     dirs
   }) => {
     const settingsPath = join(dirs.userData, 'app-settings.json')
     // New download's "Save to" row, as the user sees it — compared whole, so no platform's idea
     // of the default folder is baked into the test.
     const choices = async (): Promise<string> => {
-      await plexo.newDownload()
-      const row = await plexo.page.getByText('Save to', { exact: true }).locator('..').innerText()
-      await plexo.page.keyboard.press('Escape')
+      await lightning.newDownload()
+      const row = await lightning.page
+        .getByText('Save to', { exact: true })
+        .locator('..')
+        .innerText()
+      await lightning.page.keyboard.press('Escape')
       return row
     }
     const fresh = await choices()
 
-    await plexo.quit()
+    await lightning.quit()
     await writeFile(settingsPath, '{"destinationDir": "/')
-    await plexo.launch()
+    await lightning.launch()
     expect(await choices()).toEqual(fresh)
 
-    await plexo.quit()
+    await lightning.quit()
     await writeFile(settingsPath, JSON.stringify({ destinationDir: join(dirs.dest, 'unplugged') }))
-    await plexo.launch()
+    await lightning.launch()
     expect(await choices()).toEqual(fresh)
   })
 })
 
 test.describe('no networks', () => {
-  test.use({ appEnv: { PLEXO_E2E_INTERFACES: '' } })
+  test.use({ appEnv: { LIGHTNING_E2E_INTERFACES: '' } })
 
-  test('a network appearing makes the list ready for downloads @smoke', async ({ plexo }) => {
-    await expect(plexo.page.getByText('No networks connected')).toBeVisible()
-    await plexo.evaluateMain(
+  test('a network appearing makes the list ready for downloads @smoke', async ({ lightning }) => {
+    await expect(lightning.page.getByText('No networks connected')).toBeVisible()
+    await lightning.evaluateMain(
       (_electron, value) => {
-        process.env['PLEXO_E2E_INTERFACES'] = value
+        process.env['LIGHTNING_E2E_INTERFACES'] = value
       },
       interfacesEnv({ a: NETWORKS['a'] })
     )
-    await plexo.page.getByRole('button', { name: 'Scan again' }).click()
-    await expect(plexo.page.getByText('No downloads yet')).toBeVisible()
+    await lightning.page.getByRole('button', { name: 'Scan again' }).click()
+    await expect(lightning.page.getByText('No downloads yet')).toBeVisible()
   })
 })
 
 test('new download and limits dialogs stay open after outside clicks and close with their buttons', async ({
-  plexo
+  lightning
 }) => {
-  const page = plexo.page
-  await plexo.newDownload()
+  const page = lightning.page
+  await lightning.newDownload()
   const newDownload = page.getByRole('dialog', { name: 'New download', exact: true })
   await expect(newDownload.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
@@ -332,7 +337,7 @@ test('new download and limits dialogs stay open after outside clicks and close w
   await newDownload.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(newDownload).toBeHidden()
 
-  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
+  await page.getByRole('button', { name: /^\d+ of \d+ networks? on$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const limits = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
   await expect(limits.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
@@ -347,42 +352,42 @@ test('new download and limits dialogs stay open after outside clicks and close w
 })
 
 test('a link just started is not offered again from the clipboard', async ({
-  plexo,
+  lightning,
   serve,
   dirs
 }) => {
   const origin = await serve({ size: BLOCK })
-  await stubNativeUi(plexo, dirs.dest)
-  const page = plexo.page
+  await stubNativeUi(lightning, dirs.dest)
+  const page = lightning.page
   // Stubbed rather than written, so the run leaves the real clipboard alone.
-  await plexo.evaluateMain((electron, text) => {
+  await lightning.evaluateMain((electron, text) => {
     electron.clipboard.readText = (() => text) as never
   }, origin.url())
-  const link = await plexo.newDownload()
+  const link = await lightning.newDownload()
   await expect(link).toHaveValue(origin.url())
   await page.getByRole('button', { name: 'Change…' }).click()
-  await plexo.expectNextDownload(origin.sha256)
+  await lightning.expectNextDownload(origin.sha256)
   await page.getByRole('button', { name: 'Download', exact: true }).click()
   await expect(link).toBeHidden()
 
   // Started: its own screen is open, so back to the list for the next one.
   await page.getByRole('button', { name: 'Downloads', exact: true }).click()
-  await plexo.newDownload()
+  await lightning.newDownload()
   // Answered after the dialog's own read, so that one has been applied (or skipped) by now.
-  await page.evaluate(() => window.plexo.readClipboardText())
+  await page.evaluate(() => window.lightning.readClipboardText())
   await expect(link).toHaveValue('')
-  await plexo.waitForStatus('completed')
+  await lightning.waitForStatus('completed')
 })
 
 test('compact limits controls convert units without changing the limit and show monthly resets', async ({
-  plexo,
+  lightning,
   dirs
 }) => {
-  const page = plexo.page
+  const page = lightning.page
   // Nothing saved yet means no file yet.
   const settings = async (): Promise<Record<string, unknown>> =>
     JSON.parse(await readFile(join(dirs.userData, 'app-settings.json'), 'utf8').catch(() => '{}'))
-  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
+  await page.getByRole('button', { name: /^\d+ of \d+ networks? on$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
   const total = dialog.getByRole('radiogroup', { name: 'Total speed', exact: true })
@@ -398,7 +403,7 @@ test('compact limits controls convert units without changing the limit and show 
   await total.getByRole('radio', { name: 'Limit to', exact: true }).check()
   await expect(total.getByRole('textbox')).toHaveValue('512')
   expect((await settings()).speedLimit, 'nothing is saved before Save').toBeUndefined()
-  await page.screenshot({ path: '/tmp/plexo-limits-general.png' })
+  await page.screenshot({ path: '/tmp/lightning-limits-general.png' })
 
   await dialog.locator('nav button').nth(1).click()
   const data = dialog.getByRole('radiogroup', { name: /data limit$/, exact: false })
@@ -420,7 +425,7 @@ test('compact limits controls convert units without changing the limit and show 
   await data.getByRole('button', { name: 'Week', exact: true }).click()
   await expect(dialog.getByText('Weeks start Monday.', { exact: false })).toBeVisible()
   await expect(dialog.getByText('10.0 GB this week', { exact: false })).toBeVisible()
-  await page.screenshot({ path: '/tmp/plexo-limits-network.png' })
+  await page.screenshot({ path: '/tmp/lightning-limits-network.png' })
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog).toBeHidden()
   await expect.poll(async () => (await settings()).speedLimit).toBe(512 * 1024)
@@ -436,23 +441,23 @@ test('compact limits controls convert units without changing the limit and show 
 })
 
 test('network reset controls confirm scope, keep limits when resetting usage, and keep usage when removing limits', async ({
-  plexo,
+  lightning,
   serve
 }) => {
   const origin = await serve({ size: BLOCK })
-  await plexo.start(origin.url(), origin.sha256)
-  await plexo.waitForStatus('completed')
-  const usage = await plexo.api.networkUsage()
+  await lightning.start(origin.url(), origin.sha256)
+  await lightning.waitForStatus('completed')
+  const usage = await lightning.api.networkUsage()
   const id = Object.keys(usage).find((key) => usage[key] > 0)!
-  await plexo.api.updateSettings({
+  await lightning.api.updateSettings({
     networkPreferences: {
       [id]: { speedLimit: 1024 ** 2, dataLimit: 1024 ** 3, dataLimitPeriod: 'week' }
     }
   })
-  await plexo.page.reload()
-  const page = plexo.page
-  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
-  const iface = (await plexo.api.listInterfaces()).findIndex((entry) => entry.id === id)
+  await lightning.page.reload()
+  const page = lightning.page
+  await page.getByRole('button', { name: /^\d+ of \d+ networks? on$/ }).click()
+  const iface = (await lightning.api.listInterfaces()).findIndex((entry) => entry.id === id)
   // A network's row in the menu opens the dialog on that network.
   await page
     .getByRole('button', { name: / limits$/ })
@@ -474,7 +479,7 @@ test('network reset controls confirm scope, keep limits when resetting usage, an
     dialog.getByRole('button', { name: 'Reset data usage…', exact: true })
   ).toBeDisabled()
   await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeEnabled()
-  expect((await plexo.api.networkUsage())[id]).toBe(0)
+  expect((await lightning.api.networkUsage())[id]).toBe(0)
   await dialog.getByRole('button', { name: 'Remove limits…', exact: true }).click()
   await page
     .getByRole('alertdialog')
@@ -482,25 +487,25 @@ test('network reset controls confirm scope, keep limits when resetting usage, an
     .click()
   await expect(dialog.getByRole('button', { name: 'Remove limits…', exact: true })).toBeDisabled()
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
-  await plexo.relaunch()
-  expect((await plexo.api.networkUsage())[id]).toBe(0)
+  await lightning.relaunch()
+  expect((await lightning.api.networkUsage())[id]).toBe(0)
 })
 
 test('all downloads reset to defaults on Save, leaving each network’s limits', async ({
-  plexo,
+  lightning,
   dirs
 }) => {
-  const [{ id }] = await plexo.api.listInterfaces()
-  await plexo.api.updateSettings({
+  const [{ id }] = await lightning.api.listInterfaces()
+  await lightning.api.updateSettings({
     speedLimit: 1024 ** 2,
     slowMode: true,
     slowModeSpeed: 512 * 1024,
     downloadsAtOnce: 5,
     networkPreferences: { [id]: { speedLimit: 1024 ** 2 } }
   })
-  await plexo.page.reload()
-  const page = plexo.page
-  await page.getByRole('button', { name: /^\d+ networks?$/ }).click()
+  await lightning.page.reload()
+  const page = lightning.page
+  await page.getByRole('button', { name: /^\d+ of \d+ networks? on$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
   const resetButton = dialog.getByRole('button', { name: 'Reset to defaults…', exact: true })

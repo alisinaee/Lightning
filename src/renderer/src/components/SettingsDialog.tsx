@@ -1,0 +1,365 @@
+import type { AccentId, AppPrefs } from '@shared/types'
+import { isProxyAddress } from '@shared/networks'
+import { useState } from 'react'
+import { describeVpn, useVpnLayer } from '../hooks/useConnections'
+import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
+import { useAppStore } from '../store/useAppStore'
+import { Button } from './ui/button'
+import { Checkbox } from './ui/checkbox'
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
+import { Switch } from './ui/switch'
+import { HistorySettings } from './HistorySettings'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
+
+const SCALES = [
+  { value: '0.9', label: 'Small' },
+  { value: '1', label: 'Medium' },
+  { value: '1.15', label: 'Large' },
+  { value: '1.3', label: 'Larger' }
+]
+
+const PAGES = [
+  'General',
+  'History',
+  'Appearance',
+  'Network',
+  'Notifications',
+  'Power',
+  'Interface'
+] as const
+
+const ACCENTS: { id: AccentId; label: string; color: string }[] = [
+  { id: 'amber', label: 'Amber', color: '#d97706' },
+  { id: 'blue', label: 'Blue', color: '#2563eb' },
+  { id: 'teal', label: 'Teal', color: '#0f766e' },
+  { id: 'green', label: 'Green', color: '#15803d' },
+  { id: 'violet', label: 'Violet', color: '#6d28d9' },
+  { id: 'rose', label: 'Rose', color: '#be123c' }
+]
+
+function applyScale(scale: number): void {
+  document.documentElement.style.zoom = String(scale)
+}
+
+function applyAccent(accent: string): void {
+  document.documentElement.dataset.accent = accent
+}
+
+function Row({
+  checked,
+  onChange,
+  label
+}: {
+  checked: boolean
+  onChange: (on: boolean) => void
+  label: string
+}): React.JSX.Element {
+  return (
+    <label className="flex items-start gap-3 py-1.5 text-[13px] leading-5">
+      <Checkbox checked={checked} onCheckedChange={onChange} className="mt-0.5" />
+      <span>{label}</span>
+    </label>
+  )
+}
+
+function ProxyField({
+  label,
+  value,
+  onChange
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}): React.JSX.Element {
+  // What is typed stays here until Enter or leaving the field: applying a proxy on every
+  // keystroke would try half-typed addresses. Only an address that is valid (or empty) is saved.
+  const [draft, setDraft] = useState(value)
+  const text = draft.trim()
+  const invalid = text !== '' && !isProxyAddress(text)
+  const commit = (): void => {
+    if (invalid) return
+    if (text !== value) onChange(text)
+  }
+  return (
+    <label className="flex items-center gap-3 text-[12.5px]">
+      <span className="w-16 text-muted-foreground">{label}</span>
+      <input
+        value={draft}
+        placeholder="host:port"
+        spellCheck={false}
+        aria-invalid={invalid || undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit()
+        }}
+        className="h-8 min-w-0 flex-1 rounded-md border border-input bg-[var(--input-bg)] px-2 font-mono text-[12px] outline-none aria-invalid:border-[var(--color-danger)]"
+      />
+      {invalid && <span className="text-[11.5px] text-[var(--color-danger)]">Not an address</span>}
+    </label>
+  )
+}
+
+/** Settings: version and updates, text size and theme, the proxy, notices, power, and how the
+ * window closes. Saved as they change. */
+export function SettingsDialog({
+  open,
+  onOpenChange
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  const initial = window.lightning.initialState
+  const [page, setPage] = useState<(typeof PAGES)[number]>('General')
+  const [prefs, setPrefs] = useState<Required<AppPrefs>>(initial.prefs)
+  const theme = useAppStore((store) => store.themeSource)
+  const setTheme = useAppStore((store) => store.setThemeSource)
+  const downloadsAtOnce = useAppStore((store) => store.downloadsAtOnce)
+  const setDownloadsAtOnce = useAppStore((store) => store.setDownloadsAtOnce)
+  const checkForUpdate = useAppStore((store) => store.checkForUpdate)
+  const [checking, setChecking] = useState(false)
+
+  const save = (patch: Partial<AppPrefs>): void => {
+    const next = { ...prefs, ...patch }
+    setPrefs(next)
+    if (patch.uiScale !== undefined) applyScale(patch.uiScale)
+    if (patch.accent !== undefined) applyAccent(patch.accent)
+    void window.lightning.updateSettings({ prefs: next })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[560px] w-[720px] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+        <div className="border-b-[0.5px] border-border px-5 py-4">
+          <DialogTitle className="text-[16px] font-semibold">Settings</DialogTitle>
+        </div>
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-40 shrink-0 flex-col gap-0.5 border-r-[0.5px] border-border p-2">
+            {PAGES.map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => setPage(entry)}
+                className={`h-8 rounded-md px-2 text-left text-[13px] ${
+                  page === entry ? 'bg-primary/10 font-medium' : 'hover:bg-secondary'
+                }`}
+              >
+                {entry}
+              </button>
+            ))}
+          </nav>
+          <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4 text-[13px]">
+            {page === 'General' && (
+              <>
+                <div>
+                  <div className="text-[15px] font-semibold">Lightning {initial.version}</div>
+                  <div className="text-[12.5px] text-muted-foreground">
+                    Updates come from the Lightning releases on GitHub.
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="self-start"
+                  disabled={checking}
+                  onClick={() => {
+                    setChecking(true)
+                    void checkForUpdate().finally(() => setChecking(false))
+                  }}
+                >
+                  {checking ? 'Checking…' : 'Check for updates'}
+                </Button>
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Downloads</div>
+                <label className="flex items-center gap-3">
+                  Files at once
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={downloadsAtOnce}
+                    onChange={(event) => {
+                      const count = Math.floor(Number(event.target.value))
+                      if (count >= 1 && count <= 8) setDownloadsAtOnce(count)
+                    }}
+                    className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center outline-none"
+                  />
+                </label>
+              </>
+            )}
+            {page === 'History' && <HistorySettings />}
+            {page === 'Appearance' && (
+              <>
+                <div className="text-[12px] font-medium text-muted-foreground">Text size</div>
+                <ToggleGroup
+                  value={[String(prefs.uiScale)]}
+                  onValueChange={(values) => {
+                    const next = Number(values[0])
+                    if (Number.isFinite(next)) save({ uiScale: next })
+                  }}
+                >
+                  {SCALES.map((scale) => (
+                    <ToggleGroupItem key={scale.value} value={scale.value}>
+                      {scale.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <div className="text-[12px] font-medium text-muted-foreground">Appearance</div>
+                <ToggleGroup
+                  value={[theme]}
+                  onValueChange={(values) => {
+                    const next = values[0]
+                    if (next === 'light' || next === 'dark') setTheme(next)
+                  }}
+                >
+                  <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+                  <ToggleGroupItem value="light">Light</ToggleGroupItem>
+                </ToggleGroup>
+                <div className="text-[12px] font-medium text-muted-foreground">Color</div>
+                <div className="flex flex-wrap gap-2">
+                  {ACCENTS.map((accent) => (
+                    <button
+                      key={accent.id}
+                      type="button"
+                      aria-label={accent.label}
+                      aria-pressed={prefs.accent === accent.id}
+                      title={accent.label}
+                      onClick={() => save({ accent: accent.id })}
+                      className="flex h-9 items-center gap-2 rounded-md border px-2.5 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      style={{
+                        borderColor: prefs.accent === accent.id ? accent.color : 'var(--border)'
+                      }}
+                    >
+                      <span
+                        className="size-3.5 rounded-full"
+                        style={{ background: accent.color }}
+                      />
+                      {accent.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {page === 'Network' && (
+              <>
+                <VpnSetting />
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Proxy</div>
+                <div className="text-[12px] text-muted-foreground">
+                  For the app&rsquo;s own requests, such as checking for updates. Downloads connect
+                  through the networks you chose and don&rsquo;t use it.
+                </div>
+                {(
+                  [
+                    ['system', 'System proxy'],
+                    ['direct', 'No proxy'],
+                    ['manual', 'Configure manually']
+                  ] as const
+                ).map(([mode, label]) => (
+                  <label key={mode} className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="proxy"
+                      checked={prefs.proxyMode === mode}
+                      onChange={() => save({ proxyMode: mode })}
+                    />
+                    {label}
+                  </label>
+                ))}
+                {prefs.proxyMode === 'manual' && (
+                  <div className="mt-1 flex flex-col gap-2">
+                    <ProxyField
+                      label="HTTP"
+                      value={prefs.proxyHttp}
+                      onChange={(proxyHttp) => save({ proxyHttp })}
+                    />
+                    <ProxyField
+                      label="HTTPS"
+                      value={prefs.proxyHttps}
+                      onChange={(proxyHttps) => save({ proxyHttps })}
+                    />
+                    <ProxyField
+                      label="FTP"
+                      value={prefs.proxyFtp}
+                      onChange={(proxyFtp) => save({ proxyFtp })}
+                    />
+                    <ProxyField
+                      label="SOCKS5"
+                      value={prefs.proxySocks}
+                      onChange={(proxySocks) => save({ proxySocks })}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            {page === 'Notifications' && (
+              <>
+                <Row
+                  checked={prefs.notifyAdded}
+                  onChange={(notifyAdded) => save({ notifyAdded })}
+                  label="Notify me when a download is added"
+                />
+                <Row
+                  checked={prefs.notifyCompleted}
+                  onChange={(notifyCompleted) => save({ notifyCompleted })}
+                  label="Notify me when a download finishes"
+                />
+                <Row
+                  checked={prefs.notifyFailed}
+                  onChange={(notifyFailed) => save({ notifyFailed })}
+                  label="Notify me when a download fails"
+                />
+                <Row
+                  checked={prefs.notifyWhenInactive}
+                  onChange={(notifyWhenInactive) => save({ notifyWhenInactive })}
+                  label="Only when Lightning is in the background"
+                />
+              </>
+            )}
+            {page === 'Power' && (
+              <Row
+                checked={prefs.preventSleep}
+                onChange={(preventSleep) => save({ preventSleep })}
+                label="Keep the computer awake while a download is running"
+              />
+            )}
+            {page === 'Interface' && (
+              <>
+                <Row
+                  checked={prefs.closeToBackground}
+                  onChange={(closeToBackground) => save({ closeToBackground })}
+                  label="Closing the window keeps Lightning running in the background"
+                />
+                <Row
+                  checked={prefs.hideDock}
+                  onChange={(hideDock) => save({ hideDock })}
+                  label="Hide the Dock icon"
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function VpnSetting(): React.JSX.Element {
+  const { detected, on, tunnels, setOn } = useVpnLayer()
+  const visual = useNetworkVisuals()
+  const names = tunnels.map((tunnel) => visual(tunnel.id, tunnel.kind, tunnel.displayName).name)
+  return (
+    <div className="flex items-center gap-3 rounded-lg border-[0.5px] border-border px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium">VPN</div>
+        <div className="text-[12.5px] leading-snug text-muted-foreground">
+          {detected ? describeVpn(on, names) : 'No VPN detected on this computer.'}
+        </div>
+      </div>
+      <Switch
+        aria-label="Use VPN for downloads"
+        checked={on}
+        disabled={!detected}
+        onCheckedChange={setOn}
+      />
+    </div>
+  )
+}

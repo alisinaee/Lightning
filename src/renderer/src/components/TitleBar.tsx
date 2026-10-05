@@ -4,9 +4,9 @@ import { useLabStore } from '../store/useLabStore'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { Button } from './ui/button'
 
-const isMac = window.plexo.platform === 'darwin'
+const isMac = window.lightning.platform === 'darwin'
 
-/** Opens the Test lab (see components/lab). Always shown in this local build. */
+/** Opens the Test lab (see components/lab). Only where the lab is enabled (not in a packaged build). */
 function Debug(): React.JSX.Element {
   const open = useLabStore((store) => store.open)
   const setOpen = useLabStore((store) => store.setOpen)
@@ -55,16 +55,13 @@ export function TitleBar(): React.JSX.Element {
   return (
     <div
       style={{ height: TITLE_BAR_HEIGHT }}
-      className={`relative flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card [-webkit-app-region:drag] ${
-        // Clear of the controls on either side, so the name stays centered between them.
-        isMac ? 'px-[94px]' : 'px-[140px]'
-      }`}
+      className="relative flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card [-webkit-app-region:drag]"
     >
-      <div className="truncate font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">
-        {window.plexo.initialState.appName ?? 'Plexo'}
+      <div className="pointer-events-none whitespace-nowrap font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">
+        {window.lightning.initialState.appName ?? 'Lightning'}
       </div>
       <Logs />
-      <Debug />
+      {window.lightning.initialState.labEnabled && <Debug />}
     </div>
   )
 }

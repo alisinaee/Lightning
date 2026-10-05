@@ -5,11 +5,23 @@ import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { isNetworkOff, isVpn } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
+import { DnsPicker } from './DnsPicker'
+import { useDns } from '../hooks/useDns'
 import { UsageBar } from './LimitsDialog'
 import { NetworkEditPopover } from './NetworkEditPopover'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Button } from './ui/button'
 import { Switch } from './ui/switch'
+
+const KIND_LABELS: Record<string, string> = {
+  wifi: 'Wi-Fi',
+  usb: 'USB network',
+  ethernet: 'Ethernet',
+  bridge: 'Bridge',
+  vpn: 'VPN',
+  other: 'Network'
+}
+const kindLabel = (kind: string): string => KIND_LABELS[kind] ?? 'Network'
 
 /** The networks new downloads combine, switched on or off here; each download can still change
  * its own. Also how fast each is going right now, and how much of its data limit is left. */
@@ -26,6 +38,7 @@ export function NetworksMenu({
   const networkVisual = useNetworkVisuals()
   const latencies = useAppStore((store) => store.latencies)
   const [open, setOpen] = useState(false)
+  const dns = useDns()
   const usage = useNetworkUsage(open)
   useLatencyPolling(open)
 
@@ -38,12 +51,17 @@ export function NetworksMenu({
       speeds.set(network.id, (speeds.get(network.id) ?? 0) + network.speedBytesPerSec)
     }
   }
-  const total = [...speeds.values()].reduce((sum, speed) => sum + speed, 0)
   const on = interfaces.filter((iface) => !isNetworkOff(iface, preferences))
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        // The button shows only "1/2": a screen reader gets it in words.
+        aria-label={
+          interfaces.length === 0
+            ? undefined
+            : `${on.length} of ${interfaces.length} ${interfaces.length === 1 ? 'network' : 'networks'} on`
+        }
         render={<Button type="button" variant="secondary" className="gap-2.5 px-3 text-[13px]" />}
       >
         <span className="flex gap-1" aria-hidden>
@@ -62,17 +80,14 @@ export function NetworksMenu({
           <span className="text-[var(--color-danger)]">No network</span>
         ) : (
           <>
-            {on.length} {on.length === 1 ? 'network' : 'networks'}
-            {total > 0 && (
-              <span className="font-mono text-[11.5px] text-muted-foreground">
-                {formatSpeed(total)}
-              </span>
-            )}
+            <span className="font-mono text-[12px] tabular-nums">
+              {on.length}/{interfaces.length}
+            </span>
           </>
         )}
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[340px] gap-0 p-0">
+      <PopoverContent align="end" className="w-max max-w-[520px] min-w-[380px] gap-0 p-0">
         <div className="flex flex-col gap-1.5 border-b-[0.5px] border-border p-4">
           <div className="text-[14px] font-semibold">Default networks</div>
           <div className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
@@ -96,7 +111,7 @@ export function NetworksMenu({
             >
               <div className="flex items-center gap-3">
                 <span
-                  className="size-2 shrink-0 rounded-full"
+                  className="mt-[7px] size-2 shrink-0 self-start rounded-full"
                   style={{ background: visual.solid }}
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -111,19 +126,25 @@ export function NetworksMenu({
                     </span>
                   </div>
                   <div
-                    className={`font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
+                    className={`truncate font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
                   >
                     {reached
                       ? 'Data limit reached'
-                      : [
-                          iface.displayName,
-                          speed > 0 ? formatSpeed(speed) : 'Idle',
-                          typeof latencies[iface.id] === 'number' &&
-                            `${Math.round(latencies[iface.id]!)} ms`
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
+                      : iface.displayName !== visual.name
+                        ? iface.displayName
+                        : kindLabel(iface.kind)}
                   </div>
+                </div>
+                {/* Figures sit in columns of their own, so every row lines up whatever the names. */}
+                <div className="flex shrink-0 flex-col items-end gap-1 font-mono text-[11px] leading-none text-muted-foreground tabular-nums">
+                  <span className="w-[72px] text-right">
+                    {speed > 0 ? formatSpeed(speed) : 'Idle'}
+                  </span>
+                  <span className="w-[72px] text-right">
+                    {typeof latencies[iface.id] === 'number'
+                      ? `${Math.round(latencies[iface.id]!)} ms`
+                      : '–'}
+                  </span>
                 </div>
                 <Switch
                   className="relative z-10"
@@ -153,6 +174,19 @@ export function NetworksMenu({
             </div>
           )
         })}
+        <div className="flex items-center gap-3 border-b-[0.5px] border-border px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-medium">DNS</div>
+            <div className="text-[11.5px] leading-snug text-muted-foreground">
+              How names are looked up. A group or a single download can use its own.
+            </div>
+          </div>
+          <DnsPicker
+            value={dns.defaultId ?? 'system'}
+            label="Default DNS"
+            onChange={(id) => void window.lightning.setDefaultDns(id === 'system' ? null : id)}
+          />
+        </div>
         <button
           type="button"
           className="px-4 py-3 text-[13px] font-medium text-primary hover:underline"

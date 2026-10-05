@@ -1,12 +1,17 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { installAppMenu, installTray } from './appMenu'
+import { applyBehavior, behavior } from './appBehavior'
+import { loadSettings } from './settings'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
 import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
+import { migrateLegacyUserData } from './legacyData'
 import { appVariant } from './variant'
 import type { DownloadManager } from './download/downloadManager'
 
@@ -14,15 +19,13 @@ import type { DownloadManager } from './download/downloadManager'
 // the Dock tooltip/menu bar — must be set before the app is ready. Packaged builds already get
 // this from electron-builder's productName, but setting it here keeps dev and packaged in sync.
 app.setName(appVariant().name)
-// A variant lives beside the normal app, with its own settings, downloads and log.
-if (appVariant().custom) {
-  app.setPath('userData', join(app.getPath('appData'), appVariant().name))
-}
+// Bring the data over from when the app was called Plexo (once; the old folder stays).
+if (!testKnobs.userDataDir) migrateLegacyUserData()
 
 // Each e2e test runs against its own throwaway userData folder (downloads, manifests, settings).
 if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
 
-// One Plexo at a time (per userData folder, so parallel e2e runs each have their own): a second
+// One Lightning at a time (per userData folder, so parallel e2e runs each have their own): a second
 // launch — a magnet link clicked, a .torrent opened — hands its link to the first and exits.
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -32,6 +35,7 @@ process.on('unhandledRejection', (reason) => log.error('process', 'unhandledReje
 let mainWindow: BrowserWindow | null = null
 let downloadManager: DownloadManager | null = null
 let quitAfterSuspending = false
+let quitting = false
 
 /** A link the OS handed over goes to the window's link field (see openLinks.ts). */
 function offer(candidate: string): void {
@@ -95,12 +99,23 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // A hidden e2e window would otherwise have its timers throttled.
-      backgroundThrottling: !testKnobs.hideWindow
+      backgroundThrottling: !testKnobs.hideWindow,
+      // The defaults, said out loud: the page gets no Node, and only what the preload exposes.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
     }
   })
 
   mainWindow.on('ready-to-show', () => {
     if (!testKnobs.hideWindow) mainWindow?.show()
+  })
+  // Close hides the window and leaves downloads running, unless the user is actually quitting
+  // or Settings turned that off.
+  mainWindow.on('close', (event) => {
+    if (quitting || !behavior.closeHides) return
+    event.preventDefault()
+    mainWindow?.hide()
   })
 
   // What the window says when it goes wrong (window.onerror and unhandled rejections reach the
@@ -128,13 +143,37 @@ function createWindow(): void {
     log.error('renderer', 'did-fail-load', { code, description, url })
   )
 
-  // The page's own <title> would otherwise rename the window back to "Plexo".
+  // The page's own <title> would otherwise rename the window back to "Lightning".
   mainWindow.on('page-title-updated', (event) => event.preventDefault())
   log.info('window', 'created')
   mainWindow.webContents.on('did-finish-load', () => log.info('window', 'page loaded'))
   mainWindow.on('closed', () => {
     log.info('window', 'closed')
     mainWindow = null
+  })
+
+  // The window only ever shows the app's own page: a link or script that tries to navigate it
+  // elsewhere is stopped (links open in the browser through the handler below).
+  const appUrl =
+    is.dev && process.env['ELECTRON_RENDERER_URL']
+      ? new URL(process.env['ELECTRON_RENDERER_URL'])
+      : pathToFileURL(join(__dirname, '../renderer/index.html'))
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    let target: URL
+    try {
+      target = new URL(url)
+    } catch {
+      event.preventDefault()
+      return
+    }
+    const ours =
+      appUrl.protocol === 'file:'
+        ? target.protocol === 'file:' && target.pathname === appUrl.pathname
+        : target.origin === appUrl.origin
+    if (!ours) {
+      event.preventDefault()
+      log.warn('window', 'blocked navigation', { protocol: target.protocol, host: target.host })
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -153,7 +192,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId(appVariant().custom ? 'com.plexo.custom' : 'com.plexo.app')
+  electronApp.setAppUserModelId('com.lightning.app')
   log.info(
     'app',
     `${appVariant().name} ${app.getVersion()} on ${process.platform} ${process.arch}`,
@@ -166,7 +205,7 @@ app.whenReady().then(async () => {
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
   await migrateLegacyNetworkPreferences().catch((error) =>
-    console.error('[plexo] failed to migrate network-preferences.json', error)
+    console.error('[lightning] failed to migrate network-preferences.json', error)
   )
 
   // Applied before the window is created so the initial background/icon already match —
@@ -185,14 +224,22 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
+  installAppMenu(() => mainWindow)
+  if (!testKnobs.hideWindow) installTray(() => mainWindow)
+  await applyBehavior(await loadSettings())
   if (testKnobs.hideWindow) app.dock?.hide()
 
   app.on('activate', function () {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+      return
+    }
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('before-quit', (event) => {
+  quitting = true
   if (quitAfterSuspending || !downloadManager) return
   log.info('app', 'quitting: pausing downloads')
 

@@ -12,7 +12,7 @@ import {
 } from './torrent/metadata'
 
 const MAX_REDIRECTS = 5
-const USER_AGENT = 'Plexo/1.0'
+const USER_AGENT = 'Lightning/1.0'
 // A server that accepts the connection and never answers would otherwise hang the probe — and
 // the link field's "Checking…" — forever. Same budget as a stalled chunk, for the whole probe:
 // redirects included, so a chain of slow hops can't stretch it.

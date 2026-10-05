@@ -8,9 +8,9 @@ export function useLabEvents(): void {
   const load = useLabStore((store) => store.load)
   const receiveSettings = useAppStore((store) => store.receiveSettings)
   useEffect(() => {
-    const unsubscribe = window.plexo.onLabEvent((event) => receive(event.state))
-    const unsubscribeSettings = window.plexo.onSettingsChanged(receiveSettings)
-    void load()
+    const unsubscribe = window.lightning.onLabEvent((event) => receive(event.state))
+    const unsubscribeSettings = window.lightning.onSettingsChanged(receiveSettings)
+    if (window.lightning.initialState.labEnabled) void load()
     return () => {
       unsubscribe()
       unsubscribeSettings()

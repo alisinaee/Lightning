@@ -1,437 +1,141 @@
-# Plexo
+<p align="center">
+  <img src="resources/icon.png" alt="Lightning" width="120" />
+</p>
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/anmolkapil)
+<h1 align="center">Lightning</h1>
 
-A fast download manager for Windows, macOS, and Linux that speeds up downloads by pulling chunks in parallel across **multiple network connections at the same time**.
+<p align="center">
+  <strong>The download manager that uses every network you have, all at once.</strong><br />
+  Wi-Fi, Ethernet, a tethered phone and a VPN can all carry the same file at the same time.
+</p>
 
-For example, if your computer has:
+<p align="center">
+  <a href="https://github.com/alisinaee/Lightning/releases"><img alt="Release" src="https://img.shields.io/github/v/release/alisinaee/Lightning?include_prereleases&color=d97706" /></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey" />
+  <img alt="Licence" src="https://img.shields.io/badge/licence-MIT-blue" />
+</p>
 
-- Wi-Fi
-- Ethernet
-- USB-tethered phone (iPhone or Android)
-- Cellular
-
-Plexo can use them together to download the **same file**. It supports direct download links, magnet links, and `.torrent` links or files.
-
-https://github.com/user-attachments/assets/e57728f4-fb63-441f-839c-174eef954b17
-
----
-
-## ⚠️ Before you start
-
-### Combining multiple network connections?
-
-To successfully combine bandwidth across multiple network adapters (on Windows, macOS, or Linux):
-
-- **Use distinct internet connections:**
-  - Each connection must have its own gateway / subnet (e.g., **Wi-Fi** via home router + **USB Tethering** via mobile phone, or two distinct WAN networks).
-  - Connecting both Wi-Fi and Ethernet to the **same router** (same local subnet like `192.168.1.0/24`) will not increase speeds: both share the same upstream broadband connection, and operating system routing will send all packets through whichever interface has the lower metric or higher priority (usually Ethernet).
-
-### Wi-Fi disconnecting when Ethernet is plugged in on Windows?
-
-Some Windows 10/11 installations automatically disconnect or sleep Wi-Fi when an active Ethernet cable is detected.
-
-If Wi-Fi turns off when Ethernet is plugged in: open **Group Policy Editor** (`gpedit.msc`) → _Computer Configuration_ → _Administrative Templates_ → _Network_ → _Windows Connection Manager_ → set **"Minimize the number of simultaneous connections to the Internet or a Windows domain"** to **Disabled**.
-
-### Using Android USB tethering on macOS?
-
-macOS does not natively provide an RNDIS driver, so Android phones with USB tethering enabled won't appear as network interfaces out of the box (this is also why legacy kernel extensions like `HoRNDIS` stopped working on Apple Silicon and modern macOS).
-
-To use your Android phone's connection over USB, install **TetherKit** — a kext-free, user-space RNDIS driver.
-
-See [Using a USB-tethered Android phone](#using-a-usb-tethered-android-phone) for setup instructions.
-
-> Plexo can only route traffic through connections that your operating system recognizes as network interfaces.
+<p align="center">
+  <img src="docs/screenshots/main.png" alt="Lightning's download list, with two files downloading and four queued" width="860" />
+</p>
 
 ---
 
-## Why Plexo?
+## Why Lightning
 
-A single TCP connection rarely saturates your actual bandwidth. Even when your computer has multiple active networks — such as Wi-Fi and a tethered mobile phone — the operating system routes all traffic through a single default gateway, leaving the other interfaces completely idle.
+One connection rarely uses all the bandwidth you have. Your computer sends all its traffic out through a single default route, so a second network sits idle even when it is connected.
 
-Plexo changes that: it splits the file into independent byte ranges and downloads them simultaneously through distinct physical network interfaces.
+Lightning splits a file into ranges and fetches each range through a specific network interface, in parallel. The pieces are joined as they arrive, and the file is written once, straight into its final place.
 
 ```text
-                    ┌── Wi-Fi (IP: 192.168.1.40) ──────┐
-                    │                                  │
-                    ├── Ethernet (IP: 10.0.0.12) ──────┤
-File ──→ Split ─────┤                                  ├──→ Assembled File
-                    ├── USB Tether (IP: 172.20.10.3) ──┤
-                    │                                  │
-                    └── Cellular (IP: 21.169.64.78) ───┘
+                 ┌── Wi-Fi ────────┐
+                 │                 │
+ File ──▶ split ─┼── USB tether ───┼──▶ one finished file
+                 │                 │
+                 └── Ethernet ─────┘
 ```
 
-**Multiple networks → concurrent HTTP range requests → aggregated bandwidth**
-
----
+Faster networks take more pieces, so a slow one never holds the others back.
 
 ## Features
 
-- **Torrents** — open magnet links, `.torrent` links, or local `.torrent` files. Choose files before downloading and see peers, pieces, download speed, and upload speed across networks.
-- **Download queue** — run two downloads at once by default, or choose between one and eight. Waiting downloads start automatically when a slot opens.
-- **Downloads list and history** — browse Downloading, Queued, Paused, Needs attention, and Finished groups. Filter the list and keep finished history across restarts.
-- **Selection actions** — pause, resume, retry, cancel, remove finished entries from the list, or move finished files to Trash. Each action applies only to eligible selected downloads.
-- **Speed and data limits** — set a total download speed, use slow mode, and set speed or daily, weekly, or monthly data limits for individual networks. Limits apply to direct downloads and torrents.
-- **Usage controls** — reset a network’s usage for its selected period, or remove its speed and data limits while keeping recorded usage.
-- **Fix expired links** — paste a new link to the same file and continue from the saved progress when the file still matches.
-- 🚀 **Multi-interface, multi-connection downloads** — splits files into chunks of up to 8 MB and fans them out across worker connections bound to specific network interfaces, each kept open from one chunk to the next. Each interface starts with 8 connections and doubles once they are all receiving, up to 32. If the server refuses some (503, 429, 403, or leaves them unanswered), that interface drops to the ones it accepted, then gets one more back each minute without a refusal; a server refusing everything (busy, or an expired link) doesn't lower it. You can also pick a fixed 4, 8, 16 or 32 per interface in the download’s details instead of Auto.
-- 🔌 **Hardware interface detection** — queries Windows adapters via PowerShell `Get-NetAdapter` and macOS hardware ports via `networksetup` so Wi-Fi, Ethernet, tethered iPhones, and Thunderbolt bridges are labeled by real device names instead of bare BSD names (`en0`, `en6`).
-- ⚖️ **Dynamic work-stealing queue** — chunks are leased from a shared pending queue; faster networks pull more chunks instead of waiting for slower connections to finish.
-- ⏸️ **Resumable downloads** — cleanly pause and resume downloads with progress saved in a destination-side staging file.
-- 💾 **Relaunch recovery** — interrupted downloads are restored as paused after Plexo restarts, with a small manifest in application data.
-- 🛡️ **Safe, integrity-checked resume** — re-verifies remote `ETag` and `Last-Modified` validators before resuming, refusing to resume (rather than corrupting the file) if the server-side file has changed.
-- 🔁 **Automatic retry with backoff** — failed chunks go back to the queue and are retried with jittered exponential backoff (1s–15s). A dropped connection is retried for as long as its network is there; a busy server (429, 503, …) is waited out, honouring `Retry-After`; a server that answers wrongly gets 5 retries.
-- 🔄 **Network changes and sleep** — a network that gets a new address, or a computer that wakes from sleep, gets its connections going again at once instead of waiting out a backoff; the computer is kept awake while a download runs.
-- 💤 **Stall detection & watchdog** — automatically drops and re-queues connections that remain open but silent (>20s without incoming data, not counting time spent waiting on the disk).
-- 🔔 **Desktop notifications** — native desktop alerts when downloads complete or encounter errors.
-- 💾 **Upfront disk-space verification** — checks the destination volume before writing the staging file.
-- 🔀 **Mid-download redirect handling** — transparently follows 3xx HTTP redirects (up to 5 hops) during probing and individual chunk downloads.
-- 📊 **Real-time telemetry** — live throughput graphs, rolling-window ETA calculation, and per-connection transfer stats.
-- 🗺️ **Interactive progress grid** — 1:1 visual map of individual chunks, color-coded by the network interface that fetched each chunk with accurate per-network byte attribution.
-- 🎨 **Network customization** — rename and recolor physical network interfaces with persistent user preferences.
-- 🌓 **Light & Dark modes** — full theme support with an instant toggle between light and dark modes.
+### Downloading
 
----
+- **Several networks per download.** Choose **All**, **Auto**, or individual networks (Wi-Fi, LAN and so on) for a single download, a group, or the whole app. The networks menu shows how many are active, for example `2/2`.
+- **Direct links, magnet links and `.torrent` files.** For torrents, tick the files you want first, then watch peers, pieces and speed.
+- **Groups.** Add several files at once and choose how many run together (1, 2, 5…). In **Auto** mode the last file left uses every network for top speed. In **Manual** mode set one rule for all files, or one per file.
+- **Download later.** Add a file paused and start it when you like.
+- **Fix a dead link.** Paste a fresh link to the same file and carry on from where it stopped.
+- **Safe resume.** Pause, quit, relaunch and continue. Lightning checks the server's `ETag` and `Last-Modified` first, and refuses to resume a file that has changed rather than corrupt it.
+- **Self-healing.** Failed pieces are retried with backoff, silent connections are replaced, and a network that changes address or wakes from sleep reconnects at once.
 
-## Managing downloads
+### Control
 
-Use the header dropdown to filter **All downloads**, **In progress**, **Finished**, or **Needs attention**. In progress includes downloading, queued, and paused items. Click a filename or its chevron to open detailed progress.
+- **Limits.** Cap total speed, switch on slow mode, or give each network its own speed and daily, weekly or monthly data limit.
+- **DNS.** Pick DNS servers for the app, a group, or one download, with named recent servers.
+- **Proxy.** Use the system proxy, none, or a manual HTTP, HTTPS, FTP or SOCKS5 proxy for the app's own requests.
+- **VPN.** Lightning detects your VPN and lets you switch whether downloads may use it, from the top bar.
+- **Power.** Keeps the computer awake while a download runs.
 
-Select downloads using their checkboxes. **Select all** selects the current filtered list. The header shows available actions and how many selected downloads each action applies to:
+### Your list
 
-- **Pause** for downloading or queued items; **Resume** for paused items.
-- **Retry** for recoverable failures. Expired links use **Fix link** individually; downloads that cannot resume use **Download again**.
-- **Remove from list** for finished downloads. Their files stay on your computer. **Clear finished list** removes finished history without touching files.
-- **Cancel downloads…** stops unfinished downloads and deletes their partial data after confirmation.
-- **Move files to Trash…** moves finished files to Trash (Recycle Bin on Windows) after confirmation. For torrents, Plexo removes only the files it downloaded and preserves unrelated files added to the folder. Missing files can still be removed from the list. Older torrent history without a file record must be managed in your file browser.
+- **Sidebar filters** by status (Downloading, Queued, Paused, Completed, Failed) and by file type: video, audio, archives, documents, programs, images, torrents, disk images.
+- **File-type badges** (`MP4`, `RAR`, `ISO`…) in a colour for each kind, and a tinted row, sorted to the top, for anything in progress.
+- **Resizable, sortable columns** and search with previous/next and a counter such as `1/23`. Long names can wrap onto several lines.
+- **Right-click or `⋯` on any row** for open, show in folder, details, pause/resume/retry, fix link, copy link, copy name or location, download again, remove from list, delete file, or cancel and delete partial data. Anything destructive asks first, and bulk actions apply to the whole selection.
+- **A status bar** with the count, total speed and the speed of each network.
 
-## Speed and data limits
+<p align="center">
+  <img src="docs/screenshots/details.png" alt="A finished download's details: speed over time and each network's share of the file" width="860" />
+</p>
 
-Open **Speed & data limits…** from the networks menu. Settings apply immediately; **Done** closes the modal.
+Open any download to see its speed over time, what each network contributed, and a map of every chunk coloured by the network that fetched it.
 
-Under **All downloads**, set the total speed limit, slow-mode speed, and number of simultaneous downloads. Slow mode replaces the total speed limit while enabled. Per-network speed limits still apply.
+### History and settings
 
-Choose a network to set its speed in KB/s or MB/s and its data allowance in GB per **Day**, **Week**, or **Month**. Data usage counts bytes received by Plexo on that network, including torrent transfers; uploads and other apps do not count. When the allowance is reached, Plexo stops using that network while available networks can continue.
+- **History** keeps every finished file with search, size, date, uploaded bytes and a mark when the file has gone missing. Rename a file (on disk too, if it is still there), show it in Finder or Explorer, remove it from history only, or clear the lot.
+- **Settings** has General, History, Appearance (text size, light or dark, accent colour), Network, Notifications, Power and Interface (close to the tray, hide the Dock icon).
+- **Logs window and diagnostic report** with sensitive details redacted, for when something goes wrong.
 
-Periods follow the local calendar: days reset at midnight, weeks start Monday, and months reset on the first day. Usage survives restarts, and switching periods shows the usage recorded for that period.
+## Install
 
-- **Reset data usage…** resets only the selected network’s current period to zero, keeping its configured limits and other periods’ usage. It makes that network available again if its data allowance was reached.
-- **Remove limits…** removes the selected network’s speed and data limits while preserving its recorded usage. Total speed and slow-mode settings still apply.
+Download the latest build from [Releases](https://github.com/alisinaee/Lightning/releases). Lightning checks the same page for updates.
 
-Both actions ask for confirmation. New download, Fix link, and limits dialogs close through their dedicated buttons or Escape; clicking outside does not dismiss them.
+Builds are unsigned. On macOS, right-click the app and choose **Open** the first time. An app you build yourself launches without that prompt.
 
----
+## Getting the most from several networks
 
-# How direct downloads work
+Combining networks only helps when each one has its **own route to the internet**.
 
-Instead of downloading a file linearly over a single socket, Plexo requests arbitrary slices of the file simultaneously across multiple physical network interfaces. Three core technical primitives make this work:
+- Use genuinely different connections, such as home Wi-Fi plus a phone's USB or hotspot tethering. Wi-Fi and Ethernet plugged into the *same router* share one upstream link and add nothing.
+- **Windows:** if Wi-Fi drops when Ethernet is plugged in, open `gpedit.msc`, go to *Computer Configuration → Administrative Templates → Network → Windows Connection Manager* and set *Minimize the number of simultaneous connections to the Internet or a Windows domain* to **Disabled**.
+- **Android USB tethering on macOS:** macOS has no RNDIS driver. Install [TetherKit](https://github.com/XiaoMiku01/TetherKit) with `brew install XiaoMiku01/tap/tetherkit`, turn on USB tethering on the phone, and the interface appears in Lightning.
+- Lightning can only use connections your operating system exposes as network interfaces. VPN and virtual adapters show up too, so check each network's speed on the details page.
 
-### 1. HTTP range requests (`206 Partial Content`)
+## How it works
 
-Most modern HTTP servers support byte-level slicing:
+1. **Probe.** A range request learns the file size, whether the server allows `206 Partial Content`, and its validators.
+2. **Chunk.** The file is cut into chunks of up to 8 MB and written directly into the destination, with no second copy.
+3. **Bind.** Worker connections are bound to specific network interfaces. Each interface starts with 8 and grows up to 32 while the server keeps accepting them. It drops back when the server refuses.
+4. **Steal work.** Chunks come from a shared queue, so fast networks do more of the work.
+5. **Recover.** Failed chunks go back in the queue, and connections that go silent for 20 seconds are replaced.
 
-```http
-GET /ubuntu-26.04.1-desktop-amd64.iso HTTP/1.1
-Host: releases.ubuntu.com
-Range: bytes=8388608-16777215
-```
+## Build from source
 
-Servers advertise this capability with the `Accept-Ranges: bytes` response header and reply with HTTP status `206 Partial Content`. Because byte slices are stateless and independent, Plexo can request dozens of chunks at once, in any order, and stitch them together later.
-
-#### Probing before downloading
-
-Before starting a multi-connection download, Plexo sends a **1-byte ranged GET** (`Range: bytes=0-0`), following any redirects:
-
-- Unlike a `HEAD` request (which servers and CDNs frequently misreport), receiving a `206 Partial Content` response conclusively proves that range requests are supported and functional.
-- The probe response provides the total file size (`Content-Range` / `Content-Length`), suggested filename (`Content-Disposition`), and cache validators (`ETag` and `Last-Modified`).
-- If the server answers with `200 OK` (ignoring the `Range` header), Plexo falls back to a standard single-connection stream instead of failing.
-
-### 2. Multi-interface socket binding
-
-Every active network interface on your computer has local IP addresses — Wi-Fi might have both IPv4 and IPv6, while a USB-tethered phone has its own addresses.
-
-A standard TCP socket leaves interface selection to the operating system's routing table. Plexo resolves the server, chooses an address of the same IP family on each selected interface, then binds that address for its HTTP/HTTPS connections. On Linux it also pins the socket to the device.
-
-```js
-https.request({
-  hostname: 'releases.ubuntu.com',
-  path: '/ubuntu-26.04.1-desktop-amd64.iso',
-  localAddress: '172.20.10.3', // Source address on the USB tether
-  headers: {
-    Range: 'bytes=8388608-16777215'
-  }
-})
-```
-
-The interface binding keeps each worker on its selected network:
-
-- **No virtual network adapters or VPN tunnels**
-- **No packet bonding or link aggregation**
-- **No kernel extensions (`kext`) or root privileges**
-
-### 3. Dynamic work-stealing queue
-
-If you statically divide a 6 GB file into equal shares (e.g. 3 GB on Wi-Fi and 3 GB on mobile data), the total download speed is bottlenecked by the slower network.
-
-Instead, Plexo uses a **dynamic work-stealing queue**:
-
-1. The file is split into **chunks of up to 8 MB** (smaller for small files, so every network gets a share).
-2. All chunks enter a centralized pending queue.
-3. A pool of worker connections continuously lease the next chunk from the queue as soon as they become free. Each keeps its one connection to the server from chunk to chunk, so it pays for the handshake and TCP's slow start once, not per chunk. Connections start interleaved across networks, so each network is served before any is served twice.
-   - **How many.** Each network starts with 8 connections, and once every one of them is receiving it doubles, up to 32, never more than there are chunks for. Another connection costs little when the link is already full, and a server that caps each connection's speed is only outrun by more of them. A server that refuses some of a network's connections (503, 429, 403, or leaves them unanswered for 5 seconds) while still sending data down the others is asking for fewer: the refused ones close, their chunks go back to the queue to carry on from where they got to, and that network stays at the ones left. After a minute without another refusal it may have one more, and so on back up. A server that refuses everything (busy, or an expired link) isn't limiting connections, so the count stays. In the download’s details you can pick a fixed 4, 8, 16 or 32 per network instead of Auto.
-4. Faster interfaces finish chunks quicker and immediately pick up new ones; slower interfaces pull fewer chunks.
-5. **Racing the tail.** Once no chunk is left waiting, a free connection can start a second attempt at a chunk another connection is fetching too slowly (as soon as the free connection would finish it in under half the time the chunk still needs; a chunk whose second attempt is stuck too can get one more), picking up from where the first had got to. Whichever finishes first wins and the other is dropped. It costs a few bytes fetched twice at the very end, and it means one slow connection — or one slow network — can no longer hold the whole download back. A stream doing this is marked **BACKUP** in the streams table.
-
-```text
-Shared Pending Queue: [Chunk #4]  [Chunk #5]  [Chunk #6]  [Chunk #7]  [Chunk #8]  ...
-                          ↑           ↑           ↑           ↑
-                       Worker 1    Worker 2    Worker 3    Worker 4
-                       (Wi-Fi)    (Ethernet) (USB Tether) (Cellular)
-```
-
-Work distribution is dynamically proportional to each interface's real-time throughput. If one network slows down or disconnects, remaining workers continue draining the queue without stalled shares.
-
-### 4. Direct-to-destination storage
-
-Each worker writes its assigned byte range at its final offset in one staging file beside the chosen destination. Workers use separate file handles and explicit byte positions, so non-overlapping ranges can be written in parallel.
-
-While downloading, the folder contains `<filename>.plexo` and no empty file under the final name. Once every range is complete, Plexo flushes the partial file, checks for a filename collision, and renames it into place in the same folder. If the final name is taken, Plexo chooses a numbered name. This works on drives such as exFAT without a full-file assembly copy, so the destination needs approximately one file's worth of space.
-
----
-
-# Downloads are resumable
-
-When you pause a download:
-
-- Plexo aborts all active HTTP socket connections via `AbortController`.
-- The staging file remains beside the chosen destination, and progress is saved in a small manifest.
-
-When you resume:
-
-1. **Validator check**: Plexo sends a probe request to compare the server's current `ETag` and `Last-Modified` headers against the values recorded when the download started.
-2. **Safe resume**: If the validators match, Plexo resumes each range from the last saved byte offset in the staging file.
-3. **Guard against corruption**: If the file on the server has changed, Plexo refuses to resume to prevent combining incompatible slices into a corrupt file.
-
-Download manifests are stored under Plexo's application-data directory; large partial data stays beside the destination. If Plexo quits or crashes during a transfer, it restores that transfer as paused on the next launch. Cancelling an unfinished download deletes its downloaded data. Removing a finished download from the list keeps its files.
-
----
-
-# What is a chunk?
-
-A **chunk** is the atomic unit of work in Plexo:
-
-- **Size**: Up to 8 MB, with the final chunk sized to the remaining bytes. A file that is small next to its connection count gets smaller chunks (never under 1 MB) — at least two per connection — so a fast network can out-pull a slow one instead of being stuck behind it.
-- **Transport**: One independent HTTP range request (`Range: bytes=START-END`).
-- **Storage**: Written at its final byte offset in the destination-side staging file.
-- **Assignment**: Leased to an individual worker socket bound to a specific network interface.
-
-```text
-Chunk #0 → Range: bytes=0-8388607         → staging offset 0 (Wi-Fi)
-Chunk #1 → Range: bytes=8388608-16777215  → staging offset 8388608 (Ethernet)
-Chunk #2 → Range: bytes=16777216-25165823 → staging offset 16777216 (USB Tether)
-Chunk #3 → Range: bytes=25165824-33554431 → staging offset 25165824 (Cellular)
-```
-
-### Why up to 8 MB?
-
-8 MB provides the optimal balance: large enough to minimize HTTP connection overhead and TLS handshakes, yet small enough to keep the work-stealing queue fluid, ensure fine-grained load balancing across mismatched connections, and keep retries cheap (a failed or stalled connection only discards at most 8 MB). Below about 1 MB a request costs more in round trips than splitting saves, so that is the floor; a file that small is one chunk.
-
----
-
-# What is the progress grid?
-
-The progress grid provides a real-time visual map of the entire download.
-
-Every chunk maps **1:1 to its own square** in the grid. Square #N directly corresponds to the **Chunk #N** badge shown in the active streams table, allowing you to cross-reference active connections with their location in the file.
-
-```text
-Active Streams:
-[Wi-Fi]      → Chunk #4
-[Ethernet]   → Chunk #5
-[USB Tether] → Chunk #6
-[Cellular]   → Chunk #7
-
-Progress Grid:
-[#1][#2][#3][#4][#5][#6][#7][#8]...
-```
-
----
-
-# Getting started
-
-Download a build for your platform from [GitHub Releases](https://github.com/anmolkapil/plexo/releases), or run Plexo from source using the steps below.
-
-## Requirements
-
-- **Windows 10/11, macOS, or Linux**: Windows uses its built-in Windows PowerShell for adapter metadata; macOS uses `networksetup`; Linux provides fallback interface detection and desktop network settings integration.
-- **Node.js**: 22.12+ (Node 22 LTS recommended).
-- **npm**: v9+ recommended.
-
----
-
-## Run Plexo locally
-
-Clone the repository:
+You need Node.js 22.12 or later and npm 9 or later.
 
 ```bash
-git clone https://github.com/anmolkapil/plexo.git
-cd plexo
-```
-
-Install dependencies:
-
-```bash
+git clone https://github.com/alisinaee/Lightning.git
+cd Lightning
 npm install
-```
-
-Start the application in development mode:
-
-```bash
 npm run dev
 ```
 
----
-
-## Running tests
-
-Plexo includes an automated end-to-end test suite driven by Playwright:
-
-```bash
-npm run test:e2e:smoke          # quick smoke tests
-npm run test:e2e                # full E2E test suite (including integrity and chaos tests)
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md#end-to-end-tests) for testing options and debugging flags.
-
----
-
-# Build the macOS app
-
-To package Plexo as a standalone macOS application bundle:
+Package an app:
 
 ```bash
 npm run build:mac
-```
-
-The compiled application will be generated at:
-
-```text
-dist/mac/Plexo.app
-```
-
-> **Note on Gatekeeper:** The app is unsigned because it is not distributed with a paid Apple Developer certificate. However, because you compile it locally on your machine, macOS will not apply the quarantine flag (`com.apple.quarantine`). Gatekeeper only quarantines files downloaded from the web (via browsers, curl, etc.), so your locally built `Plexo.app` will launch cleanly without quarantine warnings.
-
-## Build the Windows app
-
-Run these commands from PowerShell in the project directory:
-
-```powershell
-npm install
 npm run build:win
-```
-
-The installer is generated at `dist/plexo-1.0.0-setup.exe`. For an unpacked app, run
-`npm run build:unpack` and launch `dist/win-unpacked/plexo.exe`.
-Local builds are unsigned.
-
-Windows uses native window controls, Ctrl+V hints, File Explorer integration, and Windows
-Network Settings. Download filenames are normalized to Windows filename rules.
-
-### USB tethering on Windows
-
-Enable USB tethering on your phone and check that its adapter appears in Windows Network
-Settings. Install the phone manufacturer's Windows driver if Windows does not recognize it.
-TetherKit is only needed for the macOS setup below.
-
-Each selected network needs a working IPv4 connection and a route to the download server.
-Adapter detection does not guarantee Internet access: VPN, virtual, and isolated adapters may
-also appear. Check per-network latency and transfer stats. Combined throughput depends on the
-networks, Windows routing, and the server; it needs testing with your particular connections.
-
-Linux packaging remains available via `npm run build:linux` (see [Build the Linux app](#build-the-linux-app)).
-
----
-
-## Build the Linux app
-
-To package Plexo for Linux:
-
-```bash
 npm run build:linux
 ```
 
-The package will be generated in `dist/`.
+Output goes to `dist/`.
 
----
-
-# Using a USB-tethered Android phone
-
-Android USB tethering requires an additional setup step on macOS.
-
-macOS lacks native support for the **RNDIS (Remote Network Driver Interface Specification)** protocol. An Android phone with USB tethering enabled will charge and support MTP/ADB, but macOS will not expose it as a network interface (this is also why legacy kernel extensions like `HoRNDIS` stopped functioning on modern macOS and Apple Silicon).
-
-## Install TetherKit
-
-[TetherKit](https://github.com/XiaoMiku01/TetherKit) is an open-source, kext-free, user-space RNDIS driver that makes Android USB tethering available as a standard network interface on macOS.
-
-Install it via Homebrew:
+## Testing
 
 ```bash
-brew install XiaoMiku01/tap/tetherkit
+npm run typecheck
+npm run lint
+npm run test:e2e:smoke   # quick smoke tests
+npm run test:e2e         # full Playwright suite, including integrity and chaos tests
 ```
 
-### Steps:
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/TESTING.md](docs/TESTING.md).
 
-1. Connect your Android device via USB.
-2. On your phone, navigate to **Settings → Network & Internet → Hotspot & tethering** and enable **USB tethering**.
-3. Once TetherKit is active, macOS registers the device as a network interface.
-4. Open Plexo — the new interface will be automatically detected and ready to carry download chunks.
+## Built with
 
-Special thanks to [@XiaoMiku01](https://github.com/XiaoMiku01) for developing and open-sourcing TetherKit!
+Electron, React 19, TypeScript, Tailwind CSS v4, Base UI, Zustand, WebTorrent, electron-vite, electron-builder and Playwright.
 
----
+## Licence
 
-# Contributing
-
-Contributions are welcome! Whether you're optimizing download concurrency, improving UI responsiveness, or testing new tethering setups:
-
-- 🐛 Fix bugs & edge cases
-- 🚀 Improve download engine & socket throughput
-- 🌐 Expand multi-interface detection to other platforms (Linux)
-- 🎨 Enhance UI/UX and dark mode styling
-- 🧪 Test diverse multi-network environments (5G tethering, Wi-Fi 6, 10GbE)
-- 📖 Improve documentation & guides
-
-For development setup, coding standards, and PR workflows, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
-# Tech stack
-
-Plexo is built with:
-
-- **Electron** — desktop runtime
-- **React 19** — declarative UI
-- **Tailwind CSS v4** & **Base UI** — modern styling and accessible component primitives
-- **TypeScript** — end-to-end type safety
-- **Zustand** — lightweight client state management
-- **Lucide React** — icons
-- **Playwright** — end-to-end testing suite
-- **electron-vite** — fast HMR and build tooling
-- **electron-builder** — multi-platform packaging (macOS, Windows, Linux)
-
----
-
-# Support
-
-If Plexo is useful to you, you can support it by:
-
-- ⭐ Starring the repo
-- 🐛 [Reporting bugs and suggesting features](https://github.com/anmolkapil/plexo/issues)
-- ❤️ [Sponsoring development](https://github.com/sponsors/anmolkapil)
-
----
-
-# License
-
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

@@ -5,8 +5,8 @@ import { log } from '../logger'
 // Simulated networks for the Test lab. While enabled they replace the computer's real networks in
 // listActiveInterfaces (network/interfaces.ts), so the whole app (the lists, the pickers, the Auto
 // scheduler, the VPN filter) sees them. All of them are 127.0.0.1; their requests name the network
-// in the X-Plexo-Network header (see routes.ts), which is how the lab's server tells them apart.
-// Unlike PLEXO_E2E_INTERFACES this works in a packaged build, and a network can be added or
+// in the X-Lightning-Network header (see routes.ts), which is how the lab's server tells them apart.
+// Unlike LIGHTNING_E2E_INTERFACES this works in a packaged build, and a network can be added or
 // removed at any moment to make a connection drop and come back.
 
 export interface SimNetworkSpec {

@@ -1,9 +1,10 @@
-import { kindOfDownload } from '../../utils/fileKind'
 import { describeItem, isFinished, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
 import {
   Copy,
   ExternalLink,
+  FileText,
+  FolderInput,
   FolderOpen,
   Info,
   Link2,
@@ -30,7 +31,7 @@ import {
   StatusCell,
   cellClass
 } from './cells'
-import { FileKindIcon } from './FileKindIcon'
+import { FormatBadge } from './FileKindIcon'
 import {
   chipsOf,
   onControl,
@@ -93,13 +94,12 @@ export const DownloadRow = memo(function DownloadRow({
 }): React.JSX.Element {
   const columns = useColumns()
   const info = describeItem(item, queuePosition)
-  const kind = kindOfDownload(item)
   const finished = info.status === 'completed'
   const name = item.fileName
   const host = item.kind === 'torrent' ? 'Torrent' : sourceOf(item.url)
-  const reveal = (): void => void window.plexo.revealDownload(item.id)
-  const pause = (): void => void window.plexo.pauseDownload(item.id)
-  const resume = (): void => void window.plexo.resumeDownload(item.id)
+  const reveal = (): void => void window.lightning.revealDownload(item.id)
+  const pause = (): void => void window.lightning.pauseDownload(item.id)
+  const resume = (): void => void window.lightning.resumeDownload(item.id)
 
   const state = isFinished(item) ? null : item
   let primary: { label: string; icon?: RowAction['icon']; run: () => void } | null = null
@@ -127,7 +127,7 @@ export const DownloadRow = memo(function DownloadRow({
       label: 'Open file',
       icon: ExternalLink,
       disabled: info.missing,
-      run: () => void window.plexo.openDownloadedFile(item.id)
+      run: () => void window.lightning.openDownloadedFile(item.id)
     })
   }
   menu.push({
@@ -163,10 +163,34 @@ export const DownloadRow = memo(function DownloadRow({
     run: () => void navigator.clipboard.writeText(item.url).catch(() => {}),
     divider: !primary
   })
+  menu.push({
+    id: 'copy-name',
+    label: 'Copy file name',
+    icon: FileText,
+    run: () => void navigator.clipboard.writeText(name).catch(() => {})
+  })
+  if ('destinationPath' in item && item.destinationPath) {
+    const path = item.destinationPath
+    menu.push({
+      id: 'copy-path',
+      label: 'Copy file location',
+      icon: FolderInput,
+      run: () => void navigator.clipboard.writeText(path).catch(() => {})
+    })
+  }
+  if (primary?.label !== 'Download again') {
+    menu.push({
+      id: 'again',
+      label: 'Download again…',
+      icon: RotateCw,
+      run: () => handlers.again(item),
+      divider: true
+    })
+  }
   if (finished) {
     menu.push({
       id: 'remove',
-      label: 'Remove from list',
+      label: 'Remove from list…',
       icon: X,
       run: () => handlers.removeFromList(item),
       divider: true
@@ -193,8 +217,8 @@ export const DownloadRow = memo(function DownloadRow({
 
   const cells: Record<string, React.JSX.Element> = {
     name: (
-      <div key="name" role="cell" className={cn(cellClass, 'gap-2.5')}>
-        <FileKindIcon kind={kind} />
+      <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 pl-0')}>
+        <FormatBadge name={name} kind={item.kind === 'torrent' ? 'torrent' : undefined} />
         <button
           type="button"
           aria-label={`Open ${name}`}
@@ -242,6 +266,7 @@ export const DownloadRow = memo(function DownloadRow({
       row={
         <div
           role="row"
+          data-row-entry={item.id}
           data-selected={selected || undefined}
           data-status={info.status}
           onClick={(event) => {
@@ -259,7 +284,7 @@ export const DownloadRow = memo(function DownloadRow({
             info.missing && 'text-muted-foreground opacity-70',
             selected && 'bg-primary/10 hover:bg-primary/15'
           )}
-          style={stateEdge(statusKeyOf(item))}
+          style={stateEdge(statusKeyOf(item), selected)}
         >
           <div role="cell" className="flex items-center justify-center">
             <Checkbox

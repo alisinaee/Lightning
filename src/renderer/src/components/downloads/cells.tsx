@@ -44,7 +44,18 @@ export function ClippedText({
 }): React.JSX.Element {
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className={cn('truncate', className)}>{text}</span>} />
+      <TooltipTrigger
+        render={
+          <span
+            className={cn(
+              'truncate group-data-[wrap=true]/table:leading-snug group-data-[wrap=true]/table:break-all group-data-[wrap=true]/table:whitespace-normal',
+              className
+            )}
+          >
+            {text}
+          </span>
+        }
+      />
       <TooltipContent className="max-w-[min(560px,90vw)] break-all">{text}</TooltipContent>
     </Tooltip>
   )
@@ -87,36 +98,90 @@ function useCountdown(at: number | undefined): number | null {
   return at === undefined ? null : Math.max(0, Math.ceil((at - now) / 1000))
 }
 
-/** Icon and word, and under them a slim bar while it is under way, or why it failed. */
+/** The state as an icon. While it is under way a slim bar follows, with its percentage on the
+ * right; a download that is moving needs no word, its icon and bar say it. Anything else keeps
+ * its word, and a failure (or a reason) shows under it. */
 export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
   // A finished file that has gone is a warning, not a success.
   const style = statusStyle(info.missing ? 'attention' : info.status)
   const Icon = style.icon
   const moving = info.status === 'downloading'
   const waitSeconds = useCountdown(info.retryAt)
-  const label = waitSeconds === null ? info.label : `Retrying in ${waitSeconds} s`
+  // The percentage has its own place beside the bar, not in the word.
+  const label = (waitSeconds === null ? info.label : `Retrying in ${waitSeconds} s`).replace(
+    /\s*\d+%$/,
+    ''
+  )
+  const showBar = !info.reason && info.bar
+  const icon = (
+    <Icon
+      aria-hidden
+      className="size-3.5 shrink-0"
+      style={{ color: style.color }}
+      strokeWidth={2.2}
+    />
+  )
+  const word = (
+    <span
+      title={info.missing ? 'The file was moved or deleted' : undefined}
+      className={cn('truncate', info.status === 'completed' && 'text-[var(--text-secondary)]')}
+      style={
+        info.status === 'failed' || info.status === 'attention' ? { color: style.color } : undefined
+      }
+    >
+      {label}
+    </span>
+  )
+  if (showBar) {
+    return (
+      <div role="cell" className={cn(cellClass, 'gap-2')}>
+        <span
+          className="flex shrink-0 items-center gap-1.5 text-[12.5px] leading-none font-medium"
+          title={moving ? info.label : undefined}
+        >
+          {icon}
+          {!moving && word}
+        </span>
+        <div
+          role="progressbar"
+          aria-label="Progress"
+          aria-valuenow={info.percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-[4px] min-w-4 flex-1 overflow-hidden rounded-full bg-muted"
+        >
+          <div
+            className={cn(
+              'h-full rounded-full transition-[width] duration-500',
+              !moving && 'opacity-55'
+            )}
+            style={{
+              width: `${Math.max(2, info.percent)}%`,
+              background: style.color,
+              ...(moving
+                ? {
+                    backgroundImage:
+                      'repeating-linear-gradient(115deg, rgba(255,255,255,0.28) 0 6px, transparent 6px 12px)',
+                    backgroundSize: '16px 100%',
+                    animation: 'lightning-stripes 0.9s linear infinite'
+                  }
+                : null)
+            }}
+          />
+        </div>
+        <span className="w-[34px] shrink-0 text-right font-mono text-[11.5px] leading-none text-[var(--text-secondary)] tabular-nums">
+          {Math.round(info.percent)}%
+        </span>
+      </div>
+    )
+  }
   return (
     <div role="cell" className={cn(cellClass, 'flex-col items-stretch justify-center gap-1')}>
       <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] leading-none font-medium">
-        <Icon
-          aria-hidden
-          className="size-3.5 shrink-0"
-          style={{ color: style.color }}
-          strokeWidth={2.2}
-        />
-        <span
-          title={info.missing ? 'The file was moved or deleted' : undefined}
-          className={cn('truncate', info.status === 'completed' && 'text-[var(--text-secondary)]')}
-          style={
-            info.status === 'failed' || info.status === 'attention'
-              ? { color: style.color }
-              : undefined
-          }
-        >
-          {label}
-        </span>
+        {icon}
+        {word}
       </div>
-      {info.reason ? (
+      {info.reason && (
         <Tooltip>
           <TooltipTrigger
             render={
@@ -127,36 +192,6 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
           />
           <TooltipContent className="max-w-[min(480px,90vw)]">{info.reasonFull}</TooltipContent>
         </Tooltip>
-      ) : (
-        info.bar && (
-          <div
-            role="progressbar"
-            aria-label="Progress"
-            aria-valuenow={info.percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            className="h-[3px] overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className={cn(
-                'h-full rounded-full transition-[width] duration-500',
-                !moving && 'opacity-55'
-              )}
-              style={{
-                width: `${Math.max(2, info.percent)}%`,
-                background: style.color,
-                ...(moving
-                  ? {
-                      backgroundImage:
-                        'repeating-linear-gradient(115deg, rgba(255,255,255,0.28) 0 6px, transparent 6px 12px)',
-                      backgroundSize: '16px 100%',
-                      animation: 'plexo-stripes 0.9s linear infinite'
-                    }
-                  : null)
-              }}
-            />
-          </div>
-        )
       )}
     </div>
   )

@@ -26,15 +26,15 @@ export function networksOf(group: GroupInfo, file: GroupFile): string[] {
 /** Switches a running file's networks to exactly `next`: the new ones first, so it is never left
  * with none (which would pause it). An errored file is resumed first, so it can be switched. */
 export async function switchNetworks(download: DownloadState, next: string[]): Promise<void> {
-  if (download.status === 'error') await window.plexo.resumeDownload(download.id)
+  if (download.status === 'error') await window.lightning.resumeDownload(download.id)
   const current = connectionsOf(download.networks)
     .filter((network) => network.enabled)
     .map((n) => n.id)
   for (const id of next) {
-    if (!current.includes(id)) await window.plexo.setDownloadNetwork(download.id, id, true)
+    if (!current.includes(id)) await window.lightning.setDownloadNetwork(download.id, id, true)
   }
   for (const id of current) {
-    if (!next.includes(id)) await window.plexo.setDownloadNetwork(download.id, id, false)
+    if (!next.includes(id)) await window.lightning.setDownloadNetwork(download.id, id, false)
   }
 }
 
@@ -47,12 +47,12 @@ export async function chooseConnection(
 ): Promise<void> {
   const auto = group.mode === 'auto'
   if (next === null) {
-    await window.plexo.setGroupFileChoice(group.id, fileIdOf(file), null)
+    await window.lightning.setGroupFileChoice(group.id, fileIdOf(file), null)
     return
   }
   if (file.kind === 'download') await switchNetworks(file.download, next)
   // Also for a manual group's waiting file; a manual running one needs no record.
   if (auto || file.kind === 'waiting') {
-    await window.plexo.setGroupFileChoice(group.id, fileIdOf(file), next)
+    await window.lightning.setGroupFileChoice(group.id, fileIdOf(file), next)
   }
 }

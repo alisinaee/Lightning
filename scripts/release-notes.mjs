@@ -13,10 +13,10 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const { PlexoDownloads: downloads } = createRequire(import.meta.url)('../docs/downloads.js')
+const { LightningDownloads: downloads } = createRequire(import.meta.url)('../docs/downloads.js')
 
-const REPO = 'anmolkapil/plexo'
-const SITE = 'https://anmolkapil.github.io/plexo/'
+const REPO = 'alisinaee/Lightning'
+const SITE = 'https://alisinaee.github.io/Lightning/'
 
 const [tag, arg] = process.argv.slice(2)
 if (!tag || !/^v\d/.test(tag)) {

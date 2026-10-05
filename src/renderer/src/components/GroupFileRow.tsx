@@ -5,7 +5,6 @@ import { memo } from 'react'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
-import { fileKind, kindOfDownload } from '../utils/fileKind'
 import { describeError, sourceOf } from '../utils/format'
 import { chooseConnection, networksOf, type GroupFile } from '../utils/groupFiles'
 import { describeItem, statusKeyOf, type RowInfo } from '../utils/status'
@@ -23,7 +22,7 @@ import {
 } from './downloads/cells'
 import { useColumns } from './downloads/columns'
 import { chipsOf, onControl, ROW_CLASS, stateEdge } from './downloads/rowHelpers'
-import { FileKindIcon } from './downloads/FileKindIcon'
+import { FormatBadge } from './downloads/FileKindIcon'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -76,7 +75,6 @@ export const GroupFileRow = memo(
     let reason = ''
     let action: { label: string; icon: typeof Pause; run: () => void } | null = null
     let host = ''
-    let kind = fileKind(name)
 
     if (entry.kind === 'waiting') {
       const planned = group.plannedNetworks[id]
@@ -106,7 +104,6 @@ export const GroupFileRow = memo(
     } else {
       const download = entry.download
       info = describeItem(download)
-      kind = kindOfDownload(download)
       host = sourceOf(download.url)
       chips = chipsOf(download, getVisual)
       if (entry.kind === 'download') {
@@ -115,19 +112,19 @@ export const GroupFileRow = memo(
           action = {
             label: 'Pause',
             icon: Pause,
-            run: () => attempt(() => window.plexo.pauseDownload(id))
+            run: () => attempt(() => window.lightning.pauseDownload(id))
           }
         } else if (live.status === 'paused') {
           action = {
             label: 'Resume',
             icon: Play,
-            run: () => attempt(() => window.plexo.resumeDownload(id))
+            run: () => attempt(() => window.lightning.resumeDownload(id))
           }
         } else if (live.status === 'error' && live.resumable !== false) {
           action = {
             label: 'Retry',
             icon: RotateCw,
-            run: () => attempt(() => window.plexo.resumeDownload(id))
+            run: () => attempt(() => window.lightning.resumeDownload(id))
           }
         }
         if (auto && live.status === 'downloading') {
@@ -149,7 +146,7 @@ export const GroupFileRow = memo(
           : null
 
     const remove = (): void => {
-      if (entry.kind === 'waiting') attempt(() => window.plexo.removeGroupItem(group.id, id))
+      if (entry.kind === 'waiting') attempt(() => window.lightning.removeGroupItem(group.id, id))
       else if (
         entry.kind === 'download' &&
         entry.download.bytesDownloaded > 0 &&
@@ -163,7 +160,13 @@ export const GroupFileRow = memo(
     const cells: Record<string, React.JSX.Element> = {
       name: (
         <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 pl-9')}>
-          <FileKindIcon kind={kind} size="sm" />
+          <FormatBadge
+            name={name}
+            size="sm"
+            kind={
+              entry.kind !== 'waiting' && entry.download.kind === 'torrent' ? 'torrent' : undefined
+            }
+          />
           {entry.kind === 'waiting' ? (
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <ClippedText text={name} className="text-[12.5px] leading-none font-medium" />
@@ -219,7 +222,9 @@ export const GroupFileRow = memo(
           if (entry.kind !== 'waiting' && !onControl(event.target)) onOpen(id)
         }}
         className={cn(ROW_CLASS, 'bg-card/40', selected && 'bg-primary/10 hover:bg-primary/15')}
-        style={entry.kind === 'waiting' ? undefined : stateEdge(statusKeyOf(entry.download))}
+        style={
+          entry.kind === 'waiting' ? undefined : stateEdge(statusKeyOf(entry.download), selected)
+        }
       >
         <div role="cell" className="flex items-center justify-center">
           {entry.kind !== 'waiting' && (
@@ -235,6 +240,8 @@ export const GroupFileRow = memo(
           {file && (
             <ConnectionPicker
               iconOnly
+              // A general rule decides for every file.
+              disabled={group.mode === 'manual' && group.rule === 'general'}
               options={options}
               value={networksOf(group, file)}
               label={name}

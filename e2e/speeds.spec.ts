@@ -52,14 +52,14 @@ test.describe('speed meters', () => {
 })
 
 test('a limited download shows the speed it is held to, and a time left', async ({
-  plexo,
+  lightning,
   serve
 }) => {
   const origin = await serve({ size: 80 * BLOCK })
-  await plexo.api.updateSettings({ speedLimit: 1 * MB })
-  await plexo.start(origin.url(), origin.sha256)
+  await lightning.api.updateSettings({ speedLimit: 1 * MB })
+  await lightning.start(origin.url(), origin.sha256)
   // 5 MB at 1 MB/s: five seconds. Past the first ticks, the reading sits at the limit.
-  const state = await plexo.waitUntil(
+  const state = await lightning.waitUntil(
     (s) =>
       s.status === 'downloading' &&
       s.speedBytesPerSec > 0.5 * MB &&
@@ -68,8 +68,8 @@ test('a limited download shows the speed it is held to, and a time left', async 
   )
   expect(state.speedBytesPerSec).toBeLessThan(1.3 * MB)
   expect(state.networks.some((n) => n.speedBytesPerSec > 0)).toBe(true)
-  await plexo.waitForHttpStatus('completed', 30_000)
-  const done = await plexo.currentHttp()
+  await lightning.waitForHttpStatus('completed', 30_000)
+  const done = await lightning.currentHttp()
   expect(done!.speedBytesPerSec).toBe(0)
   expect(done!.timeLeftSeconds).toBeUndefined()
 })

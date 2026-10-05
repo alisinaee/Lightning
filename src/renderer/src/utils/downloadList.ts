@@ -1,4 +1,4 @@
-import type { DownloadState, FinishedDownload, GroupInfo } from '@shared/types'
+import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import type { DownloadFilter, SortKey } from '../store/useAppStore'
 import { connectionsOf, sourceOf, wantedBytes } from './format'
 import { kindOfDownload, type FileKind } from './fileKind'
@@ -188,6 +188,34 @@ export function sortEntries(
       return added(a.entry) - added(b.entry) || a.index - b.index
     })
     .map(({ entry }) => entry)
+}
+
+/** A group's files in the order the user picked, as the list itself is sorted. */
+export function sortItems(items: Item[], sort: { key: SortKey; dir: 'asc' | 'desc' }): Item[] {
+  const entries: ListEntry[] = items.map((item) => ({ type: 'item', id: item.id, item }))
+  return sortEntries(entries, sort).flatMap((entry) => (entry.type === 'item' ? [entry.item] : []))
+}
+
+/** Files of a group still waiting for a network: they can be put in order by name and size; for
+ * the other columns they have nothing to compare, so they keep their place. */
+export function sortPending(
+  pending: PendingGroupItem[],
+  sort: { key: SortKey; dir: 'asc' | 'desc' }
+): PendingGroupItem[] {
+  const sign = sort.dir === 'asc' ? 1 : -1
+  if (sort.key === 'name') {
+    return [...pending].sort(
+      (a, b) =>
+        sign *
+        a.request.suggestedFileName
+          .toLowerCase()
+          .localeCompare(b.request.suggestedFileName.toLowerCase())
+    )
+  }
+  if (sort.key === 'size') {
+    return [...pending].sort((a, b) => sign * (a.request.totalBytes - b.request.totalBytes))
+  }
+  return pending
 }
 
 /** Place in the queue of each queued download, 1 first. */

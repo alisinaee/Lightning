@@ -184,8 +184,16 @@ test('one network with nothing left to do helps the biggest file (work stealing)
 test('an idle network does not help a file that is nearly done', () => {
   const sim = new Sim(['wifi', 'eth'], () => 6 * MB)
   sim.addFile('small', 30 * MB, ['wifi'])
+  sim.addFile('other', 30 * MB, ['wifi'])
   sim.run(2)
   expect(sim.actions).toHaveLength(0)
+})
+
+test('a lone running file, with nothing waiting, gets every network at once', () => {
+  const sim = new Sim(['wifi', 'eth'], () => 6 * MB)
+  sim.addFile('small', 30 * MB, ['wifi'])
+  sim.run(1)
+  expect([...sim.files[0].networks].sort()).toEqual(['eth', 'wifi'])
 })
 
 test('a helper is given back when a file of its own is waiting', () => {

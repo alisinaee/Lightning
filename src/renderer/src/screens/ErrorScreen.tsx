@@ -3,16 +3,10 @@ import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { DetailHeader } from '../components/DetailHeader'
+import { FormatBadge } from '../components/downloads/FileKindIcon'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
-import {
-  describeError,
-  fileExtensionBadge,
-  formatBytes,
-  isFolder,
-  linkExpired,
-  wantedBytes
-} from '../utils/format'
+import { describeError, formatBytes, isFolder, linkExpired, wantedBytes } from '../utils/format'
 import { useAppStore } from '../store/useAppStore'
 
 export function ErrorScreen({ download }: { download: DownloadState }): React.JSX.Element {
@@ -67,7 +61,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
             disabled={resuming}
             onClick={() => {
               setResuming(true)
-              void window.plexo.resumeDownload(download.id).finally(() => setResuming(false))
+              void window.lightning.resumeDownload(download.id).finally(() => setResuming(false))
             }}
           >
             {resuming ? 'Retrying…' : 'Retry'}
@@ -144,13 +138,15 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
 
           {/* File capsule */}
           <div className="flex w-full items-center gap-[11px] rounded-[9px] border-[0.5px] border-border bg-background p-[10px_12px] text-left">
-            <div className="flex size-[34px] shrink-0 items-center justify-center rounded-[7px] border-[0.5px] border-[var(--border-strong)] bg-card font-mono text-[8.5px] leading-none font-semibold text-[var(--text-secondary)]">
+            <FormatBadge
+              name={download.fileName}
+              className="size-[34px] rounded-[7px] text-[8.5px]"
+              kind={isFolder(download) ? 'torrent' : undefined}
+            >
               {isFolder(download) ? (
                 <Folder aria-label="Folder" className="size-[15px]" />
-              ) : (
-                fileExtensionBadge(download.fileName)
-              )}
-            </div>
+              ) : undefined}
+            </FormatBadge>
             <div className="min-w-0 flex-1">
               <TruncatedText
                 text={download.fileName}

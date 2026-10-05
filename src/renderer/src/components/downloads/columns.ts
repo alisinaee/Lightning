@@ -51,7 +51,7 @@ export const COLUMNS: ColumnDef[] = [
   {
     id: 'connections',
     label: 'Connections',
-    width: 108,
+    width: 92,
     min: 60,
     max: 240,
     dropOrder: 6,
@@ -62,10 +62,11 @@ export const COLUMNS: ColumnDef[] = [
 export const columnOf = (id: ColumnId): ColumnDef | undefined =>
   COLUMNS.find((def) => def.id === id)
 
-const SELECT_WIDTH = 36
-export const ACTIONS_WIDTH = 132
+export const SELECT_WIDTH = 30
+/** Fits the widest set of actions: the "Download again" text button beside the ⋯ menu. */
+export const ACTIONS_WIDTH = 152
 /** What the name column keeps at least, before columns start to drop out. */
-const NAME_MIN = 220
+export const NAME_MIN = 220
 
 export interface ColumnLayout {
   /** The columns shown, in order. */

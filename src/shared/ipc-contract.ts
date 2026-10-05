@@ -3,6 +3,8 @@ import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
   CreateGroupInput,
+  DnsConfig,
+  DnsProfile,
   DownloadUpdate,
   FinishedDownload,
   GroupInfo,
@@ -16,7 +18,7 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, historyChanged, groupsChanged, labEvent, settingsChanged and linkReceived) — one source of truth for
- * both plexoApi (preload) and registerIpcHandlers (main), so a signature drift between the two
+ * both lightningApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
   listInterfaces: { args: []; result: NetworkInterfaceInfo[] }
@@ -24,6 +26,18 @@ export interface IpcContract {
   deviceBindingSupported: { args: []; result: boolean }
   openNetworkSettings: { args: []; result: void }
   updateSettings: { args: [patch: AppSettings]; result: void }
+  /** The saved DNS profiles and the app's default. */
+  getDns: { args: []; result: DnsConfig }
+  /** Adds or replaces a profile; servers are IP addresses, as a list or typed text. */
+  saveDns: {
+    args: [input: { id?: string; name: string; servers: string[] | string }]
+    result: DnsProfile
+  }
+  removeDns: { args: [id: string]; result: void }
+  /** The DNS the whole app uses; null is the system's. */
+  setDefaultDns: { args: [id: string | null]; result: void }
+  /** The DNS one download uses ('system' for the system's); null follows its group and the app. */
+  setDownloadDns: { args: [id: string, dnsId: string | null]; result: void }
   probeUrl: { args: [url: string]; result: ProbeResult }
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }
@@ -52,6 +66,7 @@ export interface IpcContract {
   listHistory: { args: []; result: FinishedDownload[] }
   /** Forgets every finished download; their files stay. */
   clearHistory: { args: []; result: void }
+  updateHistory: { args: [id: string, fileName: string]; result: void }
   /** Bytes each network has received in its selected calendar period, by id (see NetworkPreference.dataLimit). */
   networkUsage: { args: []; result: Record<string, number> }
   resetNetworkUsage: { args: [id: string]; result: void }
@@ -113,7 +128,7 @@ export interface IpcContract {
   /** Runs one plan to its end and gives how it went; the window follows it through labEvent. */
   labRun: { args: [planId: string]; result: LabPlanRun }
   labRunAll: { args: []; result: LabState }
-  /** The second half of a plan that needed Plexo restarted. */
+  /** The second half of a plan that needed Lightning restarted. */
   labVerify: { args: [planId: string]; result: LabPlanRun }
   /** Stops the running plan (it cleans up first) and brings the real networks back. */
   labStop: { args: []; result: void }

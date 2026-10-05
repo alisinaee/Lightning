@@ -63,13 +63,13 @@ export function CompleteScreen({
   const files = isTorrent && download.files.total > 1 ? download.files : null
 
   // Gone since the list was read: main sends history again, marking it missing here.
-  const handleReveal = (): void => void window.plexo.revealDownload(download.id)
+  const handleReveal = (): void => void window.lightning.revealDownload(download.id)
 
   return (
     <div className="flex h-full flex-col bg-background">
       <DetailHeader download={download}>
         <Button type="button" onClick={handleReveal} disabled={missing}>
-          {window.plexo.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
+          {window.lightning.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
         </Button>
       </DetailHeader>
       <div role="status" className="sr-only">

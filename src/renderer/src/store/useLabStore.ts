@@ -4,7 +4,7 @@ import { create } from 'zustand'
 // The Test lab as the window shows it. The main process owns every run (main/debug/lab.ts); this
 // only keeps the last state it pushed, and whether the lab's side panel is open.
 
-const WIDTH_KEY = 'plexo.labWidth'
+const WIDTH_KEY = 'lightning.labWidth'
 const DEFAULT_WIDTH = 480
 
 function loadWidth(): number {
@@ -58,14 +58,14 @@ export const useLabStore = create<LabStore>((set, get) => {
     receive: (state) => set({ state }),
     load: async () => {
       try {
-        get().receive(await window.plexo.labGetState())
+        get().receive(await window.lightning.labGetState())
       } catch {
         // The next push brings it.
       }
     },
-    run: (planId) => attempt(window.plexo.labRun(planId)),
-    runAll: () => attempt(window.plexo.labRunAll()),
-    verify: (planId) => attempt(window.plexo.labVerify(planId)),
-    stop: () => attempt(window.plexo.labStop())
+    run: (planId) => attempt(window.lightning.labRun(planId)),
+    runAll: () => attempt(window.lightning.labRunAll()),
+    verify: (planId) => attempt(window.lightning.labVerify(planId)),
+    stop: () => attempt(window.lightning.labStop())
   }
 })

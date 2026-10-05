@@ -17,7 +17,7 @@ const P = 'Phone'
 const V = 'Fake VPN'
 const MB = 1024 * 1024
 
-export const RESTART_NOTE = join(tmpdir(), 'plexo-lab-restart', 'note.json')
+export const RESTART_NOTE = join(tmpdir(), 'lightning-lab-restart', 'note.json')
 
 /** Waits for every file; stops early if one fails. */
 async function waitAll(
@@ -55,7 +55,7 @@ async function bytesOf(ctx: LabContext, file: LabFile): Promise<number> {
   return (await ctx.find(file))?.bytesDownloaded ?? 0
 }
 
-const staging = (names: string[]): string[] => names.filter((name) => name.includes('.plexo'))
+const staging = (names: string[]): string[] => names.filter((name) => name.includes('.lightning'))
 
 const requestsOn = (counts: Record<string, { requests: number }>, net: string): number =>
   counts[net]?.requests ?? 0
@@ -1363,13 +1363,13 @@ const plans: LabPlan[] = [
     timeoutSec: 300,
     steps: ['Start and pause a group', 'Write the restart note'],
     verifySteps: ['After the restart: what came back', 'Finish the downloads'],
-    fixedDir: join(tmpdir(), 'plexo-lab-restart', 'files'),
+    fixedDir: join(tmpdir(), 'lightning-lab-restart', 'files'),
     tests:
-      'That a group you were part way through is still there, with its progress and its plan, after you quit and reopen Plexo, and that it can then be finished.',
+      'That a group you were part way through is still there, with its progress and its plan, after you quit and reopen Lightning, and that it can then be finished.',
     challenge:
-      'This one needs you. The lab starts a group, pauses it, and then asks you to quit and reopen Plexo yourself. Plexo has to remember everything from its files on disk.',
+      'This one needs you. The lab starts a group, pauses it, and then asks you to quit and reopen Lightning yourself. Lightning has to remember everything from its files on disk.',
     passLooksLike:
-      'After you reopen Plexo and press Verify, the group is back with the same files, the downloads are paused with their progress kept, the waiting files are still waiting, and resuming finishes everything byte-exact.',
+      'After you reopen Lightning and press Verify, the group is back with the same files, the downloads are paused with their progress kept, the waiting files are still waiting, and resuming finishes everything byte-exact.',
     async run(ctx) {
       const files = Array.from({ length: 3 }, (_, i) =>
         ctx.file({ name: `restart-${i + 1}.bin`, mb: 40 })
@@ -1410,7 +1410,7 @@ const plans: LabPlan[] = [
         await ctx.sleep(1500)
       })
       await ctx.step('Write the restart note', async () => {
-        await mkdir(join(tmpdir(), 'plexo-lab-restart'), { recursive: true })
+        await mkdir(join(tmpdir(), 'lightning-lab-restart'), { recursive: true })
         const group = ctx.group(groupId)
         await writeFile(
           RESTART_NOTE,
@@ -1430,7 +1430,7 @@ const plans: LabPlan[] = [
         ctx.expect('the note was written', existsSync(RESTART_NOTE), true)
         ctx.keep()
         ctx.awaitPerson(
-          'Quit Plexo completely, open it again, open Debug, then press Verify on this plan.'
+          'Quit Lightning completely, open it again, open Debug, then press Verify on this plan.'
         )
       })
     },

@@ -36,7 +36,7 @@ export function FixLinkDialog({
     setFixing(true)
     setError(null)
     try {
-      await window.plexo.relinkDownload(download.id, url.trim())
+      await window.lightning.relinkDownload(download.id, url.trim())
       close()
     } catch (failure) {
       setError(describeError(failure))
@@ -56,7 +56,7 @@ export function FixLinkDialog({
           <DialogTitle>Paste a new link</DialogTitle>
           <DialogDescription>
             {download &&
-              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Plexo resumes from where the download stopped.`}
+              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Lightning resumes from where the download stopped.`}
           </DialogDescription>
         </DialogHeader>
         <form

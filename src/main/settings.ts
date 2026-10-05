@@ -2,12 +2,15 @@ import { rm } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { app, nativeTheme } from 'electron'
 import {
+  DEFAULT_PREFS,
   DOWNLOADS_AT_ONCE,
+  type AppPrefs,
   type AppSettings,
   type NetworkPreference,
   type NetworkPreferences,
   type ThemeSource
 } from '../shared/types'
+import { isProxyAddress } from '../shared/networks'
 import { readJson, updateJson } from './jsonFile'
 
 function settingsPath(): string {
@@ -86,7 +89,55 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (slowModeSpeed !== undefined) settings.slowModeSpeed = slowModeSpeed
   if (parsed.slowMode === true) settings.slowMode = true
   if (parsed.useVpn === true) settings.useVpn = true
+  if (parsed.prefs !== undefined) settings.prefs = sanitizePrefs(parsed.prefs)
   return settings
+}
+
+const PROXY_MODES = ['system', 'direct', 'manual'] as const
+
+function flag(value: unknown): boolean | undefined {
+  return value === true ? true : value === false ? false : undefined
+}
+
+function shortText(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.trim().slice(0, 200) : undefined
+}
+
+/** Keeps a saved Settings page. Readers apply DEFAULT_PREFS for anything left out. */
+export function sanitizePrefs(parsed: unknown): AppPrefs {
+  if (!isRecord(parsed)) return {}
+  const prefs: AppPrefs = {}
+  const scale = parsed.uiScale
+  if (typeof scale === 'number' && scale >= 0.8 && scale <= 1.4) prefs.uiScale = scale
+  if (['amber', 'blue', 'teal', 'green', 'violet', 'rose'].includes(parsed.accent as string)) {
+    prefs.accent = parsed.accent as AppPrefs['accent']
+  }
+  for (const key of [
+    'notifyAdded',
+    'notifyCompleted',
+    'notifyFailed',
+    'notifyWhenInactive',
+    'preventSleep',
+    'closeToBackground',
+    'hideDock'
+  ] as const) {
+    const value = flag(parsed[key])
+    if (value !== undefined) prefs[key] = value
+  }
+  if ((PROXY_MODES as readonly string[]).includes(parsed.proxyMode as string)) {
+    prefs.proxyMode = parsed.proxyMode as AppPrefs['proxyMode']
+  }
+  for (const key of ['proxyHttp', 'proxyHttps', 'proxyFtp', 'proxySocks'] as const) {
+    // Kept only if it is a proxy address: the text goes into Chromium's proxy rules.
+    const value = shortText(parsed[key])
+    if (value !== undefined && (value === '' || isProxyAddress(value))) prefs[key] = value
+  }
+  return prefs
+}
+
+/** Saved prefs over the defaults, so a missing field is the default. */
+export function prefsOf(settings: AppSettings): Required<AppPrefs> {
+  return { ...DEFAULT_PREFS, ...sanitizePrefs(settings.prefs) }
 }
 
 export async function loadSettings(): Promise<AppSettings> {

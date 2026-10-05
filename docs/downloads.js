@@ -1,5 +1,5 @@
 /*
- * What Plexo's download page and its GitHub Release notes say about each file we ship, and which
+ * What Lightning's download page and its GitHub Release notes say about each file we ship, and which
  * one to put in front of a visitor. Plain ES5 so the page can load it as-is; the release-notes
  * script and the tests load it with require().
  *
@@ -16,15 +16,15 @@
   // What an unsigned build makes the OS say on first launch, and the way past it: under the
   // download button for the visitor's own OS, and with every other OS's downloads.
   // `code` in backticks, **button names** in stars.
-  var MAC_COMMAND = 'xattr -dr com.apple.quarantine /Applications/Plexo.app'
+  var MAC_COMMAND = 'xattr -dr com.apple.quarantine /Applications/Lightning.app'
   var FIRST_LAUNCH = {
     mac: {
       system: 'macOS',
-      warning: 'Plexo is damaged and can’t be opened',
-      fix: 'It isn’t damaged, just not signed by Apple yet. Drag Plexo into **Applications**, then run this once in **Terminal** and open it again:',
+      warning: 'Lightning is damaged and can’t be opened',
+      fix: 'It isn’t damaged, just not signed by Apple yet. Drag Lightning into **Applications**, then run this once in **Terminal** and open it again:',
       command: MAC_COMMAND,
       aside:
-        'Says it can’t verify Plexo instead? Choose **Open Anyway** in System Settings → Privacy & Security.'
+        'Says it can’t verify Lightning instead? Choose **Open Anyway** in System Settings → Privacy & Security.'
     },
     win: {
       system: 'Windows',
@@ -42,9 +42,9 @@
     ],
     win: ['One installer covers both regular (x64) and ARM PCs.'],
     linux: [
-      'AppImage: `chmod +x plexo-*.AppImage`, then run it. Recent Ubuntu needs FUSE 2 first: `sudo apt install libfuse2t64` (older releases call it `libfuse2`) — or use the .deb, which needs nothing extra.',
-      '.deb: `sudo apt install ./plexo_*.deb`.',
-      'Using more than one network needs Linux kernel 5.7 or newer (any current distro); on older kernels Plexo can only use the default network.'
+      'AppImage: `chmod +x lightning-*.AppImage`, then run it. Recent Ubuntu needs FUSE 2 first: `sudo apt install libfuse2t64` (older releases call it `libfuse2`) — or use the .deb, which needs nothing extra.',
+      '.deb: `sudo apt install ./lightning_*.deb`.',
+      'Using more than one network needs Linux kernel 5.7 or newer (any current distro); on older kernels Lightning can only use the default network.'
     ]
   }
 
@@ -292,7 +292,7 @@
       out.push('')
     })
     out.push(
-      '**macOS says Plexo is damaged?** It isn’t: Plexo isn’t signed yet. Move it to Applications, ' +
+      '**macOS says Lightning is damaged?** It isn’t: Lightning isn’t signed yet. Move it to Applications, ' +
         'run `' +
         MAC_COMMAND +
         '` in Terminal, and open it again.',
@@ -304,7 +304,7 @@
     return out.join('\n')
   }
 
-  root.PlexoDownloads = {
+  root.LightningDownloads = {
     describe: describe,
     detectEnvironment: detectEnvironment,
     build: build,

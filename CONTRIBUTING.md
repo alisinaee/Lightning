@@ -1,12 +1,12 @@
-# Contributing to Plexo
+# Contributing to Lightning
 
-Thanks for taking a look at Plexo. It's a small project, so the process is intentionally lightweight.
+Thanks for taking a look at Lightning. It's a small project, so the process is intentionally lightweight.
 
 ## Setup
 
 ```bash
-git clone https://github.com/anmolkapil/plexo.git
-cd plexo
+git clone https://github.com/alisinaee/Lightning.git
+cd lightning
 npm install
 npm run dev
 ```
@@ -30,16 +30,16 @@ Please describe how you checked your change manually (which URL/file size/interf
 
 ## End-to-end tests
 
-`e2e/` drives the real built app through the same `window.plexo` API the renderer uses, against a local test server that can drop, stall, corrupt or hold any response at an exact byte. Every test also runs automatic checks: a `completed` download must match the source byte for byte, and anything else must leave no file, part files or open handles behind. The app's window stays hidden while tests run.
+`e2e/` drives the real built app through the same `window.lightning` API the renderer uses, against a local test server that can drop, stall, corrupt or hold any response at an exact byte. Every test also runs automatic checks: a `completed` download must match the source byte for byte, and anything else must leave no file, part files or open handles behind. The app's window stays hidden while tests run.
 
 ```bash
 npm run test:e2e:smoke          # what CI runs on every PR (~1 min)
 npm run test:e2e                # everything, including @disk and @chaos
-PLEXO_CHAOS_RUNS=50 npx playwright test e2e/chaos.spec.ts   # more random sequences
-PLEXO_CHAOS_SEED=<seed> npx playwright test e2e/chaos.spec.ts  # replay a chaos failure
+LIGHTNING_CHAOS_RUNS=50 npx playwright test e2e/chaos.spec.ts   # more random sequences
+LIGHTNING_CHAOS_SEED=<seed> npx playwright test e2e/chaos.spec.ts  # replay a chaos failure
 ```
 
-Tests build the app first; set `PLEXO_E2E_SKIP_BUILD=1` when `out/` is already fresh. Known bugs are written as `test.fail(...)` — when a fix lands, Playwright reports the test as unexpectedly passing, and the marker comes off. Retries are deliberately off: a download test that passes only on a retry has found a race.
+Tests build the app first; set `LIGHTNING_E2E_SKIP_BUILD=1` when `out/` is already fresh. Known bugs are written as `test.fail(...)` — when a fix lands, Playwright reports the test as unexpectedly passing, and the marker comes off. Retries are deliberately off: a download test that passes only on a retry has found a race.
 
 ## Making changes
 
@@ -50,7 +50,7 @@ Tests build the app first; set `PLEXO_E2E_SKIP_BUILD=1` when `out/` is already f
 
 ## Releasing
 
-A release ships seven files: `Plexo` for macOS (Apple silicon and Intel `.dmg`), Windows (one installer for x64 and ARM64) and Linux (`AppImage` and `.deb`, x86_64 and ARM64). The download page (`docs/`, served by GitHub Pages) reads them from the latest GitHub Release and labels each one from its file name (`docs/downloads.js`), so keep the naming in `electron-builder.yml` intact.
+A release ships seven files: `Lightning` for macOS (Apple silicon and Intel `.dmg`), Windows (one installer for x64 and ARM64) and Linux (`AppImage` and `.deb`, x86_64 and ARM64). The download page (`docs/`, served by GitHub Pages) reads them from the latest GitHub Release and labels each one from its file name (`docs/downloads.js`), so keep the naming in `electron-builder.yml` intact.
 
 ```bash
 npm version <version> --no-git-tag-version     # e.g. 1.0.0-rc.8

@@ -28,7 +28,7 @@ interface Env {
   os: string
   arch: 'arm64' | 'x64' | null
 }
-const D = createRequire(__filename)('../docs/downloads.js').PlexoDownloads as {
+const D = createRequire(__filename)('../docs/downloads.js').LightningDownloads as {
   describe: (name: string) => Omit<Asset, 'file' | 'url' | 'recommended'> | null
   detectEnvironment: (
     nav: { userAgent: string; platform: string; maxTouchPoints?: number },
@@ -41,23 +41,23 @@ const D = createRequire(__filename)('../docs/downloads.js').PlexoDownloads as {
 // What a release actually contains (rc.7's file names), plus what electron-builder leaves lying
 // around in dist/ that must never be offered.
 const SHIPPED = [
-  'plexo-1.0.0-rc.7-arm64.AppImage',
-  'plexo-1.0.0-rc.7-arm64.dmg',
-  'plexo-1.0.0-rc.7-setup.exe',
-  'plexo-1.0.0-rc.7-x64.dmg',
-  'plexo-1.0.0-rc.7-x86_64.AppImage',
-  'plexo_1.0.0-rc.7_amd64.deb',
-  'plexo_1.0.0-rc.7_arm64.deb'
+  'lightning-1.0.0-rc.7-arm64.AppImage',
+  'lightning-1.0.0-rc.7-arm64.dmg',
+  'lightning-1.0.0-rc.7-setup.exe',
+  'lightning-1.0.0-rc.7-x64.dmg',
+  'lightning-1.0.0-rc.7-x86_64.AppImage',
+  'lightning_1.0.0-rc.7_amd64.deb',
+  'lightning_1.0.0-rc.7_arm64.deb'
 ]
 const NOISE = [
   'latest.yml',
   'latest-mac.yml',
-  'plexo-1.0.0-rc.7-arm64.dmg.blockmap',
-  'plexo-1.0.0-rc.7-setup.exe.blockmap',
-  'plexo_1.0.0-rc.7_amd64.snap',
-  'Plexo-1.0.0-rc.4-arm64-mac.zip'
+  'lightning-1.0.0-rc.7-arm64.dmg.blockmap',
+  'lightning-1.0.0-rc.7-setup.exe.blockmap',
+  'lightning_1.0.0-rc.7_amd64.snap',
+  'Lightning-1.0.0-rc.4-arm64-mac.zip'
 ]
-const BASE = 'https://github.com/anmolkapil/plexo/releases/download/v1.0.0-rc.7/'
+const BASE = 'https://github.com/alisinaee/Lightning/releases/download/v1.0.0-rc.7/'
 const release = (names: string[] = [...SHIPPED, ...NOISE]): unknown => ({
   tag_name: 'v1.0.0-rc.7',
   prerelease: true,
@@ -121,13 +121,13 @@ const BROWSERS = {
 
 test.describe('what each file is', () => {
   const expected: Record<string, [string, string, string]> = {
-    'plexo-1.0.0-rc.7-arm64.dmg': ['mac', 'arm64', 'Apple silicon'],
-    'plexo-1.0.0-rc.7-x64.dmg': ['mac', 'x64', 'Intel'],
-    'plexo-1.0.0-rc.7-setup.exe': ['win', 'any', 'Windows 10 and 11'],
-    'plexo-1.0.0-rc.7-x86_64.AppImage': ['linux', 'x64', 'AppImage · x86_64'],
-    'plexo-1.0.0-rc.7-arm64.AppImage': ['linux', 'arm64', 'AppImage · ARM64'],
-    'plexo_1.0.0-rc.7_amd64.deb': ['linux', 'x64', 'Debian / Ubuntu · x86_64'],
-    'plexo_1.0.0-rc.7_arm64.deb': ['linux', 'arm64', 'Debian / Ubuntu · ARM64']
+    'lightning-1.0.0-rc.7-arm64.dmg': ['mac', 'arm64', 'Apple silicon'],
+    'lightning-1.0.0-rc.7-x64.dmg': ['mac', 'x64', 'Intel'],
+    'lightning-1.0.0-rc.7-setup.exe': ['win', 'any', 'Windows 10 and 11'],
+    'lightning-1.0.0-rc.7-x86_64.AppImage': ['linux', 'x64', 'AppImage · x86_64'],
+    'lightning-1.0.0-rc.7-arm64.AppImage': ['linux', 'arm64', 'AppImage · ARM64'],
+    'lightning_1.0.0-rc.7_amd64.deb': ['linux', 'x64', 'Debian / Ubuntu · x86_64'],
+    'lightning_1.0.0-rc.7_arm64.deb': ['linux', 'arm64', 'Debian / Ubuntu · ARM64']
   }
 
   for (const [file, [os, arch, title]] of Object.entries(expected)) {
@@ -141,11 +141,11 @@ test.describe('what each file is', () => {
   })
 
   test('a Windows installer with an architecture in its name is described as that one', () => {
-    expect(D.describe('plexo-2.0.0-x64-setup.exe')).toMatchObject({
+    expect(D.describe('lightning-2.0.0-x64-setup.exe')).toMatchObject({
       arch: 'x64',
       title: 'Windows · x64'
     })
-    expect(D.describe('plexo-2.0.0-arm64-setup.exe')).toMatchObject({ arch: 'arm64' })
+    expect(D.describe('lightning-2.0.0-arm64-setup.exe')).toMatchObject({ arch: 'arm64' })
   })
 })
 
@@ -186,17 +186,17 @@ test.describe('which download is offered', () => {
   const offered = (env: Env): string | undefined => D.build(release(), env).primary?.asset.file
 
   test('the right build for every system we can identify', () => {
-    expect(offered({ os: 'win', arch: null })).toBe('plexo-1.0.0-rc.7-setup.exe')
-    expect(offered({ os: 'mac', arch: 'arm64' })).toBe('plexo-1.0.0-rc.7-arm64.dmg')
-    expect(offered({ os: 'mac', arch: 'x64' })).toBe('plexo-1.0.0-rc.7-x64.dmg')
-    expect(offered({ os: 'linux', arch: 'x64' })).toBe('plexo-1.0.0-rc.7-x86_64.AppImage')
-    expect(offered({ os: 'linux', arch: 'arm64' })).toBe('plexo-1.0.0-rc.7-arm64.AppImage')
+    expect(offered({ os: 'win', arch: null })).toBe('lightning-1.0.0-rc.7-setup.exe')
+    expect(offered({ os: 'mac', arch: 'arm64' })).toBe('lightning-1.0.0-rc.7-arm64.dmg')
+    expect(offered({ os: 'mac', arch: 'x64' })).toBe('lightning-1.0.0-rc.7-x64.dmg')
+    expect(offered({ os: 'linux', arch: 'x64' })).toBe('lightning-1.0.0-rc.7-x86_64.AppImage')
+    expect(offered({ os: 'linux', arch: 'arm64' })).toBe('lightning-1.0.0-rc.7-arm64.AppImage')
   })
 
   test('an undecided Mac gets Apple silicon, with the Intel build one click away and a hint', () => {
     const model = D.build(release(), { os: 'mac', arch: null })
     expect(model.primary?.asset.arch).toBe('arm64')
-    expect(model.alternates.map((a) => a.asset.file)).toEqual(['plexo-1.0.0-rc.7-x64.dmg'])
+    expect(model.alternates.map((a) => a.asset.file)).toEqual(['lightning-1.0.0-rc.7-x64.dmg'])
     expect(model.hint).toMatch(/About This Mac/)
   })
 
@@ -210,11 +210,11 @@ test.describe('which download is offered', () => {
 
   test('Linux offers the .deb beside the AppImage, of the same architecture', () => {
     const arm = D.build(release(), { os: 'linux', arch: 'arm64' })
-    expect(arm.alternates.map((a) => a.asset.file)).toEqual(['plexo_1.0.0-rc.7_arm64.deb'])
+    expect(arm.alternates.map((a) => a.asset.file)).toEqual(['lightning_1.0.0-rc.7_arm64.deb'])
     const unknown = D.build(release(), { os: 'linux', arch: null })
     expect(unknown.alternates.map((a) => a.asset.file)).toEqual([
-      'plexo_1.0.0-rc.7_amd64.deb',
-      'plexo-1.0.0-rc.7-arm64.AppImage'
+      'lightning_1.0.0-rc.7_amd64.deb',
+      'lightning-1.0.0-rc.7-arm64.AppImage'
     ])
   })
 
@@ -226,7 +226,7 @@ test.describe('which download is offered', () => {
   })
 
   test('a release missing a platform leaves it out, and a Windows-only visitor still gets the installer', () => {
-    const windowsOnly = release(['plexo-1.0.0-rc.7-setup.exe'])
+    const windowsOnly = release(['lightning-1.0.0-rc.7-setup.exe'])
     expect(D.build(windowsOnly, { os: 'win', arch: null }).primary?.asset.os).toBe('win')
     expect(D.build(windowsOnly, { os: 'mac', arch: null }).primary).toBeNull()
     expect(D.build(windowsOnly, { os: 'mac', arch: null }).groups.map((g) => g.os)).toEqual(['win'])
@@ -241,10 +241,10 @@ test.describe('which download is offered', () => {
       'Linux:4'
     ])
     expect(model.groups[2].rows.map((r) => r.file)).toEqual([
-      'plexo-1.0.0-rc.7-x86_64.AppImage',
-      'plexo_1.0.0-rc.7_amd64.deb',
-      'plexo-1.0.0-rc.7-arm64.AppImage',
-      'plexo_1.0.0-rc.7_arm64.deb'
+      'lightning-1.0.0-rc.7-x86_64.AppImage',
+      'lightning_1.0.0-rc.7_amd64.deb',
+      'lightning-1.0.0-rc.7-arm64.AppImage',
+      'lightning_1.0.0-rc.7_arm64.deb'
     ])
     expect(model.groups.flatMap((g) => g.rows).filter((r) => r.recommended)).toHaveLength(1)
     for (const group of model.groups) expect(group.notes.length).toBeGreaterThan(0)
@@ -256,12 +256,12 @@ test.describe('which download is offered', () => {
       size: 100 * 1048576,
       url: BASE + name
     }))
-    const text = D.markdown(files, 'https://anmolkapil.github.io/plexo/')
+    const text = D.markdown(files, 'https://alisinaee.github.io/Lightning/')
     for (const name of SHIPPED) expect(text.split(BASE + name + ')')).toHaveLength(2)
     for (const name of NOISE) expect(text).not.toContain(name)
     expect(text).toContain('[Apple silicon]')
-    expect(text).toContain('https://anmolkapil.github.io/plexo/#downloads')
-    expect(text).toContain('`xattr -dr com.apple.quarantine /Applications/Plexo.app`')
+    expect(text).toContain('https://alisinaee.github.io/Lightning/#downloads')
+    expect(text).toContain('`xattr -dr com.apple.quarantine /Applications/Lightning.app`')
   })
 })
 
@@ -318,15 +318,15 @@ test.describe('the download page', () => {
         'Debian / Ubuntu · ARM64'
       ])
       expect(rows[2].detail).toBe('Installer · x64 and ARM64')
-      expect(rows[0].file).toMatch(/plexo-1\.0\.0-rc\.7-arm64\.dmg · \d+(\.\d)? MB/)
+      expect(rows[0].file).toMatch(/lightning-1\.0\.0-rc\.7-arm64\.dmg · \d+(\.\d)? MB/)
       expect(rows.map((r) => r.href.split('/').pop())).toEqual([
-        'plexo-1.0.0-rc.7-arm64.dmg',
-        'plexo-1.0.0-rc.7-x64.dmg',
-        'plexo-1.0.0-rc.7-setup.exe',
-        'plexo-1.0.0-rc.7-x86_64.AppImage',
-        'plexo_1.0.0-rc.7_amd64.deb',
-        'plexo-1.0.0-rc.7-arm64.AppImage',
-        'plexo_1.0.0-rc.7_arm64.deb'
+        'lightning-1.0.0-rc.7-arm64.dmg',
+        'lightning-1.0.0-rc.7-x64.dmg',
+        'lightning-1.0.0-rc.7-setup.exe',
+        'lightning-1.0.0-rc.7-x86_64.AppImage',
+        'lightning_1.0.0-rc.7_amd64.deb',
+        'lightning-1.0.0-rc.7-arm64.AppImage',
+        'lightning_1.0.0-rc.7_arm64.deb'
       ])
       // The one meant for this visitor is marked, and only that one.
       await expect(page.locator('.asset-row.recommended')).toHaveCount(1)
@@ -352,9 +352,11 @@ test.describe('the download page', () => {
       // ...once: not again with their own OS's downloads, but with every other OS's.
       await expect(page.locator('.os-group').nth(1).locator('.first-launch')).toHaveCount(0)
       const mac = page.locator('.os-group').nth(0).locator('.first-launch')
-      await expect(mac.locator('.fl-warning')).toContainText('Plexo is damaged and can’t be opened')
+      await expect(mac.locator('.fl-warning')).toContainText(
+        'Lightning is damaged and can’t be opened'
+      )
       await expect(mac.locator('.fl-command code')).toHaveText(
-        'xattr -dr com.apple.quarantine /Applications/Plexo.app'
+        'xattr -dr com.apple.quarantine /Applications/Lightning.app'
       )
       await expect(mac).toContainText('Open Anyway')
       await expect(page.locator('.os-group').nth(2).locator('.first-launch')).toHaveCount(0)
@@ -372,8 +374,8 @@ test.describe('the download page', () => {
 
   test('a file name cannot inject markup into the page', async () => {
     const hostile = release([
-      'plexo-<img src=x onerror=document.title=1>-x64.dmg',
-      'plexo-1.0.0-setup.exe'
+      'lightning-<img src=x onerror=document.title=1>-x64.dmg',
+      'lightning-1.0.0-setup.exe'
     ])
     const { page, close } = await openPage(BROWSERS.chromeWindows, { releases: [hostile] })
     try {
@@ -391,7 +393,7 @@ test.describe('the download page', () => {
       await expect(page.locator('#asset-groups')).toContainText('Couldn’t load the latest release')
       await expect(page.locator('#primary-btn')).toHaveAttribute(
         'href',
-        'https://github.com/anmolkapil/plexo/releases'
+        'https://github.com/alisinaee/Lightning/releases'
       )
     } finally {
       await close()

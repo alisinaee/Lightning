@@ -18,15 +18,29 @@ export interface RowHandlers {
   trash: (item: Item) => void
 }
 
-export const FINDER = window.plexo.platform === 'darwin' ? 'Finder' : 'folder'
+export const FINDER = window.lightning.platform === 'darwin' ? 'Finder' : 'folder'
 export const REVEAL_LABEL = `Show in ${FINDER}`
 
 export const ROW_CLASS =
-  'group/row relative grid h-11 items-center border-b-[0.5px] border-border/70 text-[13px] [content-visibility:auto] [contain-intrinsic-size:auto_44px] [grid-template-columns:var(--cols)] hover:bg-secondary focus-within:bg-secondary'
+  'group/row relative grid h-11 items-center group-data-[wrap=true]/table:h-auto group-data-[wrap=true]/table:min-h-11 group-data-[wrap=true]/table:py-1.5 bg-[var(--row-tint,transparent)] border-b-[0.5px] border-border/70 text-[13px] [content-visibility:auto] [contain-intrinsic-size:auto_44px] [grid-template-columns:var(--cols)] hover:bg-secondary focus-within:bg-secondary data-[status=downloading]:bg-primary/[0.07] data-[status=downloading]:hover:bg-primary/[0.12] data-[status=downloading]:data-[selected]:bg-primary/15'
 
 /** A thin colour down the row's left edge says how it is doing without reading the Status cell. */
-export function stateEdge(status: keyof typeof STATUS_STYLE): React.CSSProperties | undefined {
-  return status === 'downloading' || status === 'failed' || status === 'attention'
+export function stateEdge(
+  status: keyof typeof STATUS_STYLE,
+  selected = false
+): React.CSSProperties | undefined {
+  if (status === 'downloading') {
+    // What is moving right now stands out from the rest of the list by a tint of its colour.
+    return {
+      boxShadow: `inset 2px 0 0 ${statusStyle(status).color}`,
+      ...(selected
+        ? {}
+        : ({
+            '--row-tint': `color-mix(in srgb, ${statusStyle(status).color} 9%, transparent)`
+          } as React.CSSProperties))
+    }
+  }
+  return status === 'failed' || status === 'attention'
     ? { boxShadow: `inset 2px 0 0 ${statusStyle(status).color}` }
     : undefined
 }

@@ -3,7 +3,7 @@ import { isAbsolute } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 
-// Links the OS hands Plexo — a magnet link clicked in a browser, a .torrent opened from the file
+// Links the OS hands Lightning — a magnet link clicked in a browser, a .torrent opened from the file
 // manager — for the window's link field. They're never started on their own: the user still sees
 // what the link is and presses Start.
 

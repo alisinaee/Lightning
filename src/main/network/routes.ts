@@ -24,7 +24,11 @@ export interface NetworkRoute {
 export type RemoteAddress = { address: string; family: IpFamily }
 
 /** Test seam for an AAAA-only hostname without modifying system DNS. */
-type ResolveHost = (host: string) => Promise<RemoteAddress[]>
+export type ResolveHost = (host: string) => Promise<RemoteAddress[]>
+
+/** The system's own lookup, in the order it answers. */
+export const systemResolve: ResolveHost = async (name) =>
+  (await lookup(name, { all: true, order: 'verbatim' })) as RemoteAddress[]
 
 /** URL.hostname brackets IPv6 literals; sockets and isIP expect the unbracketed address. */
 export function targetHost(target: URL): string {
@@ -33,8 +37,7 @@ export function targetHost(target: URL): string {
 
 async function resolveTarget(
   host: string,
-  resolveHost: ResolveHost = async (name) =>
-    (await lookup(name, { all: true, order: 'verbatim' })) as RemoteAddress[]
+  resolveHost: ResolveHost = systemResolve
 ): Promise<RemoteAddress[]> {
   const literalFamily = isIP(host)
   if (literalFamily) return [{ address: host, family: literalFamily as IpFamily }]
@@ -372,7 +375,7 @@ export class StreamConnection {
    * the fake server to throttle each one separately. */
   private tagged(headers: Record<string, string>): Record<string, string> {
     const id = simNetworks.isActive() || testInterfaces() ? this.network()?.id : undefined
-    return id ? { ...headers, 'X-Plexo-Network': id } : headers
+    return id ? { ...headers, 'X-Lightning-Network': id } : headers
   }
 
   private send(

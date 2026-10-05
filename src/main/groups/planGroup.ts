@@ -284,6 +284,25 @@ export function planGroup(state: PlanState): PlanResult {
   }
   const wanted = new Set(Object.values(assignments))
 
+  // Nothing else is waiting and one file runs: nothing competes for the networks, so it gets every
+  // one present, without the share, size or cooldown gates the steps below apply.
+  if (state.waiting.length === 0 && state.running.length === 1) {
+    const [only] = state.running
+    if (only.splittable && !only.pinned) {
+      const added = present.filter((network) => !(using.get(only.id) ?? []).includes(network.id))
+      for (const network of added) {
+        act({
+          kind: 'add',
+          fileId: only.id,
+          networkId: network.id,
+          why: 'help',
+          reason: `${network.name} had nothing left to download, so it joined ${only.name}${only.remaining > 0 ? ` (${size(only.remaining)} left)` : ''}.`
+        })
+      }
+      if (added.length > 0) changed.add(only.id)
+    }
+  }
+
   // d. A helper network is wanted by a file of its own: give it back.
   for (const file of state.running) {
     if (!free(file)) continue
@@ -401,13 +420,13 @@ export function summarize(input: {
   const sorted = [...live].sort((a, b) => b.speedBps - a.speedBps)
   const slow = sorted.filter((network) => network.state === 'slow')
   if (slow.length > 0) {
-    return `${slow[0].name} slowed down (${rate(slow[0].speedBps)}), so Plexo is shifting work to ${sorted.find((n) => n.state !== 'slow')?.name ?? sorted[0].name}.`
+    return `${slow[0].name} slowed down (${rate(slow[0].speedBps)}), so Lightning is shifting work to ${sorted.find((n) => n.state !== 'slow')?.name ?? sorted[0].name}.`
   }
   if (input.waiting === 0 && input.running <= 1) {
     return `Finishing the last file on ${sorted[0].name}${sorted.length > 1 ? ' with help from the others' : ''}.`
   }
   const [first, ...rest] = sorted
-  if (first.speedBps <= 0) return 'Plexo is learning how fast each connection is.'
+  if (first.speedBps <= 0) return 'Lightning is learning how fast each connection is.'
   return `${first.name} is the fastest (${rate(first.speedBps)}) so it gets the biggest files. ${rest
     .map((network) => `${network.name} (${rate(network.speedBps)})`)
     .join(', ')} get${rest.length === 1 ? 's' : ''} the smaller ones, so all finish together.`

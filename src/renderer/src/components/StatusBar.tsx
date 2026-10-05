@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { isVpn } from '@shared/networks'
+import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatSpeed } from '../utils/format'
 import { ScreenFooter } from './ScreenFooter'
@@ -10,20 +12,23 @@ import { UpdateIndicator } from './UpdateIndicator'
 
 const FREE_SPACE_POLL_MS = 30_000
 
-/** Along the bottom of every screen: how fast everything is going and under what limit, the
- * queue, the slow mode switch, and the room left where downloads are saved. */
+/** One bar along the bottom: how many downloads, the total speed, each connection's speed when
+ * there is room, then slow mode and the free space. */
 export function StatusBar(): React.JSX.Element {
   const downloads = useAppStore((store) => store.downloads)
+  const history = useAppStore((store) => store.history)
   const speedLimit = useAppStore((store) => store.speedLimit)
   const slowMode = useAppStore((store) => store.slowMode)
   const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
   const destinationDir = useAppStore((store) => store.destinationDir)
+  const interfaces = useAppStore((store) => store.interfaces)
+  const networkVisual = useNetworkVisuals()
   const [free, setFree] = useState<number | null>(null)
 
   useEffect(() => {
     let disposed = false
     const load = (): void => {
-      void window.plexo
+      void window.lightning
         .freeSpace(destinationDir)
         .then((bytes) => !disposed && setFree(bytes))
         .catch(() => {})
@@ -38,29 +43,52 @@ export function StatusBar(): React.JSX.Element {
 
   let speed = 0
   let waiting = 0
+  const perNetwork = new Map<string, number>()
   for (const download of Object.values(downloads)) {
-    if (download.status === 'downloading') speed += download.speedBytesPerSec
+    if (download.status === 'downloading') {
+      speed += download.speedBytesPerSec
+      for (const network of download.networks) {
+        if (isVpn(network) || network.speedBytesPerSec <= 0) continue
+        perNetwork.set(network.id, (perNetwork.get(network.id) ?? 0) + network.speedBytesPerSec)
+      }
+    }
     if (download.status === 'queued') waiting++
   }
+  const listed = Object.keys(downloads).length + history.length
   const limit = slowMode ? slowModeSpeed : speedLimit
+  const chips = [...perNetwork.entries()].map(([id, bytes]) => {
+    const iface = interfaces.find((entry) => entry.id === id)
+    const visual = iface
+      ? networkVisual(iface.id, iface.kind, iface.displayName)
+      : { name: id, solid: 'var(--text-secondary)' }
+    return { id, bytes, name: visual.name, color: visual.solid }
+  })
 
   return (
-    <ScreenFooter className="gap-4 font-mono text-[11.5px] text-muted-foreground">
-      {/* At rest it says nothing: a zero speed or an empty queue only reads as broken. */}
-      {(speed > 0 || limit !== undefined) && (
-        <span className="tabular-nums">
-          {speed > 0 && (
-            <>
-              ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
-            </>
-          )}
-          {limit !== undefined && `${speed > 0 ? ' · ' : ''}limit ${formatSpeed(limit)}`}
+    <ScreenFooter className="gap-3 font-mono text-[11.5px] text-muted-foreground">
+      <span className="shrink-0 text-foreground">
+        {listed} {listed === 1 ? 'download' : 'downloads'}
+      </span>
+      {speed > 0 && (
+        <span className="shrink-0 tabular-nums">
+          ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
         </span>
       )}
-      {waiting > 0 && <span>{waiting} waiting in the queue</span>}
-      <div className="flex-1" />
+      {limit !== undefined && (
+        <span className="shrink-0 tabular-nums">limit {formatSpeed(limit)}</span>
+      )}
+      {waiting > 0 && <span className="shrink-0">{waiting} waiting</span>}
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+        {chips.map((chip) => (
+          <span key={chip.id} className="flex shrink-0 items-center gap-1.5 tabular-nums">
+            <span className="size-1.5 rounded-full" style={{ background: chip.color }} />
+            <span className="max-w-[120px] truncate">{chip.name}</span>
+            <span className="text-foreground">{formatSpeed(chip.bytes)}</span>
+          </span>
+        ))}
+      </div>
       <SlowModeControl />
-      {free !== null && <span>{formatBytes(free)} free</span>}
+      {free !== null && <span className="shrink-0">{formatBytes(free)} free</span>}
       <UpdateIndicator />
       <ThemeToggle />
     </ScreenFooter>
@@ -75,8 +103,7 @@ function SlowModeControl(): React.JSX.Element {
   const setSlowMode = useAppStore((store) => store.setSlowMode)
   const setSlowModeSpeed = useAppStore((store) => store.setSlowModeSpeed)
   return (
-    <span className="flex items-center gap-2">
-      {/* The switch stays where it was; the label beside it opens the speed. */}
+    <span className="flex shrink-0 items-center gap-2">
       <Switch aria-label="Slow mode" checked={slowMode} onCheckedChange={setSlowMode} />
       <Popover>
         <PopoverTrigger

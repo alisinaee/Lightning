@@ -16,21 +16,7 @@ export const FILE_KINDS: { kind: FileKind; label: string }[] = [
 ]
 
 const EXTENSIONS: Record<Exclude<FileKind, 'other'>, string[]> = {
-  video: [
-    'mp4',
-    'mkv',
-    'avi',
-    'mov',
-    'wmv',
-    'flv',
-    'webm',
-    'm4v',
-    'mpg',
-    'mpeg',
-    'ts',
-    'm2ts',
-    '3gp'
-  ],
+  video: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg', 'm2ts', '3gp'],
   audio: ['mp3', 'flac', 'wav', 'aac', 'ogg', 'oga', 'm4a', 'wma', 'opus', 'aiff', 'mid'],
   archive: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'lz', 'cab'],
   document: [
@@ -86,7 +72,7 @@ const EXTENSIONS: Record<Exclude<FileKind, 'other'>, string[]> = {
     'raw'
   ],
   torrent: ['torrent'],
-  disk: ['iso', 'img', 'vhd', 'vhdx', 'vmdk', 'qcow2', 'bin', 'cue', 'nrg']
+  disk: ['iso', 'img', 'vhd', 'vhdx', 'vmdk', 'qcow2', 'cue', 'nrg']
 }
 
 const BY_EXTENSION = new Map<string, FileKind>(

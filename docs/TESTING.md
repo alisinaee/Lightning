@@ -1,4 +1,4 @@
-# Testing Plexo without real downloads
+# Testing Lightning without real downloads
 
 Everything here uses a fake file server on your own computer. Nothing touches the internet.
 
@@ -19,13 +19,13 @@ Any path is a file of zeros: `http://127.0.0.1:8099/anything.rar?mb=200`. Option
 `&kbps=500` caps each connection, `&fail=2` answers 500 to the first 2 requests of that link,
 `&norange=1` makes a server that can't resume or split.
 
-The server tells networks apart by the `X-Plexo-Network` header (fake-network copy) or, in the real
+The server tells networks apart by the `X-Lightning-Network` header (fake-network copy) or, in the real
 app, by the source address (Wi-Fi 192.168.x.x versus the VPN tunnel 198.18.x.x). A network only
 shows on the page after its first request, so start one download on each network before pressing a
 scenario. (Scenarios use "the first / second network seen"; or add `?a=<name>&b=<name>` to
 `/__scenario?name=...`.)
 
-## 2. Two ways to run Plexo
+## 2. Two ways to run Lightning
 
 - **Fake networks** (dev copy, separate settings folder): `scripts/dev-fake-networks.sh`.
   Gives you Wi-Fi, Ethernet, Phone (USB) and FakeVPN, all on 127.0.0.1. Use links with `127.0.0.1`.
@@ -34,8 +34,8 @@ scenario. (Scenarios use "the first / second network seen"; or add `?a=<name>&b=
 
 ## 3. The log
 
-Fake copy: `~/Library/Application Support/Plexo-fake-test/logs/plexo.log`.
-Real app: `~/Library/Application Support/Plexo/logs/plexo.log`. Watch it with `tail -f <that file>`
+Fake copy: `~/Library/Application Support/Lightning-fake-test/logs/lightning.log`.
+Real app: `~/Library/Application Support/Lightning/logs/lightning.log`. Watch it with `tail -f <that file>`
 (or send it to Claude). Lines look like `time LEVEL [scope] message`. Look for:
 
 - `[network] appeared: / gone:` a network came or went
@@ -47,7 +47,7 @@ The Auto planner's own decisions are logged by that feature's code, if it logs t
 
 ## 4. Challenges
 
-Use files of 200 MB or more so you have time to act. "Plan" means the per-network split Plexo shows.
+Use files of 200 MB or more so you have time to act. "Plan" means the per-network split Lightning shows.
 
 | Challenge                                | Do this                                                                                               | Expect                                                                 |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -61,7 +61,7 @@ Use files of 200 MB or more so you have time to act. "Plan" means the per-networ
 | One network only                         | Turn the others off, start a group                                                                    | Everything runs on that network, no errors                             |
 | Manual connections per file              | Set connections for a file by hand                                                                    | That file keeps your number and Auto leaves it alone                   |
 | Pause and resume a group                 | Pause the group, wait, resume                                                                         | Files continue from where they were, same bytes                        |
-| Restart mid-group                        | Quit Plexo while downloading, open it again                                                           | Downloads come back paused or resume; no restart from zero             |
+| Restart mid-group                        | Quit Lightning while downloading, open it again                                                           | Downloads come back paused or resume; no restart from zero             |
 | Server without resume                    | Link with `&norange=1`                                                                                | One connection only, it still completes (a restart starts over)        |
 | Retries                                  | Link with `&fail=3`                                                                                   | Fails a few times, then succeeds; the log shows the errors             |
 | Server blocks a network                  | Press Block on a network's slider                                                                     | Its files move away, no endless error loop                             |
@@ -83,11 +83,11 @@ The title bar has a **Debug** button. It opens the **Test lab**, a resizable pan
 that runs automatic test plans against the real app: the real download manager, groups, Auto
 planner, networks and settings. The main window stays visible and usable, so you can watch the
 groups list while a plan runs. Nothing here needs `scripts/fake-server.mjs`: the lab has its own
-server inside Plexo and its own pretend networks.
+server inside Lightning and its own pretend networks.
 
 How it works:
 
-- **Server** (`src/main/debug/fakeServer.ts`): an HTTP server on `127.0.0.1` (first free port from 18000) with speed shared per network (named by the `X-Plexo-Network` header), counters per
+- **Server** (`src/main/debug/fakeServer.ts`): an HTTP server on `127.0.0.1` (first free port from 18000) with speed shared per network (named by the `X-Lightning-Network` header), counters per
   network and per file, and faults: `fail=N`, `status=429&retryAfter=S&times=K`, `cut=<bytes>`,
   `stall=1`, `slowstart=<ms>`, `wrongrange=1`, `norange=1`, `forMs=<ms>`. A file's bytes are a
   pattern of its path and offset, so every finished file is checked **byte for byte**.
@@ -126,4 +126,4 @@ check (expected against actual), and a **Copy report** button. The same is writt
 | 13  | Concurrency and queue limits      | Never more than 2 ordinary downloads at once, roughly FIFO; Auto lanes may exceed the limit                        |
 | 14  | Speed limit and slow mode         | Measured speed within 25% of the limit; rises when removed; Slow mode likewise                                     |
 | 15  | Cancel and cleanup                | Cancel, remove and remove-group leave no partial files, no listed items, no open connections                       |
-| 16  | Restart recovery (needs you)      | Group paused, you quit and reopen Plexo, press Verify: group, paused downloads and plan are back, then it finishes |
+| 16  | Restart recovery (needs you)      | Group paused, you quit and reopen Lightning, press Verify: group, paused downloads and plan are back, then it finishes |

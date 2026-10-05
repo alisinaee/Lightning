@@ -1,10 +1,4 @@
-import type {
-  DownloadState,
-  FinishedDownload,
-  GroupInfo,
-  GroupMode,
-  PendingGroupItem
-} from '@shared/types'
+import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, Plus, X } from 'lucide-react'
 import { useState } from 'react'
@@ -22,6 +16,7 @@ import { linksIn, probeLinks, requestFor } from '../utils/links'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import { chooseConnection, networksOf, type GroupFile } from '../utils/groupFiles'
 import { ConnectionPicker } from './ConnectionPicker'
+import { GroupSettings } from './GroupSettings'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +29,6 @@ import {
 } from './ui/alert-dialog'
 import { Button, buttonVariants } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 type FileRow =
@@ -116,6 +110,8 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     }))
   ]
   const manual = group.mode === 'manual'
+  // A general rule decides for every file; a file's own choice is only used with 'each file'.
+  const ruled = manual && group.rule === 'general'
 
   const run = async (action: () => Promise<unknown>): Promise<void> => {
     setActionError(null)
@@ -129,11 +125,8 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
   const commitName = (): void => {
     const next = name.trim()
     if (!next) setName(group.name)
-    else if (next !== group.name) void run(() => window.plexo.updateGroup(group.id, { name: next }))
-  }
-
-  const setMode = (mode: GroupMode): void => {
-    if (mode !== group.mode) void run(() => window.plexo.updateGroup(group.id, { mode }))
+    else if (next !== group.name)
+      void run(() => window.lightning.updateGroup(group.id, { name: next }))
   }
 
   const handleAdd = (): void => {
@@ -147,7 +140,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     const finish = async (): Promise<void> => {
       try {
         if (requests.length > 0) {
-          const { failed } = await window.plexo.addGroupItems(group.id, requests)
+          const { failed } = await window.lightning.addGroupItems(group.id, requests)
           errors.push(...failed)
         }
       } catch (error) {
@@ -164,7 +157,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
       allInterfaces,
       useVpn
     )
-    probeLinks(links, window.plexo.probeUrl, (url, outcome) => {
+    probeLinks(links, window.lightning.probeUrl, (url, outcome) => {
       if ('result' in outcome) {
         requests.push(requestFor(outcome.result, group.destinationDir, interfaceIds))
       } else {
@@ -176,7 +169,8 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
   }
 
   const handleRemove = (row: FileRow): void => {
-    if (row.kind === 'waiting') void run(() => window.plexo.removeGroupItem(group.id, row.item.id))
+    if (row.kind === 'waiting')
+      void run(() => window.lightning.removeGroupItem(group.id, row.item.id))
     else if (row.kind === 'done') removeDownload(row.download.id)
     // A download under way has partial data to lose: asked about first.
     else if (row.download.bytesDownloaded > 0) setRemoving(row.download)
@@ -211,28 +205,16 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
             {toDisplayPath(group.destinationDir, homeDir)}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[12.5px]">
-          <span className="w-24 shrink-0 text-[var(--text-secondary)]">Connections</span>
-          <ToggleGroup
-            aria-label="How files are given networks"
-            value={[group.mode]}
-            onValueChange={(values) => {
-              const next = values[0]
-              if (next === 'auto' || next === 'manual') setMode(next)
-            }}
-            size="sm"
-            spacing={0.5}
-            className="bg-secondary p-0.5"
-          >
-            <ToggleGroupItem value="auto">Auto</ToggleGroupItem>
-            <ToggleGroupItem value="manual">Manual</ToggleGroupItem>
-          </ToggleGroup>
-          <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
-            {manual
-              ? 'Pick the networks each file uses.'
-              : 'Each file gets a network of its own, matched to how fast it is. Files wait for one to be free.'}
-          </span>
-        </div>
+        <GroupSettings
+          value={{
+            mode: group.mode,
+            rule: group.rule ?? 'perFile',
+            interfaceIds: group.interfaceIds,
+            maxAtOnce: group.maxAtOnce ?? null,
+            dnsId: group.dnsId ?? null
+          }}
+          onChange={(patch) => void run(() => window.lightning.updateGroup(group.id, patch))}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
@@ -276,6 +258,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
                       : { kind: 'waiting', item: row.item }
                   )}
                   label={row.name}
+                  disabled={ruled}
                   auto={
                     manual
                       ? undefined
@@ -330,7 +313,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
             <span className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">
               {found > 0 ? `${found} ${found === 1 ? 'link' : 'links'} found` : ''}
             </span>
-            {manual && (
+            {manual && !ruled && (
               <ConnectionPicker
                 options={networkOptions}
                 value={newConnection}

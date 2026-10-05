@@ -2,28 +2,28 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { acceptedLink } from '../utils/format'
 
-/** Opens New download with a link the OS handed Plexo — a magnet link clicked, a .torrent opened
+/** Opens New download with a link the OS handed Lightning — a magnet link clicked, a .torrent opened
  * — for the user to look at and start (see main/openLinks.ts). */
 export function useOpenedLinks(): void {
   const openNewDownload = useAppStore((store) => store.openNewDownload)
 
   useEffect(() => {
     const take = (): void => {
-      void window.plexo
+      void window.lightning
         .takePendingLink()
         .then((link) => {
           if (link) openNewDownload(link)
         })
         .catch(() => {})
     }
-    const unsubscribe = window.plexo.onLinkReceived(take)
+    const unsubscribe = window.lightning.onLinkReceived(take)
     // One handed over before the window was ready to hear of it.
     take()
     return unsubscribe
   }, [openNewDownload])
 }
 
-const isMac = window.plexo.platform === 'darwin'
+const isMac = window.lightning.platform === 'darwin'
 
 /** The ways into New download from anywhere in the window, as download managers have them:
  * pasting a link (outside a text field), ⌘N / Ctrl+N, and dropping a link or a .torrent. */
@@ -54,7 +54,7 @@ export function useNewDownloadShortcuts(): void {
       const file = event.dataTransfer?.files[0]
       const link = file
         ? /\.torrent$/i.test(file.name)
-          ? window.plexo.pathForFile(file)
+          ? window.lightning.pathForFile(file)
           : null
         : acceptedLink(event.dataTransfer?.getData('text') ?? '')
       if (link) openNewDownload(link)

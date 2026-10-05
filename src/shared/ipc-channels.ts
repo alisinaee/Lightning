@@ -21,6 +21,7 @@ export const IpcChannels = {
   listDownloads: 'download:list',
   listHistory: 'history:list',
   clearHistory: 'history:clear',
+  updateHistory: 'history:update',
   networkUsage: 'network:usage',
   resetNetworkUsage: 'network:reset-usage',
   freeSpace: 'disk:free-space',
@@ -53,5 +54,12 @@ export const IpcChannels = {
   labVerify: 'lab:verify',
   labStop: 'lab:stop',
   labEvent: 'lab:event',
-  settingsChanged: 'app:settings-changed'
+  getDns: 'dns:get',
+  saveDns: 'dns:save',
+  removeDns: 'dns:remove',
+  setDefaultDns: 'dns:set-default',
+  setDownloadDns: 'download:set-dns',
+  dnsChanged: 'dns:changed',
+  settingsChanged: 'app:settings-changed',
+  appCommand: 'app:command'
 } as const

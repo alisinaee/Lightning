@@ -4,6 +4,7 @@ import type { IpcContract } from '../shared/ipc-contract'
 import type { LabEvent } from '../shared/lab'
 import type {
   AppSettings,
+  DnsConfig,
   DownloadUpdate,
   GroupPatch,
   InitialState,
@@ -21,7 +22,7 @@ function invoke<K extends keyof IpcContract>(
   return ipcRenderer.invoke(IpcChannels[channel], ...args)
 }
 
-const plexoApi = {
+const lightningApi = {
   platform: process.platform,
   // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
   initialState: ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
@@ -31,6 +32,11 @@ const plexoApi = {
   deviceBindingSupported: () => invoke('deviceBindingSupported'),
   openNetworkSettings: () => invoke('openNetworkSettings'),
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
+  getDns: () => invoke('getDns'),
+  saveDns: (input: IpcContract['saveDns']['args'][0]) => invoke('saveDns', input),
+  removeDns: (id: string) => invoke('removeDns', id),
+  setDefaultDns: (id: string | null) => invoke('setDefaultDns', id),
+  setDownloadDns: (id: string, dnsId: string | null) => invoke('setDownloadDns', id, dnsId),
   probeUrl: (url: string) => invoke('probeUrl', url),
   chooseDestinationFolder: (defaultPath: string) => invoke('chooseDestinationFolder', defaultPath),
   chooseTorrentFile: () => invoke('chooseTorrentFile'),
@@ -54,6 +60,7 @@ const plexoApi = {
   listDownloads: () => invoke('listDownloads'),
   listHistory: () => invoke('listHistory'),
   clearHistory: () => invoke('clearHistory'),
+  updateHistory: (id: string, fileName: string) => invoke('updateHistory', id, fileName),
   networkUsage: () => invoke('networkUsage'),
   resetNetworkUsage: (id) => invoke('resetNetworkUsage', id),
   freeSpace: (dir: string) => invoke('freeSpace', dir),
@@ -101,7 +108,13 @@ const plexoApi = {
     return () => ipcRenderer.removeListener(IpcChannels.labEvent, listener)
   },
 
-  /** The OS handed Plexo a link (a magnet link, a .torrent): takePendingLink() has it. */
+  /** The OS handed Lightning a link (a magnet link, a .torrent): takePendingLink() has it. */
+  onAppCommand: (callback: (command: string) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, command: string): void => callback(command)
+    ipcRenderer.on(IpcChannels.appCommand, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.appCommand, listener)
+  },
+
   onLinkReceived: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on(IpcChannels.linkReceived, listener)
@@ -121,6 +134,13 @@ const plexoApi = {
     return () => ipcRenderer.removeListener(IpcChannels.historyChanged, listener)
   },
 
+  /** The saved DNS profiles or the app's default changed. */
+  onDnsChanged: (callback: (config: DnsConfig) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, config: DnsConfig): void => callback(config)
+    ipcRenderer.on(IpcChannels.dnsChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.dnsChanged, listener)
+  },
+
   /** A group was made, changed or removed: listGroups() has them. */
   onGroupsChanged: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
@@ -136,18 +156,18 @@ const plexoApi = {
   }
 }
 
-export type PlexoApi = typeof plexoApi
+export type LightningApi = typeof lightningApi
 
-// Nothing in the renderer needs raw Electron/Node access — only the typed plexoApi above is
+// Nothing in the renderer needs raw Electron/Node access — only the typed lightningApi above is
 // exposed. The @electron-toolkit/preload electronAPI (which hands the renderer an unrestricted
 // ipcRenderer.invoke/send/on on any channel) is deliberately not bridged.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('plexo', plexoApi)
+    contextBridge.exposeInMainWorld('lightning', lightningApi)
   } catch (error) {
     console.error(error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.plexo = plexoApi
+  window.lightning = lightningApi
 }

@@ -13,7 +13,7 @@ const ago = (at: number, now: number): string => {
   return minutes < 60 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`
 }
 
-/** "How Plexo is downloading this group": what the plan is, each network's part in it, and the
+/** "How Lightning is downloading this group": what the plan is, each network's part in it, and the
  * recent decisions. */
 export function GroupPlanPanel({
   group,
@@ -60,10 +60,10 @@ export function GroupPlanPanel({
   return (
     <div
       className="mb-2 flex flex-col gap-2 rounded-lg border-[0.5px] border-border bg-card px-3 py-2.5 text-[12px]"
-      aria-label="How Plexo is downloading this group"
+      aria-label="How Lightning is downloading this group"
     >
       <div className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        How Plexo is downloading this group
+        How Lightning is downloading this group
       </div>
       <div className="leading-snug">{plan.summary || 'Nothing to plan yet.'}</div>
       {plan.networks.length > 0 && (

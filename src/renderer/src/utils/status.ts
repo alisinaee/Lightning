@@ -75,7 +75,7 @@ export interface RowInfo {
   addedAt: number
   completedAt?: number
   missing: boolean
-  /** For a failure Plexo will try again by itself: when. */
+  /** For a failure Lightning will try again by itself: when. */
   retryAt?: number
 }
 

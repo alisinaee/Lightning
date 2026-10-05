@@ -1,3 +1,4 @@
+import { prefsOf } from '../settings'
 import { trashDownload } from './trashDownload'
 import { describeError } from '../../shared/errors'
 import { AUTO_RETRY_ATTEMPTS, autoRetryDelaySeconds, isTransientFailure } from '../../shared/retry'
@@ -35,7 +36,13 @@ import {
 import { Limits } from '../network/limits'
 import { selectableNetworks } from '../../shared/networks'
 import { loadSettings } from '../settings'
-import { addToHistory, findInHistory, listHistory, removeFromHistory } from './history'
+import {
+  addToHistory,
+  findInHistory,
+  listHistory,
+  removeFromHistory,
+  updateHistoryEntry
+} from './history'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
 import { HttpTransfer, splittable } from './httpTransfer'
@@ -65,6 +72,8 @@ import {
   compatibleInterfaces,
   NoCompatibleRouteError,
   resolveTargetWithin,
+  systemResolve,
+  type ResolveHost,
   targetHost
 } from '../network/routes'
 
@@ -237,8 +246,8 @@ function isCurrentManifest(value: unknown, id: string): value is PersistedDownlo
 
 /**
  * Where a saved download that can't be restored kept its partial data beside its destination:
- * only what is unmistakably Plexo's, so that a damaged manifest can never point it at a real file.
- * - A `<name>.plexo` staging file, or a torrent's `<name>.plexo/` staging folder.
+ * only what is unmistakably Lightning's, so that a damaged manifest can never point it at a real file.
+ * - A `<name>.lightning` staging file, or a torrent's `<name>.lightning/` staging folder.
  * - rc.1–rc.9 (manifest version 2) claimed the final name itself as an empty file, until the
  *   download's parts were joined into it: taken while it is still empty and the download
  *   unfinished, never once it holds anything.
@@ -252,8 +261,8 @@ async function partialLeftovers(persisted: unknown): Promise<string[]> {
   const leftovers: string[] = []
   const partial = manifest?.partialPath
   if (typeof partial === 'string' && isAbsolute(partial)) {
-    if (partial.endsWith('.plexo')) leftovers.push(partial)
-    else if (dirname(partial).endsWith('.plexo')) leftovers.push(dirname(partial))
+    if (partial.endsWith('.lightning')) leftovers.push(partial)
+    else if (dirname(partial).endsWith('.lightning')) leftovers.push(dirname(partial))
   }
   const placeholder = manifest?.state?.destinationPath
   if (
@@ -292,8 +301,12 @@ export class DownloadManager {
   private seenAddresses = new Map<string, string[]>()
   /** The powerSaveBlocker keeping the computer awake while a download runs (see keepAwake). */
   private awakeBlocker: number | null = null
+  /** From Settings: which notices to show, and whether a running download keeps the Mac awake. */
+  private prefs = prefsOf({})
   /** How many downloads may run at once; the rest wait, queued (see pump). */
   private downloadsAtOnce = DOWNLOADS_AT_ONCE.default
+  /** How many files of a group may run at once, when the group has a limit of its own. */
+  groupLimitOf: ((groupId: string) => number | undefined) | null = null
   /** Speed and data limits, for every download together. */
   readonly limits = new Limits(() => this.limitsChanged())
 
@@ -312,8 +325,10 @@ export class DownloadManager {
    * lowered count is left to finish; a raised one starts the next ones in the queue. */
   applySettings(settings: AppSettings): void {
     this.downloadsAtOnce = settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default
+    this.prefs = prefsOf(settings)
     this.limits.configure(settings)
     this.limitsChanged()
+    this.keepAwake()
     this.pump()
   }
 
@@ -331,6 +346,29 @@ export class DownloadManager {
       this.reconcile(runtime)
       this.scheduleUpdate(runtime)
     }
+  }
+
+  /** Whether the group of this download already runs as many files as it may. `self` is not
+   * counted: a download being resumed may be running already, in its own count. */
+  private groupFull(groupId: string | undefined, self?: DownloadRuntime): boolean {
+    if (!groupId) return false
+    const limit = this.groupLimitOf?.(groupId)
+    if (!limit) return false
+    let running = 0
+    for (const runtime of this.runtimes.values()) {
+      if (
+        runtime !== self &&
+        runtime.state.status === 'downloading' &&
+        runtime.state.groupId === groupId
+      )
+        running++
+    }
+    return running >= limit
+  }
+
+  /** Starts queued downloads that now have room, e.g. after a group's limit was raised. */
+  rebalance(): void {
+    this.pump()
   }
 
   private runningCount(): number {
@@ -444,7 +482,9 @@ export class DownloadManager {
       .filter((runtime) => runtime.state.status === 'queued')
       .sort((a, b) => (a.state.queuedAt ?? 0) - (b.state.queuedAt ?? 0))
     for (const runtime of queued) {
-      if (this.runningCount() >= this.downloadsAtOnce) return
+      if (!runtime.requestPayload.groupLane && this.runningCount() >= this.downloadsAtOnce) return
+      // Its group is running all it may: it waits for one of them, and the next goes by.
+      if (this.groupFull(runtime.state.groupId, runtime)) continue
       this.begin(runtime)
     }
   }
@@ -513,7 +553,8 @@ export class DownloadManager {
       reconcile: () => this.reconcile(runtime),
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
-      scheduleUpdate: () => this.scheduleUpdate(runtime)
+      scheduleUpdate: () => this.scheduleUpdate(runtime),
+      resolveHost: (name) => this.resolverFor(runtime.state)(name)
     }
     const runtime: HttpDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'http' as const,
@@ -544,7 +585,8 @@ export class DownloadManager {
       reconcile: () => this.reconcile(runtime),
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
-      scheduleUpdate: () => this.scheduleUpdate(runtime)
+      scheduleUpdate: () => this.scheduleUpdate(runtime),
+      resolveHost: (name) => this.resolverFor(runtime.state)(name)
     }
     const runtime: TorrentDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'torrent' as const,
@@ -672,6 +714,15 @@ export class DownloadManager {
         .map((runtime) => runtime.runPromise)
     )
     await removeFromHistory()
+    this.historyChanged()
+  }
+
+  /** Renames a finished download in the history, and the file or folder when it is still there. */
+  async updateHistory(id: string, fileName: string): Promise<void> {
+    await this.initialization
+    // Still held by a run (just completed, not moved to the history yet): its file is in use.
+    if (this.runtimes.has(id)) throw new Error('That download is still finishing. Try again soon.')
+    await updateHistoryEntry(id, fileName)
     this.historyChanged()
   }
 
@@ -805,7 +856,7 @@ export class DownloadManager {
   /**
    * Clears a saved download that can't be restored, rather than keep it forever: its folder here
    * (manifest, a saved .torrent, an old version's parts/ folder), and its partial data beside the
-   * destination when that is unmistakably Plexo's (see partialLeftovers).
+   * destination when that is unmistakably Lightning's (see partialLeftovers).
    */
   private async discardUnrestorable(id: string, persisted: unknown): Promise<void> {
     for (const path of await partialLeftovers(persisted)) {
@@ -894,7 +945,12 @@ export class DownloadManager {
       const target = new URL(requestPayload.url)
       const usable = compatibleInterfaces(
         selected,
-        await resolveTargetWithin(targetHost(target), testKnobs.stallTimeoutMs)
+        await resolveTargetWithin(
+          targetHost(target),
+          testKnobs.stallTimeoutMs,
+          undefined,
+          this.resolverFor(requestPayload)
+        )
       )
       if (usable.length === 0) throw new NoCompatibleRouteError(targetHost(target))
       const blockSizeBytes = planDownload({
@@ -925,6 +981,7 @@ export class DownloadManager {
         speedBytesPerSec: 0,
         status: 'downloading',
         groupId: requestPayload.groupId,
+        ...(requestPayload.dnsId ? { dnsId: requestPayload.dnsId } : {}),
         networks,
         streams: [],
         peakStreams: 0,
@@ -936,12 +993,29 @@ export class DownloadManager {
       runtime = this.newHttpRuntime(
         state,
         requestPayload,
-        new DownloadFile(`${destinationPath}.plexo`),
+        new DownloadFile(`${destinationPath}.lightning`),
         blocks
       )
     }
+    if (requestPayload.startPaused) {
+      runtime.state.status = 'paused'
+      runtime.state.pausedAt = Date.now()
+      this.runtimes.set(id, runtime)
+      log.info('download', `later ${runtime.state.fileName}`, { id })
+      await this.persistNow(runtime)
+      this.pushUpdate(runtime)
+      this.notify(
+        'added',
+        'Download added',
+        `${runtime.state.fileName} is waiting for you to start it.`
+      )
+      return id
+    }
+    this.notify('added', 'Download added', runtime.state.fileName)
     // Decided only now: other starts may have taken the room while this one was set up.
-    const room = requestPayload.groupLane === true || this.runningCount() < this.downloadsAtOnce
+    const room =
+      (requestPayload.groupLane === true || this.runningCount() < this.downloadsAtOnce) &&
+      !this.groupFull(requestPayload.groupId)
     if (!room) this.enqueue(runtime, false)
     this.runtimes.set(id, runtime)
     log.info('download', `start ${runtime.state.fileName} (${room ? 'running' : 'queued'})`, {
@@ -1068,7 +1142,10 @@ export class DownloadManager {
     // Switched back on, then off again while the paused run wound down: it stays paused.
     if (byNetwork && !networks.some((network) => network.enabled)) return
 
-    if (!runtime.requestPayload.groupLane && this.runningCount() >= this.downloadsAtOnce) {
+    if (
+      (!runtime.requestPayload.groupLane && this.runningCount() >= this.downloadsAtOnce) ||
+      this.groupFull(runtime.state.groupId, runtime)
+    ) {
       // Asked for by name, so it goes next.
       this.enqueue(runtime, true)
       runtime.state.error = undefined
@@ -1093,8 +1170,14 @@ export class DownloadManager {
     // last if it is still there, or else the first one present.
     if (!networks.some((network) => network.enabled)) {
       const present = (network: { id: string }): boolean => !!this.networks.find(network.id)
+      const allowed = (network: { kind: string }): boolean =>
+        this.networks.useVpn || network.kind !== 'vpn'
       const again =
-        networks.find((network) => network.id === runtime.lastSwitchedOff && present(network)) ??
+        networks.find(
+          (network) =>
+            network.id === runtime.lastSwitchedOff && present(network) && allowed(network)
+        ) ??
+        networks.find((network) => present(network) && allowed(network)) ??
         networks.find(present) ??
         networks.find((network) => network.id === runtime.lastSwitchedOff) ??
         networks[0]
@@ -1132,6 +1215,23 @@ export class DownloadManager {
     this.pushUpdate(runtime)
 
     this.launch(runtime)
+  }
+
+  /** Set by main: the lookup for a download's DNS choice (see DnsService.resolverFor). */
+  dnsFor: ((dnsId: string | undefined, groupId: string | undefined) => ResolveHost) | null = null
+
+  private resolverFor(source: { dnsId?: string; groupId?: string }): ResolveHost {
+    return this.dnsFor ? this.dnsFor(source.dnsId, source.groupId) : systemResolve
+  }
+
+  /** Picks the DNS one download resolves names with; null follows its group, then the app. New
+   * connections use it, the ones open now carry on. */
+  setDnsFor(id: string, dnsId: string | null): void {
+    const runtime = this.runtimes.get(id)
+    if (!runtime) return
+    if (dnsId) runtime.state.dnsId = dnsId
+    else delete runtime.state.dnsId
+    this.scheduleUpdate(runtime)
   }
 
   /** Switches one of a download's networks on or off, running or paused. Switching off the last
@@ -1225,9 +1325,9 @@ export class DownloadManager {
       (runtime) => runtime.state.status === 'downloading'
     )
     try {
-      if (running && this.awakeBlocker === null) {
+      if (running && this.prefs.preventSleep && this.awakeBlocker === null) {
         this.awakeBlocker = powerSaveBlocker.start('prevent-app-suspension')
-      } else if (!running && this.awakeBlocker !== null) {
+      } else if ((!running || !this.prefs.preventSleep) && this.awakeBlocker !== null) {
         powerSaveBlocker.stop(this.awakeBlocker)
         this.awakeBlocker = null
       }
@@ -1536,12 +1636,17 @@ export class DownloadManager {
         runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discardLeftover().catch(() => {})
-      this.notify('Download complete', `${runtime.state.fileName} has finished downloading.`)
+      this.notify(
+        'completed',
+        'Download complete',
+        `${runtime.state.fileName} has finished downloading.`
+      )
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
       log.error('download', `error ${runtime.state.fileName}: ${runtime.state.error}`)
       this.notify(
+        'failed',
         'Download failed',
         `${runtime.state.fileName}: ${describeError(runtime.state.error)}`
       )
@@ -1557,7 +1662,7 @@ export class DownloadManager {
    * downloaded is kept all along. A refused link or a full disk is the user's to deal with. */
   private scheduleAutoRetry(runtime: DownloadRuntime): void {
     const { state } = runtime
-    const override = app.isPackaged ? undefined : process.env['PLEXO_E2E_AUTO_RETRY_MS']
+    const override = app.isPackaged ? undefined : process.env['LIGHTNING_E2E_AUTO_RETRY_MS']
     if (override === '0' || runtime.retryTimer || runtime.kind !== 'http') return
     if (state.resumable === false || !isTransientFailure(state.error)) return
     const attempt = (state.retryAttempt ?? 0) + 1
@@ -1596,7 +1701,7 @@ export class DownloadManager {
     runtime.state.error = message
     log.error('download', `error ${runtime.state.fileName}: ${message}`)
     runtime.state.resumable = !discard
-    this.notify('Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
+    this.notify('failed', 'Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
     this.stopRun(runtime)
   }
 
@@ -1606,6 +1711,19 @@ export class DownloadManager {
     network.status = 'failed'
     network.error = message
     this.reconcile(runtime)
+  }
+
+  /** With "Use VPN for downloads" off, a download doesn't use VPN tunnels: they are switched
+   * off, and a real network is switched on if that leaves none. When a VPN is all there is, it
+   * stays (see selectableNetworks). */
+  private dropVpn(networks: DownloadNetwork[]): void {
+    if (this.networks.useVpn || !networks.some((n) => n.kind === 'vpn' && n.enabled)) return
+    const real = networks.find(
+      (network) => network.kind !== 'vpn' && (network.enabled || this.networks.find(network.id))
+    )
+    if (!real) return
+    real.enabled = true
+    for (const network of networks) if (network.kind === 'vpn') network.enabled = false
   }
 
   /**
@@ -1657,6 +1775,10 @@ export class DownloadManager {
         network.label = iface.displayName
         network.kind = iface.kind
       }
+    }
+    this.dropVpn(state.networks)
+    for (const network of state.networks) {
+      const iface = this.networks.find(network.id)
       const status: NetworkStatus = !network.enabled
         ? 'off'
         : !iface && known
@@ -1682,10 +1804,17 @@ export class DownloadManager {
     runtime.transfer.reconcile()
   }
 
-  private notify(title: string, body: string): void {
-    if (testKnobs.userDataDir || !Notification.isSupported()) return
+  private notify(kind: 'added' | 'completed' | 'failed', title: string, body: string): void {
+    const allowed =
+      kind === 'added'
+        ? this.prefs.notifyAdded
+        : kind === 'completed'
+          ? this.prefs.notifyCompleted
+          : this.prefs.notifyFailed
+    if (!allowed || testKnobs.userDataDir || !Notification.isSupported()) return
+    if (this.prefs.notifyWhenInactive && this.getWindow()?.isFocused()) return
     try {
-      const notification = new Notification({ title, body })
+      const notification = new Notification({ title, body, silent: true })
       notification.on('click', () => {
         const window = this.getWindow()
         if (window && !window.isDestroyed()) {

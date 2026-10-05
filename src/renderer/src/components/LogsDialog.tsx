@@ -41,7 +41,7 @@ function LogsView(): React.JSX.Element {
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      setLines(await window.plexo.readLog(LINES))
+      setLines(await window.lightning.readLog(LINES))
     } catch (error) {
       setNote(`Could not read the log: ${String(error)}`)
     }
@@ -166,7 +166,7 @@ function LogsView(): React.JSX.Element {
           size="sm"
           variant="secondary"
           onClick={() =>
-            void window.plexo.diagnosticReport().then((report) => copy(report, 'the report'))
+            void window.lightning.diagnosticReport().then((report) => copy(report, 'the report'))
           }
         >
           Copy diagnostic report
@@ -175,7 +175,7 @@ function LogsView(): React.JSX.Element {
           type="button"
           size="sm"
           variant="secondary"
-          onClick={() => void window.plexo.openLogFolder()}
+          onClick={() => void window.lightning.openLogFolder()}
         >
           Open log folder
         </Button>
@@ -183,7 +183,7 @@ function LogsView(): React.JSX.Element {
           type="button"
           size="sm"
           variant="destructive"
-          onClick={() => void window.plexo.clearLog().then(load)}
+          onClick={() => void window.lightning.clearLog().then(load)}
         >
           Clear
         </Button>

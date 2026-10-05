@@ -193,7 +193,7 @@ export function downloadChunk(options: ChunkDownloadOptions): Promise<void> {
 
     // The whole file from the start needs no Range at all — and an empty file would answer
     // `bytes=0-` with 416, since it has no byte 0 to start from.
-    const headers: Record<string, string> = { 'User-Agent': 'Plexo/1.0' }
+    const headers: Record<string, string> = { 'User-Agent': 'Lightning/1.0' }
     if (rangeStart > 0 || rangeEnd !== null) {
       headers['Range'] =
         rangeEnd === null ? `bytes=${rangeStart}-` : `bytes=${rangeStart}-${rangeEnd}`
@@ -372,7 +372,7 @@ export function fetchRange(
   return new Promise((resolve, reject) => {
     const attempt = (target: URL, redirectsLeft: number): void => {
       void connection
-        .request(target, { 'User-Agent': 'Plexo/1.0', Range: `bytes=${start}-${end}` })
+        .request(target, { 'User-Agent': 'Lightning/1.0', Range: `bytes=${start}-${end}` })
         .then(({ req, res }) => {
           req.on('error', reject)
           const status = res.statusCode ?? 0

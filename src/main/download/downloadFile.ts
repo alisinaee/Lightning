@@ -61,7 +61,7 @@ export class DownloadFile {
       const candidateStem = candidateCharacters.join('')
       const candidate = join(directory, `${candidateStem}${suffix}${extension}`)
       if (candidate !== destinationPath) {
-        const partialExists = await lstat(`${candidate}.plexo`).then(
+        const partialExists = await lstat(`${candidate}.lightning`).then(
           () => true,
           (error: NodeJS.ErrnoException) => {
             if (error.code === 'ENOENT') return false

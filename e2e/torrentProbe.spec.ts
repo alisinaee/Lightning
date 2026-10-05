@@ -8,7 +8,7 @@ import type { Torrent } from 'webtorrent'
 import { expect, test } from './fixtures'
 import { seededBytes } from './origin'
 
-// Getting a torrent in: every way in gives the same answer, and a torrent Plexo can't save
+// Getting a torrent in: every way in gives the same answer, and a torrent Lightning can't save
 // safely is refused before anything is written. Peers come from the link itself (x.pe), so no
 // tracker or DHT is involved.
 
@@ -54,13 +54,13 @@ test.afterEach(async () => {
 })
 
 test.describe('getting a torrent in', () => {
-  test('a link to a .torrent', async ({ plexo }) => {
+  test('a link to a .torrent', async ({ lightning }) => {
     const { client, torrent } = await seed([named(seededBytes(300_000, 1), 'movie.mkv')])
     clients.push(client)
     const { url, server } = await serveTorrent(torrent.torrentFile)
     servers.push(server)
 
-    const probe = await plexo.api.probeUrl(url)
+    const probe = await lightning.api.probeUrl(url)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.torrent.infoHash).toBe(torrent.infoHash)
@@ -69,16 +69,16 @@ test.describe('getting a torrent in', () => {
     expect(probe.torrent.files).toEqual([{ path: 'movie.mkv', length: 300_000 }])
   })
 
-  test('a .torrent file on this computer, with a folder of files', async ({ plexo }) => {
+  test('a .torrent file on this computer, with a folder of files', async ({ lightning }) => {
     const { client, torrent } = await seed(
       [named(seededBytes(1000, 2), 'a.bin'), named(seededBytes(2000, 3), 'b.bin')],
       'Album'
     )
     clients.push(client)
-    const path = join(await mkdtemp(join(tmpdir(), 'plexo-torrent-')), 'album.torrent')
+    const path = join(await mkdtemp(join(tmpdir(), 'lightning-torrent-')), 'album.torrent')
     await writeFile(path, torrent.torrentFile)
 
-    const probe = await plexo.api.probeUrl(path)
+    const probe = await lightning.api.probeUrl(path)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.suggestedFileName).toBe('Album')
@@ -89,12 +89,12 @@ test.describe('getting a torrent in', () => {
     ])
   })
 
-  test('a magnet link, its details fetched from a peer', async ({ plexo }) => {
+  test('a magnet link, its details fetched from a peer', async ({ lightning }) => {
     const { client, torrent } = await seed([named(seededBytes(500_000, 4), 'show.mp4')])
     clients.push(client)
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
-    const probe = await plexo.api.probeUrl(magnet)
+    const probe = await lightning.api.probeUrl(magnet)
     expect(probe.kind).toBe('torrent')
     if (probe.kind !== 'torrent') throw new Error('Expected torrent metadata')
     expect(probe.torrent.infoHash).toBe(torrent.infoHash)
@@ -102,7 +102,7 @@ test.describe('getting a torrent in', () => {
     expect(probe.totalBytes).toBe(500_000)
   })
 
-  test('two files that would be saved as one are refused', async ({ plexo }) => {
+  test('two files that would be saved as one are refused', async ({ lightning }) => {
     const { client, torrent } = await seed(
       [named(seededBytes(10, 5), 'Read.txt'), named(seededBytes(10, 6), 'read.txt')],
       'Docs'
@@ -111,10 +111,10 @@ test.describe('getting a torrent in', () => {
     const { url, server } = await serveTorrent(torrent.torrentFile)
     servers.push(server)
 
-    await expect(plexo.api.probeUrl(url)).rejects.toThrow(/saved as the same file/)
+    await expect(lightning.api.probeUrl(url)).rejects.toThrow(/saved as the same file/)
   })
 
-  test('a v2-only torrent is refused', async ({ plexo }) => {
+  test('a v2-only torrent is refused', async ({ lightning }) => {
     // BEP 52: a file tree and per-file piece roots, but none of the v1 piece hashes.
     const v2Only = (await loadBencode()).encode({
       info: {
@@ -127,38 +127,42 @@ test.describe('getting a torrent in', () => {
     const { url, server } = await serveTorrent(v2Only)
     servers.push(server)
 
-    await expect(plexo.api.probeUrl(url)).rejects.toThrow(/BitTorrent v2 only/)
+    await expect(lightning.api.probeUrl(url)).rejects.toThrow(/BitTorrent v2 only/)
   })
 
   test.describe('with nobody to ask', () => {
-    test.use({ appEnv: { PLEXO_E2E_MAGNET_MS: '1500' } })
+    test.use({ appEnv: { LIGHTNING_E2E_MAGNET_MS: '1500' } })
 
-    test('a magnet link nobody answers gives up', async ({ plexo }) => {
+    test('a magnet link nobody answers gives up', async ({ lightning }) => {
       const magnet = `magnet:?xt=urn:btih:${'ab'.repeat(20)}&dn=nothing`
-      await expect(plexo.api.probeUrl(magnet)).rejects.toThrow(
+      await expect(lightning.api.probeUrl(magnet)).rejects.toThrow(
         /No peers responded to this magnet link/
       )
     })
   })
 
-  test('New download shows the torrent, ready to start', async ({ plexo }) => {
+  test('New download shows the torrent, ready to start', async ({ lightning }) => {
     const { client, torrent } = await seed([named(seededBytes(200_000, 7), 'clip.mov')])
     clients.push(client)
     const magnet = `${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`
 
-    await (await plexo.newDownload()).fill(magnet)
+    await (await lightning.newDownload()).fill(magnet)
     // Its files, to choose from: one here, so no tick for all of them.
-    const files = plexo.page.getByRole('group', { name: 'Files' })
+    const files = lightning.page.getByRole('group', { name: 'Files' })
     await expect(files.getByRole('checkbox', { name: /clip\.mov/ })).toBeChecked({
       timeout: 15_000
     })
     await expect(files.getByRole('checkbox')).toHaveCount(1)
     // Its files name it: no file name to repeat them.
-    await expect(plexo.page.getByRole('textbox', { name: 'File name' })).toBeHidden()
-    await expect(plexo.page.getByRole('button', { name: 'Download' })).toBeEnabled()
+    await expect(lightning.page.getByRole('textbox', { name: 'File name' })).toBeHidden()
+    await expect(
+      lightning.page.getByRole('button', { name: 'Download', exact: true })
+    ).toBeEnabled()
   })
 
-  test('a torrent of several files lists them, each ticked to be downloaded', async ({ plexo }) => {
+  test('a torrent of several files lists them, each ticked to be downloaded', async ({
+    lightning
+  }) => {
     const { client, torrent } = await seed(
       [
         named(seededBytes(1000, 8), 'one.bin'),
@@ -168,9 +172,9 @@ test.describe('getting a torrent in', () => {
       'Pack'
     )
     clients.push(client)
-    const { page } = plexo
+    const { page } = lightning
     await (
-      await plexo.newDownload()
+      await lightning.newDownload()
     ).fill(`${torrent.magnetURI}&x.pe=127.0.0.1:${client.address().port}`)
 
     // Its folder, by name, ticks them all.
@@ -181,11 +185,11 @@ test.describe('getting a torrent in', () => {
     // Untick everything: nothing to download, nothing to start.
     await all.click()
     await expect(page.getByRole('checkbox', { name: /two\.bin/ })).not.toBeChecked()
-    await expect(page.getByRole('button', { name: 'Download' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeDisabled()
 
     // Tick one: it's counted, and only its size.
     await page.getByRole('checkbox', { name: /two\.bin/ }).click()
     await expect(page.getByText('1 of 3 files · 2.0 KB')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Download' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeEnabled()
   })
 })

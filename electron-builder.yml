@@ -1,5 +1,5 @@
-appId: com.plexo.app
-productName: Plexo
+appId: com.lightning.app
+productName: Lightning
 afterPack: scripts/check-torrent-package.mjs
 directories:
   buildResources: build
@@ -12,7 +12,7 @@ files:
   # koffi is only loaded on Linux (network/deviceBinding.ts) and ships prebuilds for every OS.
   - '!node_modules/koffi/{src,vendor,doc}/**'
   - '!node_modules/koffi/build/koffi/!(linux_x64|linux_arm64)/**'
-  # Plexo uses TCP peers only. simple-peer is patched to use browser globals instead of loading
+  # Lightning uses TCP peers only. simple-peer is patched to use browser globals instead of loading
   # the native WebRTC polyfill; don't ship unused host-platform binaries in cross-platform builds.
   - '!node_modules/node-datachannel/**'
   - '!node_modules/webrtc-polyfill/**'
@@ -20,10 +20,10 @@ files:
 asarUnpack:
   - resources/**
 win:
-  # No protocols or fileAssociations: the NSIS installer would register Plexo as *the* handler for
+  # No protocols or fileAssociations: the NSIS installer would register Lightning as *the* handler for
   # magnet links and .torrent files, taking them from a torrent client the user already has.
-  # A .torrent can still be opened with Plexo through "Open with".
-  executableName: plexo
+  # A .torrent can still be opened with Lightning through "Open with".
+  executableName: lightning
   target:
     - target: nsis
       arch: [x64, arm64]
@@ -44,8 +44,8 @@ mac:
       arch: [x64, arm64]
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSDownloadsFolderUsageDescription: Plexo saves downloaded files to your Downloads folder.
-    # Magnet links and .torrent files can be opened with Plexo, as one choice among others: it's
+    - NSDownloadsFolderUsageDescription: Lightning saves downloaded files to your Downloads folder.
+    # Magnet links and .torrent files can be opened with Lightning, as one choice among others: it's
     # never made the default over a torrent client the user already has (LSHandlerRank).
     - CFBundleURLTypes:
         - CFBundleURLName: Magnet link

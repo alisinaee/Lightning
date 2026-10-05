@@ -1,5 +1,10 @@
 import type { NetworkInterfaceInfo, NetworkPreferences } from './types'
 
+/** A proxy server as the Proxy settings take it: `host`, `host:port`, or either behind a
+ * `scheme://`. Nothing that could add a rule of its own (`;`, `=`, spaces, a path). */
+export const isProxyAddress = (value: string): boolean =>
+  /^(?:[a-z][a-z0-9+.-]*:\/\/)?[\w.-]+(?::\d{1,5})?$/i.test(value)
+
 /** Off by the user's saved choice for that network. */
 export function isNetworkOff(
   iface: Pick<NetworkInterfaceInfo, 'id'>,

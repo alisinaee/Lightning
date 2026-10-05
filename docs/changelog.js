@@ -8,7 +8,7 @@
 ;(function (root) {
   'use strict'
 
-  root.PlexoChangelog = [
+  root.LightningChangelog = [
     {
       version: 'v1.0.0-rc.11',
       items: [
@@ -55,7 +55,7 @@
         {
           kind: 'faster',
           title: 'Picks its own stream count',
-          text: 'Each network starts with 4 streams and Plexo adds more only while they actually add speed, so the streams setting is gone.'
+          text: 'Each network starts with 4 streams and Lightning adds more only while they actually add speed, so the streams setting is gone.'
         },
         {
           kind: 'faster',
@@ -65,7 +65,7 @@
         {
           kind: 'improved',
           title: 'Writes straight to your folder',
-          text: 'Downloads go into a `.plexo` file in the folder you chose and take their real name when they finish, with no copy at the end.'
+          text: 'Downloads go into a `.lightning` file in the folder you chose and take their real name when they finish, with no copy at the end.'
         },
         {
           kind: 'improved',
@@ -75,7 +75,7 @@
         {
           kind: 'improved',
           title: 'Windows installer options',
-          text: 'Choose where Plexo is installed, and whether it adds a desktop shortcut.'
+          text: 'Choose where Lightning is installed, and whether it adds a desktop shortcut.'
         }
       ]
     },
@@ -90,7 +90,7 @@
         {
           kind: 'new',
           title: 'Same-network warning',
-          text: 'Plexo warns you when two selected connections are on the same local network, since Windows only uses one adapter then.'
+          text: 'Lightning warns you when two selected connections are on the same local network, since Windows only uses one adapter then.'
         },
         {
           kind: 'improved',

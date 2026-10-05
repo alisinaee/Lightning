@@ -26,7 +26,7 @@ export async function ownedTorrentFiles(
       within === '..' ||
       within.startsWith(`..${sep}`)
     ) {
-      throw new Error('Plexo can’t safely remove this torrent’s files.')
+      throw new Error('Lightning can’t safely remove this torrent’s files.')
     }
     let parent = dirname(target)
     while (true) {

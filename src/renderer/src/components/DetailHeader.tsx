@@ -61,7 +61,7 @@ function RemoveButton({
   const [error, setError] = useState<string | null>(null)
   const finished = 'unitsWritten' in download || download.status === 'completed'
   const missing = 'missing' in download && download.missing === true
-  const trashName = window.plexo.platform === 'win32' ? 'Recycle Bin' : 'Trash'
+  const trashName = window.lightning.platform === 'win32' ? 'Recycle Bin' : 'Trash'
 
   return (
     <AlertDialog
@@ -115,7 +115,7 @@ function RemoveButton({
             onClick={(event) => {
               event.preventDefault()
               setBusy(true)
-              void window.plexo
+              void window.lightning
                 .removeDownload(download.id, { trashFile })
                 .then(() => {
                   useAppStore.setState((store) => {

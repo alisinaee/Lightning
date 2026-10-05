@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo, Socket } from 'node:net'
 
 // An embedded download server for the Test lab: the features of scripts/fake-server.mjs (speed
-// shared per network, named by the X-Plexo-Network header), driven by direct method calls, with
+// shared per network, named by the X-Lightning-Network header), driven by direct method calls, with
 // counters per network and per file, a file whose every byte can be checked, and the faults a
 // real server shows: busy answers, cut and stalled connections, a wrong Content-Range.
 //
@@ -334,7 +334,8 @@ export class FakeServer {
     const q = url.searchParams
     const path = url.pathname
     const key = String(
-      req.headers['x-plexo-network'] || (req.socket.remoteAddress ?? '?').replace(/^::ffff:/, '')
+      req.headers['x-lightning-network'] ||
+        (req.socket.remoteAddress ?? '?').replace(/^::ffff:/, '')
     )
     const n = this.net(key)
     n.count.requests++
