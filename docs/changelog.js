@@ -10,6 +10,21 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.13',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'Check for updates works',
+          text: 'The button in Settings now asks GitHub straight away and says whether you are up to date, an update is available, or GitHub could not be reached. The update icon blinks so you notice it.'
+        },
+        {
+          kind: 'improved',
+          title: 'Tidier list',
+          text: 'Row actions are icons, columns fit their headers, and the Logs and Debug buttons can be switched on in Settings → Interface.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.12',
       items: [
         {
