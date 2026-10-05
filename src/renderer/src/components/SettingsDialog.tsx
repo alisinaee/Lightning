@@ -1,4 +1,6 @@
 import type { AccentId, AppPrefs } from '@shared/types'
+import { BrowserPage } from './BrowserPage'
+import { SchedulePage } from './SchedulePage'
 import { isProxyAddress } from '@shared/networks'
 import { useState } from 'react'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
@@ -25,6 +27,8 @@ const PAGES = [
   'Network',
   'Notifications',
   'Power',
+  'Schedule',
+  'Browser',
   'Interface'
 ] as const
 
@@ -121,6 +125,7 @@ export function SettingsDialog({
   const initial = window.lightning.initialState
   const [page, setPage] = useState<(typeof PAGES)[number]>('General')
   const [prefs, setPrefs] = useState<Required<AppPrefs>>(initial.prefs)
+  const [schedule, setSchedule] = useState(initial.schedule)
   const theme = useAppStore((store) => store.themeSource)
   const setTheme = useAppStore((store) => store.setThemeSource)
   const downloadsAtOnce = useAppStore((store) => store.downloadsAtOnce)
@@ -358,10 +363,32 @@ export function SettingsDialog({
               </>
             )}
             {page === 'Power' && (
-              <Row
-                checked={prefs.preventSleep}
-                onChange={(preventSleep) => save({ preventSleep })}
-                label="Keep the computer awake while a download is running"
+              <>
+                <Row
+                  checked={prefs.preventSleep}
+                  onChange={(preventSleep) => save({ preventSleep })}
+                  label="Keep the computer awake while a download is running"
+                />
+                <Row
+                  checked={prefs.askWhenFinished}
+                  onChange={(askWhenFinished) => save({ askWhenFinished })}
+                  label="When all downloads finish, ask what to do (quit, sleep or shut down)"
+                />
+              </>
+            )}
+            {page === 'Schedule' && (
+              <SchedulePage
+                value={schedule}
+                onChange={(next) => {
+                  setSchedule(next)
+                  void window.lightning.updateSettings({ schedule: next })
+                }}
+              />
+            )}
+            {page === 'Browser' && (
+              <BrowserPage
+                enabled={prefs.browserIntegration}
+                onEnabledChange={(browserIntegration) => save({ browserIntegration })}
               />
             )}
             {page === 'Interface' && (
@@ -375,6 +402,16 @@ export function SettingsDialog({
                   checked={prefs.hideDock}
                   onChange={(hideDock) => save({ hideDock })}
                   label="Hide the Dock icon"
+                />
+                <Row
+                  checked={prefs.openAtLogin}
+                  onChange={(openAtLogin) => save({ openAtLogin })}
+                  label="Start Lightning when I sign in (hidden in the tray)"
+                />
+                <Row
+                  checked={prefs.watchClipboard}
+                  onChange={(watchClipboard) => save({ watchClipboard })}
+                  label="Offer to download links I copy (while Lightning is in the background)"
                 />
                 <div className="mt-2 text-[12px] font-medium text-muted-foreground">Title bar</div>
                 <Row

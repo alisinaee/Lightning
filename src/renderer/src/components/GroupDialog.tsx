@@ -13,6 +13,7 @@ import {
   wantedBytes
 } from '../utils/format'
 import { linksIn, probeLinks, requestFor } from '../utils/links'
+import { EMPTY_DRAFT, extrasFromDraft } from '../utils/requestDraft'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import { chooseConnection, networksOf, type GroupFile } from '../utils/groupFiles'
 import { ConnectionPicker } from './ConnectionPicker'
@@ -157,15 +158,27 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
       allInterfaces,
       useVpn
     )
-    probeLinks(links, window.lightning.probeUrl, (url, outcome) => {
-      if ('result' in outcome) {
-        requests.push(requestFor(outcome.result, group.destinationDir, interfaceIds))
-      } else {
-        failedLinks.add(url)
-        errors.push(`${url}: ${describeError(outcome.error)}`)
+    // Sign-in details written into a link (https://user:pass@host/…) still go with it.
+    probeLinks(
+      links,
+      (url) => window.lightning.probeUrl(url, extrasFromDraft(EMPTY_DRAFT, url)),
+      (url, outcome) => {
+        if ('result' in outcome) {
+          requests.push(
+            requestFor(
+              outcome.result,
+              group.destinationDir,
+              interfaceIds,
+              extrasFromDraft(EMPTY_DRAFT, url)
+            )
+          )
+        } else {
+          failedLinks.add(url)
+          errors.push(`${url}: ${describeError(outcome.error)}`)
+        }
+        if (--left === 0) void finish()
       }
-      if (--left === 0) void finish()
-    })
+    )
   }
 
   const handleRemove = (row: FileRow): void => {

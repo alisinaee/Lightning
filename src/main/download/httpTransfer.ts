@@ -6,6 +6,7 @@ import type {
   NetworkStatus,
   StartHttpDownloadRequest
 } from '../../shared/types'
+import { buildHeaders } from '../../shared/requestHeaders'
 import { testKnobs, testStreamsPerNetwork } from '../testKnobs'
 import { advanceBlock, retractBlock } from './blockProgress'
 import { ConcurrencyController, type Action, type Snapshot } from './concurrency'
@@ -619,6 +620,7 @@ export class HttpTransfer implements Transfer {
         rangeStart: block.rangeStart + attempt.startOffset,
         rangeEnd: block.rangeEnd,
         connection: self.connection,
+        requestHeaders: buildHeaders(this.runtime.requestPayload),
         createDestination: () =>
           this.runtime.file.writer(block.rangeStart + (attempt.startOffset ?? 0)),
         signal: AbortSignal.any([self.controller.signal, attempt.abort.signal]),
@@ -1120,7 +1122,8 @@ export class HttpTransfer implements Transfer {
             this.runtime.requestPayload.url,
             block.rangeStart,
             block.rangeStart + local.length - 1,
-            connection
+            connection,
+            buildHeaders(this.runtime.requestPayload)
           )
           // A reply from a server still presenting an accepted label proves nothing here.
           if (compareVersion([seen], remote.version).kind !== 'same') continue

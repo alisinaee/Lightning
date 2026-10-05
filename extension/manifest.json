@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Lightning Download Manager",
+  "version": "1.0.0",
+  "description": "Send downloads to the Lightning desktop app, which fetches them over every network at once.",
+  "icons": { "16": "icons/icon.png", "48": "icons/icon.png", "128": "icons/icon.png" },
+  "action": {
+    "default_title": "Lightning",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon.png", "32": "icons/icon.png" }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "browser_specific_settings": {
+    "gecko": { "id": "lightning-extension@lightning.app", "strict_min_version": "121.0" }
+  }
+}

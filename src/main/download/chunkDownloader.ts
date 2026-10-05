@@ -3,6 +3,7 @@ import type { ClientRequest, IncomingMessage } from 'node:http'
 import { URL } from 'node:url'
 import { asConnectionError, type StreamConnection } from '../network/routes'
 import { testKnobs } from '../testKnobs'
+import { headersForRedirect } from '../../shared/requestHeaders'
 import { compareVersion, type FileVersion, type VersionCheck } from './fileVersion'
 
 export interface ChunkDownloadOptions {
@@ -12,6 +13,8 @@ export interface ChunkDownloadOptions {
   rangeEnd: number | null
   /** The stream's connection, through the network it's bound to. */
   connection: StreamConnection
+  /** The headers every request carries (see buildHeaders); a Range is added to them. */
+  requestHeaders: Record<string, string>
   createDestination: () => Writable
   /** Network bytes received, before destination backpressure or disk writes. */
   onNetworkProgress: (bytesReceivedThisRun: number) => void
@@ -193,7 +196,7 @@ export function downloadChunk(options: ChunkDownloadOptions): Promise<void> {
 
     // The whole file from the start needs no Range at all — and an empty file would answer
     // `bytes=0-` with 416, since it has no byte 0 to start from.
-    const headers: Record<string, string> = { 'User-Agent': 'Lightning/1.0' }
+    const headers: Record<string, string> = { ...options.requestHeaders }
     if (rangeStart > 0 || rangeEnd !== null) {
       headers['Range'] =
         rangeEnd === null ? `bytes=${rangeStart}-` : `bytes=${rangeStart}-${rangeEnd}`
@@ -201,7 +204,7 @@ export function downloadChunk(options: ChunkDownloadOptions): Promise<void> {
 
     const attempt = (targetUrl: URL, redirectsLeft: number): void => {
       void connection
-        .request(targetUrl, headers, signal)
+        .request(targetUrl, headersForRedirect(headers, url, targetUrl), signal)
         .then(({ req, res, sentAt }) => {
           if (settled) {
             req.destroy()
@@ -367,12 +370,16 @@ export function fetchRange(
   url: string,
   start: number,
   end: number,
-  connection: StreamConnection
+  connection: StreamConnection,
+  requestHeaders: Record<string, string>
 ): Promise<{ body: Buffer; version: FileVersion }> {
   return new Promise((resolve, reject) => {
     const attempt = (target: URL, redirectsLeft: number): void => {
       void connection
-        .request(target, { 'User-Agent': 'Lightning/1.0', Range: `bytes=${start}-${end}` })
+        .request(target, {
+          ...headersForRedirect(requestHeaders, url, target),
+          Range: `bytes=${start}-${end}`
+        })
         .then(({ req, res }) => {
           req.on('error', reject)
           const status = res.statusCode ?? 0

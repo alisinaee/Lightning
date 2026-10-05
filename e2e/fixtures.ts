@@ -15,11 +15,14 @@ import {
 } from '@playwright/test'
 import type { IpcContract } from '../src/shared/ipc-contract'
 import { applyDownloadUpdate } from '../src/shared/downloadUpdate'
+import { splitUrlCredentials } from '../src/shared/requestHeaders'
 import type {
   DownloadState,
   DownloadStatus,
   DownloadUpdate,
+  Checksum,
   HttpDownloadState,
+  RequestExtras,
   TorrentDownloadState
 } from '../src/shared/types'
 import { Origin, sha256, type OriginOptions } from './origin'
@@ -75,6 +78,10 @@ interface StartOptions {
   destinationDir?: string
   /** For a torrent: the files to download, by index. */
   selectedFiles?: number[]
+  /** Headers, Referer, Cookie or sign-in details the requests carry. */
+  extras?: RequestExtras
+  /** A hash the finished file is checked against. */
+  checksum?: Checksum
 }
 
 interface Tracked {
@@ -246,7 +253,7 @@ export class LightningApp {
   async start(url: string, expectedSha: string, options: StartOptions = {}): Promise<string> {
     await this.pinStreams(options.connections)
     await this.api.listInterfaces()
-    const probe = await this.api.probeUrl(url)
+    const probe = await this.api.probeUrl(url, options.extras)
     const multiChunk = probe.supportsRanges && probe.totalBytes !== null
     const networks = options.networks ?? ['a']
     const destinationDir = options.destinationDir ?? this.dirs.dest
@@ -260,7 +267,11 @@ export class LightningApp {
       supportsRanges: multiChunk,
       interfaceIds: multiChunk ? networks : networks.slice(0, 1),
       etag: probe.etag,
-      lastModified: probe.lastModified
+      lastModified: probe.lastModified,
+      // As the dialogs do: sign-in details written into the link go along as auth.
+      ...(probe.kind === 'http'
+        ? { auth: splitUrlCredentials(url).auth, ...options.extras, checksum: options.checksum }
+        : {})
     }
     const id = await this.api.startDownload(
       probe.kind === 'torrent'

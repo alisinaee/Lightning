@@ -32,7 +32,9 @@ export const testKnobs = {
   torrentDht: env['LIGHTNING_E2E_DHT'] !== '0',
   /** Skips the real GitHub check and pretends this version is available, for exercising the
    * update banner without needing an actual newer release published. */
-  forceUpdateVersion: env['LIGHTNING_FORCE_UPDATE_VERSION']
+  forceUpdateVersion: env['LIGHTNING_FORCE_UPDATE_VERSION'],
+  /** Answers the "downloads finished" question without a dialog (nothing, quit, sleep, shutdown). */
+  finishedAction: env['LIGHTNING_E2E_FINISHED_ACTION']
 }
 
 /** `LIGHTNING_E2E_STREAMS=2` fixes how many streams each network runs and turns the automatic

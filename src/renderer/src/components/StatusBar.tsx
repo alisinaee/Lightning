@@ -3,6 +3,7 @@ import { isVpn } from '@shared/networks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatSpeed } from '../utils/format'
+import { ScheduleChip } from './ScheduleChip'
 import { ScreenFooter } from './ScreenFooter'
 import { ThemeToggle } from './ThemeToggle'
 import { SpeedInput } from './LimitFields'
@@ -78,6 +79,7 @@ export function StatusBar(): React.JSX.Element {
         <span className="shrink-0 tabular-nums">limit {formatSpeed(limit)}</span>
       )}
       {waiting > 0 && <span className="shrink-0">{waiting} waiting</span>}
+      <ScheduleChip />
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         {chips.map((chip) => (
           <span key={chip.id} className="flex shrink-0 items-center gap-1.5 tabular-nums">

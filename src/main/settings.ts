@@ -11,6 +11,7 @@ import {
   type ThemeSource
 } from '../shared/types'
 import { isProxyAddress } from '../shared/networks'
+import { sanitizeSchedule } from '../shared/schedule'
 import { readJson, updateJson } from './jsonFile'
 
 function settingsPath(): string {
@@ -90,6 +91,13 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (parsed.slowMode === true) settings.slowMode = true
   if (parsed.useVpn === true) settings.useVpn = true
   if (parsed.prefs !== undefined) settings.prefs = sanitizePrefs(parsed.prefs)
+  if (
+    typeof parsed.integrationToken === 'string' &&
+    /^[0-9a-f]{64}$/.test(parsed.integrationToken)
+  ) {
+    settings.integrationToken = parsed.integrationToken
+  }
+  if (parsed.schedule !== undefined) settings.schedule = sanitizeSchedule(parsed.schedule)
   return settings
 }
 
@@ -120,6 +128,10 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'preventSleep',
     'closeToBackground',
     'hideDock',
+    'openAtLogin',
+    'watchClipboard',
+    'askWhenFinished',
+    'browserIntegration',
     'showLogs',
     'showDebug'
   ] as const) {

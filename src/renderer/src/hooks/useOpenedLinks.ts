@@ -11,8 +11,8 @@ export function useOpenedLinks(): void {
     const take = (): void => {
       void window.lightning
         .takePendingLink()
-        .then((link) => {
-          if (link) openNewDownload(link)
+        .then((pending) => {
+          if (pending) openNewDownload(pending.url, undefined, pending.extras)
         })
         .catch(() => {})
     }

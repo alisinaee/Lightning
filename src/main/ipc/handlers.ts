@@ -30,6 +30,11 @@ import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
 import { findInHistory, listHistory } from '../download/history'
 import { probeUrl } from '../download/probe'
+import { askWhatNext, runFinishedAction } from '../postActions'
+import { ScheduleController } from '../scheduleController'
+import { extensionFolder, integrationToken, regenerateToken } from '../integration'
+import { ALWAYS_ALLOWED, DEFAULT_SCHEDULE } from '../../shared/schedule'
+import { normalizeRequest, sanitizeExtras } from '../../shared/requestHeaders'
 import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
 import { measureLatencies } from '../network/latency'
@@ -42,7 +47,7 @@ import { redactUrl } from '../../shared/urlTools'
 import { diagnosticReport } from '../diagnostics'
 import { findDuplicates } from '../download/findDuplicates'
 import { appVariant } from '../variant'
-import { applyBehavior } from '../appBehavior'
+import { applyBehavior, integrationPort } from '../appBehavior'
 import { loadSettings, prefsOf, saveSettings } from '../settings'
 import { DnsService, SYSTEM_DNS } from '../network/dns'
 import { testKnobs } from '../testKnobs'
@@ -119,6 +124,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     void networks.refresh()
   })
 
+  const scheduleController = new ScheduleController(manager, getWindow)
+  void loadSettings().then((saved) => scheduleController.apply(saved.schedule))
+
   const groups = new GroupStore(() => {
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.groupsChanged)
@@ -146,11 +154,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   })
   // A group may run fewer files at once than the general limit lets it.
   manager.groupLimitOf = (id) => groups.limitOf(id)
+  // The last download ended: ask what to do next, if Settings says to (see askWhenFinished).
+  manager.hasPendingWork = () => groups.hasPending()
+  manager.onQueueFinished = (completed) => {
+    void askWhatNext(getWindow(), completed)
+      .then((action) => runFinishedAction(action, getWindow()))
+      .catch((error) => log.error('app', 'finished action failed', error))
+  }
   const autoScheduler = new AutoScheduler(manager, groups, networks)
   void groups.loaded.then(() => autoScheduler.run())
 
   /** Adds files to a group: a manual group's start at once, an auto group's wait for a network. */
-  const addToGroup = async (id: string, requests: StartDownloadRequest[]): Promise<string[]> => {
+  const addToGroup = async (id: string, incoming: StartDownloadRequest[]): Promise<string[]> => {
+    const requests = incoming.map(normalizeRequest)
     const group = groups.get(id)
     if (!group) throw new Error('This group no longer exists.')
     if (group.mode === 'auto') {
@@ -203,6 +219,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const saved = await loadSettings()
     networks.useVpn = saved.useVpn ?? false
     manager.applySettings(saved)
+    scheduleController.apply(saved.schedule)
     await applyBehavior(saved)
     const window = getWindow()
     if (window && !window.isDestroyed()) {
@@ -248,6 +265,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         destinationDir: destinationExists ? destinationDir : undefined,
         version: app.getVersion(),
         prefs: prefsOf(settings),
+        schedule: settings.schedule ?? DEFAULT_SCHEDULE,
+        scheduleStatus: scheduleController.status,
         labEnabled: !app.isPackaged
       } satisfies InitialState
     } catch (error) {
@@ -264,6 +283,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         useVpn: false,
         version: app.getVersion(),
         prefs: prefsOf({}),
+        schedule: DEFAULT_SCHEDULE,
+        scheduleStatus: ALWAYS_ALLOWED,
         labEnabled: !app.isPackaged
       } satisfies InitialState
     }
@@ -273,7 +294,17 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     await openNetworkSettings()
   })
 
-  handle('probeUrl', async (_event, url) => probeUrl(url))
+  handle('getIntegration', async () => ({
+    port: integrationPort(),
+    key: await integrationToken(),
+    folder: extensionFolder()
+  }))
+  handle('regenerateIntegrationKey', async () => regenerateToken())
+  handle('openExtensionFolder', async () => {
+    const failure = await shell.openPath(extensionFolder())
+    if (failure) throw new Error(failure)
+  })
+  handle('probeUrl', async (_event, url, extras) => probeUrl(url, sanitizeExtras(extras)))
 
   handle('chooseDestinationFolder', async (_event, defaultPath) => {
     const window = getWindow()
@@ -360,7 +391,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
       kind: request.kind,
       group: request.groupId
     })
-    return manager.start(request)
+    return manager.start(normalizeRequest(request))
   })
 
   handle('listDownloads', async () => manager.listDownloads())

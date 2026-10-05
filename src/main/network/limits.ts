@@ -86,13 +86,31 @@ export class Limits {
     return join(app.getPath('userData'), 'network-usage.json')
   }
 
+  /** The total limit Settings asks for (slow mode counted), before the schedule's cap. */
+  private configuredTotal: number | undefined
+  private scheduleCap: number | null = null
+
+  private applyTotal(): void {
+    const configured = this.configuredTotal
+    const cap = this.scheduleCap
+    const rate = cap ? (configured && configured > 0 ? Math.min(configured, cap) : cap) : configured
+    this.total = adjust(this.total, rate)
+  }
+
+  /** A cap from the schedule, standing beside the total limit: the lower of the two applies. */
+  setScheduleCap(cap: number | null): void {
+    this.scheduleCap = cap
+    this.applyTotal()
+  }
+
   /** Takes up the limits in `settings`. Slow mode, when on, stands in for the total limit. */
   configure(settings: AppSettings): void {
     // A slow mode speed never changed isn't saved: it's the default the window shows.
     const total = settings.slowMode
       ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
       : settings.speedLimit
-    this.total = adjust(this.total, total)
+    this.configuredTotal = total
+    this.applyTotal()
     const preferences = settings.networkPreferences ?? {}
     for (const id of new Set([...this.perNetwork.keys(), ...Object.keys(preferences)])) {
       const bucket = adjust(this.perNetwork.get(id) ?? null, preferences[id]?.speedLimit)

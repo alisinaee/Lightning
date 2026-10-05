@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'ele
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { LabEvent } from '../shared/lab'
+import type { ScheduleStatus } from '../shared/schedule'
 import type {
   AppSettings,
   DnsConfig,
@@ -9,6 +10,7 @@ import type {
   GroupPatch,
   InitialState,
   NetworkInterfaceInfo,
+  RequestExtras,
   SettingsPush
 } from '../shared/types'
 
@@ -37,7 +39,10 @@ const lightningApi = {
   removeDns: (id: string) => invoke('removeDns', id),
   setDefaultDns: (id: string | null) => invoke('setDefaultDns', id),
   setDownloadDns: (id: string, dnsId: string | null) => invoke('setDownloadDns', id, dnsId),
-  probeUrl: (url: string) => invoke('probeUrl', url),
+  getIntegration: () => invoke('getIntegration'),
+  regenerateIntegrationKey: () => invoke('regenerateIntegrationKey'),
+  openExtensionFolder: () => invoke('openExtensionFolder'),
+  probeUrl: (url: string, extras?: RequestExtras) => invoke('probeUrl', url, extras),
   chooseDestinationFolder: (defaultPath: string) => invoke('chooseDestinationFolder', defaultPath),
   chooseTorrentFile: () => invoke('chooseTorrentFile'),
   /** Where a file dropped on the window is on disk ('' for one that isn't a file). */
@@ -114,6 +119,13 @@ const lightningApi = {
     const listener = (_event: IpcRendererEvent, command: string): void => callback(command)
     ipcRenderer.on(IpcChannels.appCommand, listener)
     return () => ipcRenderer.removeListener(IpcChannels.appCommand, listener)
+  },
+
+  /** The schedule opened or closed (or its cap changed). */
+  onScheduleChanged: (callback: (status: ScheduleStatus) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, status: ScheduleStatus): void => callback(status)
+    ipcRenderer.on(IpcChannels.scheduleChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.scheduleChanged, listener)
   },
 
   onLinkReceived: (callback: () => void): (() => void) => {

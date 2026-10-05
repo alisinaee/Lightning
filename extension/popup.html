@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Lightning</h1>
+    <p id="status" class="status">Looking for Lightning…</p>
+    <label class="row"
+      ><input id="enabled" type="checkbox" /> Send browser downloads to Lightning</label
+    >
+    <label
+      >Pairing key
+      <input
+        id="key"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="From Lightning → Settings → Browser"
+      />
+    </label>
+    <label
+      >Only files larger than (MB, 0 = all)
+      <input id="minSizeMB" type="number" min="0" step="1" />
+    </label>
+    <label
+      >Never for these sites (one per line)
+      <textarea id="excluded" rows="3" spellcheck="false"></textarea>
+    </label>
+    <button id="save">Save</button>
+    <script src="popup.js"></script>
+  </body>
+</html>

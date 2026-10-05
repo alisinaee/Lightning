@@ -4,6 +4,9 @@ export const IpcChannels = {
   deviceBindingSupported: 'network:device-binding-supported',
   openNetworkSettings: 'network:open-settings',
   probeUrl: 'download:probe',
+  getIntegration: 'integration:get',
+  regenerateIntegrationKey: 'integration:regenerate-key',
+  openExtensionFolder: 'integration:open-folder',
   getInitialState: 'app:get-initial-state',
   updateSettings: 'app:update-settings',
   chooseDestinationFolder: 'dialog:choose-destination-folder',
@@ -62,5 +65,6 @@ export const IpcChannels = {
   setDownloadDns: 'download:set-dns',
   dnsChanged: 'dns:changed',
   settingsChanged: 'app:settings-changed',
-  appCommand: 'app:command'
+  appCommand: 'app:command',
+  scheduleChanged: 'app:schedule-changed'
 } as const

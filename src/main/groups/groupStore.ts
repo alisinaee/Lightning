@@ -13,6 +13,7 @@ import type {
 } from '../../shared/types'
 import { log } from '../logger'
 import { readJson, updateJson } from '../jsonFile'
+import { openRequest, sealRequest } from '../secrets'
 
 // The groups ("Add several links" batches) and, for an auto group, the files that haven't started
 // yet: they wait here, with what it takes to start them, so the group carries on after a restart.
@@ -78,6 +79,9 @@ export class GroupStore {
     this.loaded = readJson(this.path())
       .then((parsed) => {
         this.saved = sanitize(parsed)
+        for (const items of Object.values(this.saved.pending)) {
+          for (const item of items) item.request = openRequest(item.request)
+        }
       })
       .catch(() => {})
   }
@@ -86,8 +90,16 @@ export class GroupStore {
     return join(app.getPath('userData'), 'groups.json')
   }
 
+  /** Whether any group still has files waiting for a network to run on. */
+  hasPending(): boolean {
+    return Object.values(this.saved.pending).some((items) => items.length > 0)
+  }
+
   private save(): void {
     const snapshot = structuredClone(this.saved)
+    for (const items of Object.values(snapshot.pending)) {
+      for (const item of items) item.request = sealRequest(item.request)
+    }
     void updateJson(this.path(), () => snapshot).catch(() => {})
     this.onChange()
   }

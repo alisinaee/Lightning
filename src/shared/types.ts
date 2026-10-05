@@ -1,3 +1,4 @@
+import type { ScheduleSettings, ScheduleStatus } from './schedule'
 export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'vpn' | 'other'
 export type IpFamily = 4 | 6
 
@@ -226,6 +227,8 @@ interface DownloadStateBase {
   /** The DNS it resolves names with (a DnsProfile id, or 'system'); unset follows its group, then
    * the app's default. */
   dnsId?: string
+  /** Set when the download was started with a hash to check: how the finished file compared. */
+  checksum?: ChecksumResult
   /** The update this state is as of (see DownloadUpdate). */
   seq?: number
 }
@@ -336,6 +339,14 @@ export interface AppPrefs {
   preventSleep?: boolean
   closeToBackground?: boolean
   hideDock?: boolean
+  /** Start Lightning when the user signs in, hidden in the tray. */
+  openAtLogin?: boolean
+  /** Offer to download a link to a file when one is copied while Lightning is in the background. */
+  watchClipboard?: boolean
+  /** Ask what to do (quit, sleep, shut down) when the last download finishes. */
+  askWhenFinished?: boolean
+  /** Let the browser extension send links to Lightning (a server on this computer only). */
+  browserIntegration?: boolean
   /** The Logs and Debug (Test lab) buttons in the title bar; both off until switched on. */
   showLogs?: boolean
   showDebug?: boolean
@@ -357,6 +368,10 @@ export const DEFAULT_PREFS: Required<AppPrefs> = {
   preventSleep: true,
   closeToBackground: true,
   hideDock: false,
+  openAtLogin: false,
+  watchClipboard: false,
+  askWhenFinished: false,
+  browserIntegration: true,
   showLogs: false,
   showDebug: false,
   proxyMode: 'system',
@@ -385,6 +400,10 @@ export interface AppSettings {
   slowModeSpeed?: number
   /** Whether downloads may use VPN tunnels as connections. Off: they use the real networks. */
   useVpn?: boolean
+  /** Weekly windows in which downloads run, are held, or are slowed. */
+  schedule?: ScheduleSettings
+  /** The key the browser extension pairs with (see main/integration.ts). */
+  integrationToken?: string
 }
 
 export const DOWNLOADS_AT_ONCE = { default: 2, min: 1, max: 8 }
@@ -408,11 +427,67 @@ export interface InitialState {
   destinationDir?: string
   version: string
   prefs: Required<AppPrefs>
+  schedule: ScheduleSettings
+  /** What the schedule asks of the downloads right now. */
+  scheduleStatus: ScheduleStatus
   /** The Test lab (the title bar's Debug button) is there: not in a packaged build. */
   labEnabled: boolean
 }
 
-interface StartDownloadRequestBase {
+export type ChecksumAlgo = 'md5' | 'sha1' | 'sha256' | 'sha512'
+
+/** A hash the finished file should have, as lowercase hex. */
+export interface Checksum {
+  algo: ChecksumAlgo
+  value: string
+}
+
+/** How a finished file compared with the hash it was expected to have. */
+export interface ChecksumResult {
+  algo: ChecksumAlgo
+  expected: string
+  /** verifying: still being read. unreadable: the file could not be read to check it. */
+  status: 'verifying' | 'verified' | 'mismatch' | 'unreadable'
+  actual?: string
+}
+
+/** What Settings shows of the browser integration. */
+export interface IntegrationInfo {
+  /** Null while it is off (or no port was free). */
+  port: number | null
+  /** The pairing key the extension needs. */
+  key: string
+  /** Where the extension's files are. */
+  folder: string
+}
+
+/** A link handed to the window, with what the browser knew about it (the page, the cookies). */
+export interface PendingLink {
+  url: string
+  extras?: RequestExtras
+}
+
+/** Sign-in details for HTTP Basic authentication. */
+export interface RequestAuth {
+  user: string
+  pass: string
+}
+
+/** What a download's requests carry beyond the link: set by the user in the dialog, or handed over
+ * by the browser extension (the page it came from, its cookies). */
+export interface RequestExtras {
+  /** Extra request headers, by name. */
+  headers?: Record<string, string>
+  referer?: string
+  /** A Cookie header value. */
+  cookie?: string
+  userAgent?: string
+  auth?: RequestAuth
+  /** Internal: auth and cookie encrypted for storage (see main/secrets.ts). */
+  sealed?: string
+}
+
+interface StartDownloadRequestBase extends RequestExtras {
   url: string
   destinationDir: string
   suggestedFileName: string
@@ -427,6 +502,10 @@ interface StartDownloadRequestBase {
   groupId?: string
   /** The DNS to resolve with; see DownloadState.dnsId. */
   dnsId?: string
+  /** What to do with the file when it finishes: open it, or show it in its folder. */
+  onComplete?: 'open' | 'folder'
+  /** A hash the finished file is checked against (web downloads). */
+  checksum?: Checksum
   /** Added to the list and left paused, for the user to start later. */
   startPaused?: boolean
   /** Set for a download an auto group runs on one network of its own: it doesn't count towards

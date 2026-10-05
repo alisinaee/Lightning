@@ -16,6 +16,7 @@ import {
 import { Button, buttonVariants } from './ui/button'
 import { describeError } from '../utils/format'
 import { Checkbox } from './ui/checkbox'
+import { ChecksumChip } from './ChecksumChip'
 import { VpnControl } from './VpnControl'
 
 /** The top of a download's own screen, laid out as the list's header is: the way back to the
@@ -41,6 +42,7 @@ export function DetailHeader({
         Downloads
       </button>
       <div className="flex-1" />
+      {download.checksum && <ChecksumChip result={download.checksum} />}
       <VpnControl />
       <RemoveButton download={download} />
       {children}

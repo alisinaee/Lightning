@@ -56,6 +56,12 @@ Faster networks take more pieces, so a slow one never holds the others back.
 - **Proxy.** Use the system proxy, none, or a manual HTTP, HTTPS, FTP or SOCKS5 proxy for the app's own requests.
 - **VPN.** Lightning detects your VPN and lets you switch whether downloads may use it, from the top bar.
 - **Power.** Keeps the computer awake while a download runs.
+- **Schedule.** Weekly run or pause windows (overnight ones too), each with an optional speed cap.
+- **When downloads finish.** Optionally ask whether to quit, sleep or shut down; a file can also open itself, or show in its folder, when done.
+- **Sign-in, cookies and headers.** Basic auth (or `user:pass@` in a link), a Referer, cookies (paste or import `cookies.txt`), a User-Agent and extra headers per download. They are never sent on to another host after a redirect.
+- **Checksums.** Paste a SHA-256, SHA-1 or MD5 and the finished file is verified.
+- **Browser extension.** Chrome, Edge, Brave and Firefox can hand downloads to Lightning (see `extension/`).
+- **Extras.** Start at login (hidden in the tray) and offer to download links you copy.
 
 ### Your list
 

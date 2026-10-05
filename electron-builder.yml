@@ -17,6 +17,12 @@ files:
   - '!node_modules/node-datachannel/**'
   - '!node_modules/webrtc-polyfill/**'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # The browser extension is a folder the user loads into their browser, so it ships beside the app
+  # (extraResources) rather than inside the asar archive.
+  - '!extension/**'
+extraResources:
+  - from: extension
+    to: extension
 asarUnpack:
   - resources/**
 win:

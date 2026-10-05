@@ -2,6 +2,8 @@ import type { ProbeResult } from '@shared/types'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen, ListChecks, ListX } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { RequestOptions } from './RequestOptions'
+import { EMPTY_DRAFT, extrasFromDraft, type RequestDraft } from '../utils/requestDraft'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes, toDisplayPath } from '../utils/format'
@@ -45,6 +47,8 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const networkOptions = useNetworkOptions()
 
   const [text, setText] = useState('')
+  // Sign-in, cookies and headers, for every link in the box.
+  const [draft, setDraft] = useState<RequestDraft>(EMPTY_DRAFT)
   const [rows, setRows] = useState<Row[] | null>(null)
   // With links found: first the list is confirmed, then the group's settings are chosen.
   const [step, setStep] = useState<'files' | 'settings'>('files')
@@ -84,13 +88,17 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setUnticked([])
     setStep('files')
     setRows(links.map((url) => ({ url, status: 'checking' })))
-    probeLinks(links, window.lightning.probeUrl, (url, outcome) => {
-      const row: Row =
-        'result' in outcome
-          ? { url, status: 'ready', result: outcome.result }
-          : { url, status: 'error', message: describeError(outcome.error) }
-      setRows((current) => current?.map((entry) => (entry.url === url ? row : entry)) ?? null)
-    })
+    probeLinks(
+      links,
+      (url) => window.lightning.probeUrl(url, extrasFromDraft(draft, url)),
+      (url, outcome) => {
+        const row: Row =
+          'result' in outcome
+            ? { url, status: 'ready', result: outcome.result }
+            : { url, status: 'error', message: describeError(outcome.error) }
+        setRows((current) => current?.map((entry) => (entry.url === url ? row : entry)) ?? null)
+      }
+    )
   }
 
   const ready = (rows ?? []).filter((row) => row.status === 'ready')
@@ -126,7 +134,14 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     setStartError(null)
     const requests = chosen.flatMap((row) =>
       row.status === 'ready'
-        ? [requestFor(row.result, target, layer(perFile ? connectionOf(row.url) : groupIds))]
+        ? [
+            requestFor(
+              row.result,
+              target,
+              layer(perFile ? connectionOf(row.url) : groupIds),
+              extrasFromDraft(draft, row.url)
+            )
+          ]
         : []
     )
     try {
@@ -216,6 +231,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               rows={9}
               className="w-full resize-none rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12.5px] text-foreground outline-none"
             />
+            <RequestOptions value={draft} onChange={setDraft} link={found.links[0] ?? ''} />
             <div className="text-[12.5px] text-[var(--text-secondary)]">
               {found.links.length === 0
                 ? 'Links start with https:// or magnet:'

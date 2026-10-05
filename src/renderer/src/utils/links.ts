@@ -1,4 +1,4 @@
-import type { ProbeResult, StartDownloadRequest } from '@shared/types'
+import type { ProbeResult, RequestExtras, StartDownloadRequest } from '@shared/types'
 import { acceptedLink } from './format'
 
 /** Links checked at the same moment: enough to be quick, few enough not to hammer one host. */
@@ -39,7 +39,8 @@ export const isSplittable = (result: ProbeResult): boolean =>
 export function requestFor(
   result: ProbeResult,
   destinationDir: string,
-  interfaceIds: string[]
+  interfaceIds: string[],
+  extras: RequestExtras = {}
 ): StartDownloadRequest {
   const supportsRanges = isSplittable(result)
   const common = {
@@ -54,7 +55,7 @@ export function requestFor(
   }
   return result.kind === 'torrent'
     ? { kind: 'torrent', ...common, infoHash: result.torrent.infoHash }
-    : { kind: 'http', ...common }
+    : { kind: 'http', ...common, ...extras }
 }
 
 /** Checks the links a few at a time, telling `onResult` about each as it is known. */

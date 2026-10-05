@@ -9,8 +9,11 @@ import type {
   FinishedDownload,
   GroupInfo,
   GroupPatch,
+  IntegrationInfo,
   NetworkInterfaceInfo,
+  PendingLink,
   ProbeResult,
+  RequestExtras,
   StartDownloadRequest,
   TorrentFileEntry,
   UpdateInfo
@@ -38,7 +41,13 @@ export interface IpcContract {
   setDefaultDns: { args: [id: string | null]; result: void }
   /** The DNS one download uses ('system' for the system's); null follows its group and the app. */
   setDownloadDns: { args: [id: string, dnsId: string | null]; result: void }
-  probeUrl: { args: [url: string]; result: ProbeResult }
+  /** `extras`: headers, Referer, Cookie or sign-in details the request needs. */
+  /** The browser extension's pairing details; port is null while the integration is off. */
+  getIntegration: { args: []; result: IntegrationInfo }
+  /** A new pairing key: the extension paired with the old one has to be paired again. */
+  regenerateIntegrationKey: { args: []; result: string }
+  openExtensionFolder: { args: []; result: void }
+  probeUrl: { args: [url: string, extras?: RequestExtras]; result: ProbeResult }
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
@@ -124,7 +133,7 @@ export interface IpcContract {
    * whether that worked. A found update is never marked dismissed. */
   checkForUpdateNow: { args: []; result: { ok: boolean; update: UpdateInfo | null } }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
-  takePendingLink: { args: []; result: string | null }
+  takePendingLink: { args: []; result: PendingLink | null }
   /** The Test lab (main/debug/lab.ts): its plans, and what a run (or the last run) has done. */
   labList: { args: []; result: LabPlanInfo[] }
   labGetState: { args: []; result: LabState }

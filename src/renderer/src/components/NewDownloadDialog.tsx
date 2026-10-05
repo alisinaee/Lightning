@@ -3,7 +3,7 @@ import { DnsPicker } from './DnsPicker'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
@@ -17,6 +17,13 @@ import {
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
+import { RequestOptions } from './RequestOptions'
+import {
+  checksumFromDraft,
+  draftFromExtras,
+  extrasFromDraft,
+  type RequestDraft
+} from '../utils/requestDraft'
 import { TorrentFileList } from './TorrentFiles'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -27,6 +34,13 @@ type ProbeState =
   | { status: 'error'; message: string }
 
 const PROBE_DEBOUNCE_MS = 600
+
+type OnComplete = 'nothing' | 'open' | 'folder'
+const WHEN_DONE: [OnComplete, string][] = [
+  ['nothing', 'Nothing'],
+  ['open', 'Open file'],
+  ['folder', 'Show in folder']
+]
 
 type StreamsChoice = 'auto' | number
 /** Streams per network the user can pick instead of Auto. */
@@ -83,6 +97,14 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [skippedFiles, setSkippedFiles] = useState<number[]>([])
   // For this download only: the next one starts on Auto again.
   const [streamsChoice, setStreamsChoice] = useState<StreamsChoice>('auto')
+  // Sign-in, cookies and headers for this link; they also shape the check that reads its size.
+  // For this download only: what to do with the file once it is done.
+  const [onComplete, setOnComplete] = useState<OnComplete>('nothing')
+  const [requestDraft, setRequestDraft] = useState<RequestDraft>(() =>
+    draftFromExtras(useAppStore.getState().draftExtras)
+  )
+  const extras = useMemo(() => extrasFromDraft(requestDraft, url), [requestDraft, url])
+  const extrasKey = JSON.stringify(extras)
 
   // Opened with nothing in it: a link on the clipboard is most likely what it's for, as download
   // managers have long assumed. Anything else on the clipboard is left alone.
@@ -117,7 +139,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     setSkippedFiles([])
     const timer = setTimeout(async () => {
       try {
-        const result = await window.lightning.probeUrl(trimmed)
+        const result = await window.lightning.probeUrl(trimmed, extras)
         if (stale) return
         setProbe({ status: 'ready', result })
       } catch (error) {
@@ -130,7 +152,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       stale = true
       clearTimeout(timer)
     }
-  }, [url])
+    // extrasKey stands for `extras`: the check runs again when what it sends changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, extrasKey])
 
   const ready = probe.status === 'ready' ? probe.result : null
   const torrent = ready?.kind === 'torrent' ? ready.torrent : null
@@ -220,8 +244,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         interfaceIds: startIds,
         ...(dnsId ? { dnsId } : {}),
         ...(later ? { startPaused: true } : {}),
+        ...(onComplete === 'nothing' ? {} : { onComplete }),
         etag: probe.result.etag,
-        lastModified: probe.result.lastModified
+        lastModified: probe.result.lastModified,
+        ...(probe.result.kind === 'http'
+          ? { ...extras, checksum: checksumFromDraft(requestDraft) }
+          : {})
       }
       const id = await window.lightning.startDownload(
         probe.result.kind === 'torrent'
@@ -420,6 +448,10 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           <DnsPicker value={dnsId} followLabel="Default" onChange={setDnsId} />
         </div>
 
+        {!torrent && (
+          <RequestOptions value={requestDraft} onChange={setRequestDraft} link={url} withChecksum />
+        )}
+
         {/* A torrent's speed comes from its peers, and an unsplittable file has one stream. */}
         {ready && !torrent && !isSingleStreamOnly && (
           <div className="flex items-center gap-3">
@@ -445,6 +477,30 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               ))}
             </ToggleGroup>
             <div className="font-mono text-[11px] text-muted-foreground">per network</div>
+          </div>
+        )}
+
+        {ready && (
+          <div className="flex items-center gap-3">
+            <div className={labelClass} id="new-download-when-done">
+              When done
+            </div>
+            <ToggleGroup
+              value={[onComplete]}
+              onValueChange={(values) => {
+                if (values.length > 0) setOnComplete(values[0] as OnComplete)
+              }}
+              aria-labelledby="new-download-when-done"
+              variant="pill"
+              size="xs"
+              spacing={1}
+            >
+              {WHEN_DONE.map(([value, label]) => (
+                <ToggleGroupItem key={value} value={value} className="h-6 px-2">
+                  {label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         )}
 

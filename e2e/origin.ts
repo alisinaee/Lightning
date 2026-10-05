@@ -42,6 +42,8 @@ export interface OriginRequest {
   /** Which TCP connection it arrived on, numbered in the order they opened. */
   connection: number
   range: { start: number; end: number | null } | null
+  /** The request headers, lowercase names. */
+  headers: Record<string, string | string[] | undefined>
 }
 
 export interface LoggedRequest extends OriginRequest {
@@ -200,7 +202,8 @@ export class Origin {
       path: req.url ?? '/',
       from: (req.socket.remoteAddress ?? '').replace(/^::ffff:/, ''),
       connection: this.connectionIds.get(req.socket) ?? 0,
-      range: parseRange(req.headers.range)
+      range: parseRange(req.headers.range),
+      headers: req.headers
     }
     const fault = this.rule(request) ?? 'ok'
     const entry: LoggedRequest = { ...request, at: Date.now(), fault, status: 0, bytesSent: 0 }

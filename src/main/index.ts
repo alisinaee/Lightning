@@ -1,7 +1,13 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
-import { applyBehavior, behavior } from './appBehavior'
+import {
+  applyBehavior,
+  behavior,
+  installClipboardWatcher,
+  installLocalApi,
+  startedAtLogin
+} from './appBehavior'
 import { loadSettings } from './settings'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -108,7 +114,8 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (!testKnobs.hideWindow) mainWindow?.show()
+    // Started at sign-in: stay in the tray (the tray is what makes a hidden window reachable).
+    if (!testKnobs.hideWindow && !startedAtLogin()) mainWindow?.show()
   })
   // Close hides the window and leaves downloads running, unless the user is actually quitting
   // or Settings turned that off.
@@ -226,6 +233,8 @@ app.whenReady().then(async () => {
   createWindow()
   installAppMenu(() => mainWindow)
   if (!testKnobs.hideWindow) installTray(() => mainWindow)
+  installClipboardWatcher(() => mainWindow)
+  installLocalApi(() => mainWindow)
   await applyBehavior(await loadSettings())
   if (testKnobs.hideWindow) app.dock?.hide()
 

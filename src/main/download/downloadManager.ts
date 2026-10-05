@@ -50,6 +50,9 @@ import { ensureDirectory, pathExists, reserveDestinationPath } from './paths'
 import { planBlocks, planDownload, planPieces } from './plan'
 import { restoreBlocks, restorePieces, saveBlocks, type SavedBlocks } from './savedProgress'
 import { chosenFiles, finishedFiles, wantedPieces } from './torrent/files'
+import { splitUrlCredentials } from '../../shared/requestHeaders'
+import { openRequest, sealRequest } from '../secrets'
+import { hashFile } from './checksum'
 import { probeUrl } from './probe'
 import { describeTorrent, probedTorrentFile } from './torrent/metadata'
 import { TorrentDestination } from './torrent/torrentDestination'
@@ -99,6 +102,8 @@ interface RuntimeFields {
   /** Paused by switching off its last network, rather than by Pause: switching one back on
    * resumes it. */
   pausedForNoNetwork?: boolean
+  /** Paused by the schedule closing, so that it opening again resumes it (and not what the user paused). */
+  pausedBySchedule?: boolean
   /** When the speeds last went into the history (see sampleSpeeds). */
   speedSampledAt: number
   /** The best combined speed this run has shown: the peak of one done before it held one. */
@@ -137,6 +142,8 @@ type PersistedDownload = PersistedDownloadBase & {
   state: PersistedState
 } & SavedBlocks
 
+/** How long after a download ends the manager waits to see whether the queue is really empty. */
+const IDLE_CHECK_MS = 3000
 const UI_UPDATE_MS = 200
 /** How often a running download takes stock (see run). */
 const TICK_MS = 500
@@ -477,7 +484,7 @@ export class DownloadManager {
   /** Starts queued downloads, first queued first, while fewer than downloadsAtOnce run. Called
    * whenever one might have room: a run ended, a queued one went, the count went up. */
   private pump(): void {
-    if (this.suspending) return
+    if (this.suspending || !this.scheduleAllows) return
     const queued = [...this.runtimes.values()]
       .filter((runtime) => runtime.state.status === 'queued')
       .sort((a, b) => (a.state.queuedAt ?? 0) - (b.state.queuedAt ?? 0))
@@ -732,7 +739,7 @@ export class DownloadManager {
     id: string,
     persisted: PersistedDownload
   ): Promise<DownloadRuntime | null> {
-    const { requestPayload } = persisted
+    const requestPayload = openRequest(persisted.requestPayload)
     const saved: SavedBlocks = { progress: persisted.progress, complete: persisted.complete }
     let state: DownloadState
     let runtime: DownloadRuntime
@@ -1014,6 +1021,7 @@ export class DownloadManager {
     this.notify('added', 'Download added', runtime.state.fileName)
     // Decided only now: other starts may have taken the room while this one was set up.
     const room =
+      this.scheduleAllows &&
       (requestPayload.groupLane === true || this.runningCount() < this.downloadsAtOnce) &&
       !this.groupFull(requestPayload.groupId)
     if (!room) this.enqueue(runtime, false)
@@ -1085,7 +1093,12 @@ export class DownloadManager {
       throw new Error('Pause the download before replacing its link.')
     }
     if (resumable === false) throw new Error('This download can’t resume. Start it again.')
-    const probe = await probeUrl(url)
+    // Sign-in details typed into the new link replace the saved ones; otherwise the saved ones carry on.
+    const { auth } = splitUrlCredentials(url)
+    const probe = await probeUrl(
+      url,
+      auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload
+    )
     if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
     if ((probe.totalBytes ?? 0) !== totalBytes) {
       throw new Error(
@@ -1098,6 +1111,7 @@ export class DownloadManager {
       )
     }
     runtime.requestPayload.url = probe.finalUrl
+    if (auth) runtime.requestPayload.auth = auth
     runtime.state.url = probe.finalUrl
     await this.persistNow(runtime)
     this.resume(id)
@@ -1110,6 +1124,7 @@ export class DownloadManager {
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
 
     log.info('download', `resume ${runtime.state.fileName}`, { id })
+    runtime.pausedBySchedule = undefined
     runtime.state.retryAttempt = undefined
     this.clearRetry(runtime)
     void this.resumeAfterVerifying(runtime, false)
@@ -1143,6 +1158,7 @@ export class DownloadManager {
     if (byNetwork && !networks.some((network) => network.enabled)) return
 
     if (
+      !this.scheduleAllows ||
       (!runtime.requestPayload.groupLane && this.runningCount() >= this.downloadsAtOnce) ||
       this.groupFull(runtime.state.groupId, runtime)
     ) {
@@ -1641,6 +1657,7 @@ export class DownloadManager {
         'Download complete',
         `${runtime.state.fileName} has finished downloading.`
       )
+      this.openWhenDone(runtime)
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
@@ -1654,7 +1671,103 @@ export class DownloadManager {
     runtime.publishing = false
 
     this.pushUpdate(runtime)
-    if (runtime.state.status === 'completed') await this.moveToHistory(runtime)
+    if (runtime.state.status === 'completed') {
+      await this.verifyChecksum(runtime)
+      await this.moveToHistory(runtime)
+      this.completedSinceIdle++
+      this.scheduleIdleCheck()
+    }
+  }
+
+  /** What the schedule asks now (see shared/schedule.ts). Closed: what is running is paused, and
+   * nothing starts until it opens. Open: what the closing paused resumes. `cap` limits the speed. */
+  applySchedule(allow: boolean, cap: number | null): void {
+    this.limits.setScheduleCap(cap)
+    if (allow === this.scheduleAllows) return
+    this.scheduleAllows = allow
+    log.info('app', allow ? 'schedule: downloads may run' : 'schedule: downloads held')
+    for (const [id, runtime] of this.runtimes) {
+      if (!allow && runtime.state.status === 'downloading') {
+        void this.pause(id)
+        // Paused straight away, unless it was already publishing its finished file.
+        if (this.statusOf(runtime) === 'paused') runtime.pausedBySchedule = true
+      } else if (allow && runtime.pausedBySchedule) {
+        if (runtime.state.status === 'paused') this.resume(id)
+        runtime.pausedBySchedule = undefined
+      }
+    }
+    this.pump()
+  }
+
+  private scheduleAllows = true
+
+  /** A download's status as it is now: read through a call, so a check made after something that changed it is not narrowed away. */
+  private statusOf(runtime: DownloadRuntime): DownloadStatus {
+    return runtime.state.status
+  }
+
+  /** Told, once, when the last running or waiting download has finished: how many completed since
+   * the downloads were last all idle. Set by the IPC layer; only fires while Settings asks for it. */
+  onQueueFinished: ((completed: number) => void) | null = null
+  /** Whether something outside the manager still has files to start (an auto group's waiting ones). */
+  hasPendingWork: (() => boolean) | null = null
+  private completedSinceIdle = 0
+  private idleTimer: NodeJS.Timeout | undefined
+
+  /** A moment after a download ends, looks at whether anything is left: the next of a group, or a
+   * queued file, would start in that moment, and that is not the end. */
+  private scheduleIdleCheck(): void {
+    clearTimeout(this.idleTimer)
+    this.idleTimer = setTimeout(() => {
+      if (this.suspending) return
+      const busy =
+        [...this.runtimes.values()].some(
+          (runtime) => runtime.state.status === 'downloading' || runtime.state.status === 'queued'
+        ) || this.hasPendingWork?.()
+      if (busy) return
+      const completed = this.completedSinceIdle
+      this.completedSinceIdle = 0
+      if (completed > 0 && this.prefs.askWhenFinished) this.onQueueFinished?.(completed)
+    }, IDLE_CHECK_MS)
+  }
+
+  /** The per-download choice made when it was added: open the file, or show it in its folder. */
+  private openWhenDone(runtime: DownloadRuntime): void {
+    const { onComplete } = runtime.requestPayload
+    const path = runtime.state.destinationPath
+    if (onComplete === 'open') void shell.openPath(path)
+    else if (onComplete === 'folder') shell.showItemInFolder(path)
+  }
+
+  /** Reads the finished file and compares it with the hash the download was started with. A mismatch
+   * leaves the file where it is and says so: it is the user's to keep or delete. */
+  private async verifyChecksum(runtime: DownloadRuntime): Promise<void> {
+    const expected = runtime.requestPayload.checksum
+    if (runtime.kind !== 'http' || !expected) return
+    const { state } = runtime
+    state.checksum = { algo: expected.algo, expected: expected.value, status: 'verifying' }
+    this.pushUpdate(runtime)
+    try {
+      const actual = await hashFile(state.destinationPath, expected.algo)
+      state.checksum = {
+        algo: expected.algo,
+        expected: expected.value,
+        actual,
+        status: actual === expected.value ? 'verified' : 'mismatch'
+      }
+    } catch (error) {
+      log.warn('download', `could not verify ${state.fileName}`, error)
+      state.checksum = { algo: expected.algo, expected: expected.value, status: 'unreadable' }
+    }
+    log.info('download', `checksum ${state.checksum.status} ${state.fileName}`, { id: state.id })
+    if (state.checksum.status === 'mismatch') {
+      this.notify(
+        'failed',
+        'Checksum does not match',
+        `${state.fileName} is not the file it should be. Download it again.`
+      )
+    }
+    this.pushUpdate(runtime)
   }
 
   /** A download that failed for a reason a later try may fix (the network, a busy server) is
@@ -1932,7 +2045,7 @@ export class DownloadManager {
           partialPath: runtime.file.path,
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,
-          requestPayload: runtime.requestPayload
+          requestPayload: sealRequest(runtime.requestPayload)
         }
         if (runtime.state.status === 'downloading' || runtime.state.status === 'paused') {
           await runtime.file.sync()
