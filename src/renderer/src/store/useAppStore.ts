@@ -205,7 +205,9 @@ interface AppStore {
   removeDownload: (id: string, options?: { trashFile?: boolean }) => void
   setView: (view: View) => void
   /** Opens New download, with `link` in its link field when one is given. */
-  openNewDownload: (link?: string) => void
+  openNewDownload: (link?: string, replacesId?: string) => void
+  /** A finished download whose file is gone, which the download now being set up replaces. */
+  replacesId: string | null
   closeNewDownload: () => void
   openMultiLinks: () => void
   closeMultiLinks: () => void
@@ -421,10 +423,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setView: (view) => set({ view }),
 
-  openNewDownload: (link) =>
-    set(link === undefined ? { newDownloadOpen: true } : { newDownloadOpen: true, draftUrl: link }),
+  replacesId: null,
+  openNewDownload: (link, replacesId) =>
+    set(
+      link === undefined
+        ? { newDownloadOpen: true, replacesId: null }
+        : { newDownloadOpen: true, draftUrl: link, replacesId: replacesId ?? null }
+    ),
 
-  closeNewDownload: () => set({ newDownloadOpen: false }),
+  closeNewDownload: () => set({ newDownloadOpen: false, replacesId: null }),
   openMultiLinks: () => set({ multiLinksOpen: true }),
   closeMultiLinks: () => set({ multiLinksOpen: false }),
 

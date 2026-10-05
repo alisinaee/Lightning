@@ -52,8 +52,11 @@ function Item({
       title={title}
       onClick={onClick}
       className={cn(
-        'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[12.5px] outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
-        active && 'bg-primary/10 font-semibold hover:bg-primary/15'
+        // One weight in every state: a bolder active item is wider, so its row reflowed.
+        'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[12.5px] font-medium outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
+        active
+          ? 'bg-primary/10 text-foreground hover:bg-primary/15'
+          : 'text-[var(--text-secondary)]'
       )}
     >
       {children}
@@ -128,14 +131,19 @@ export function DownloadsSidebar({
         </Item>
       ))}
       <div className="flex-1" />
-      {canClear && (
-        <Tooltip>
+      {/* Always in place, only hidden when there is nothing to clear: the list above would
+          otherwise move (or gain a scrollbar) when the first download finishes. */}
+      {
+        <Tooltip disabled={!canClear}>
           <TooltipTrigger
             render={
               <button
                 type="button"
                 onClick={onClear}
-                className="mt-2 flex h-8 items-center gap-2 rounded-md px-2 text-left text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                disabled={!canClear}
+                tabIndex={canClear ? 0 : -1}
+                aria-hidden={!canClear}
+                className={`mt-2 flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${canClear ? '' : 'invisible'}`}
               >
                 <Archive aria-hidden className="size-3.5" />
                 Clear finished list
@@ -144,7 +152,7 @@ export function DownloadsSidebar({
           />
           <TooltipContent>Downloaded files stay on your computer</TooltipContent>
         </Tooltip>
-      )}
+      }
     </nav>
   )
 }

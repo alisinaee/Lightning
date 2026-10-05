@@ -75,6 +75,8 @@ export interface RowInfo {
   addedAt: number
   completedAt?: number
   missing: boolean
+  /** For a failure Plexo will try again by itself: when. */
+  retryAt?: number
 }
 
 /** First sentence of an error, trimmed for a cell; the full text goes in a tooltip. */
@@ -102,7 +104,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
   if (isFinished(item)) {
     return {
       ...base,
-      label: statusStyle('completed').label,
+      label: base.missing ? 'File missing' : statusStyle('completed').label,
       bar: false,
       speed: 0,
       etaSeconds: null
@@ -146,10 +148,14 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
       }
     default: {
       const full = describeError(item.error ?? 'Something went wrong')
+      // What it has downloaded is kept for a retry: say so, with how much.
+      const kept =
+        item.bytesDownloaded > 0 && item.resumable !== false && total > 0 ? `${percent}% kept` : ''
       return {
         ...base,
         label: statusStyle(status).label,
-        reason: shortReason(full),
+        retryAt: item.retryAt,
+        reason: [kept, shortReason(full)].filter(Boolean).join(' · '),
         reasonFull: full,
         bar: item.bytesDownloaded > 0,
         speed: 0,

@@ -12,7 +12,9 @@ export function ScreenFooter({
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center gap-3 border-t-[0.5px] border-t-[var(--footer-border)] bg-secondary px-5 py-2',
+        // A fixed height: it was set by whatever the screen put in it (a switch, a text), so it
+        // jumped when moving between screens or when a part of it came and went.
+        'flex h-10 shrink-0 items-center gap-3 overflow-hidden border-t-[0.5px] border-t-[var(--footer-border)] bg-secondary px-5',
         className
       )}
     >

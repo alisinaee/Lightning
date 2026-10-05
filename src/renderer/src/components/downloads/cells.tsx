@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   formatBytes,
   formatDateTime,
@@ -76,11 +76,25 @@ export function SizeCell({
   )
 }
 
+/** Whole seconds until `at`, counting down; null when there is nothing to wait for. */
+function useCountdown(at: number | undefined): number | null {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (at === undefined) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [at])
+  return at === undefined ? null : Math.max(0, Math.ceil((at - now) / 1000))
+}
+
 /** Icon and word, and under them a slim bar while it is under way, or why it failed. */
 export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
-  const style = statusStyle(info.status)
+  // A finished file that has gone is a warning, not a success.
+  const style = statusStyle(info.missing ? 'attention' : info.status)
   const Icon = style.icon
   const moving = info.status === 'downloading'
+  const waitSeconds = useCountdown(info.retryAt)
+  const label = waitSeconds === null ? info.label : `Retrying in ${waitSeconds} s`
   return (
     <div role="cell" className={cn(cellClass, 'flex-col items-stretch justify-center gap-1')}>
       <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] leading-none font-medium">
@@ -91,6 +105,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
           strokeWidth={2.2}
         />
         <span
+          title={info.missing ? 'The file was moved or deleted' : undefined}
           className={cn('truncate', info.status === 'completed' && 'text-[var(--text-secondary)]')}
           style={
             info.status === 'failed' || info.status === 'attention'
@@ -98,7 +113,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
               : undefined
           }
         >
-          {info.label}
+          {label}
         </span>
       </div>
       {info.reason ? (

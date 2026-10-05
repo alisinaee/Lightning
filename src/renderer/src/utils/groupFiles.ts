@@ -25,7 +25,7 @@ export function networksOf(group: GroupInfo, file: GroupFile): string[] {
 
 /** Switches a running file's networks to exactly `next`: the new ones first, so it is never left
  * with none (which would pause it). An errored file is resumed first, so it can be switched. */
-async function switchNetworks(download: DownloadState, next: string[]): Promise<void> {
+export async function switchNetworks(download: DownloadState, next: string[]): Promise<void> {
   if (download.status === 'error') await window.plexo.resumeDownload(download.id)
   const current = connectionsOf(download.networks)
     .filter((network) => network.enabled)

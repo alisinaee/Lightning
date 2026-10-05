@@ -109,20 +109,24 @@ export const DownloadRow = memo(function DownloadRow({
     } else if (state.status === 'paused') {
       primary = { label: `Resume ${name}`, icon: Play, run: resume }
     } else if (state.status === 'error') {
-      if (info.status === 'attention')
-        primary = { label: 'Fix link', run: () => handlers.fix(item) }
-      else if (state.resumable !== false) {
+      // Retry always tries the saved link first; Fix link is for when that link is refused.
+      if (state.resumable !== false) {
         primary = { label: `Retry ${name}`, icon: RotateCw, run: resume }
       } else primary = { label: 'Download again', run: () => handlers.again(item) }
     }
   }
+  const fixLink = state && state.status === 'error' && info.status === 'attention'
+  if (finished && info.missing) {
+    primary = { label: 'Download again', run: () => handlers.again(item) }
+  }
 
   const menu: RowAction[] = []
-  if (finished && !info.missing) {
+  if (finished) {
     menu.push({
       id: 'open-file',
       label: 'Open file',
       icon: ExternalLink,
+      disabled: info.missing,
       run: () => void window.plexo.openDownloadedFile(item.id)
     })
   }
@@ -134,7 +138,7 @@ export const DownloadRow = memo(function DownloadRow({
     disabled: info.missing
   })
   menu.push({ id: 'details', label: 'Details', icon: Info, run: () => handlers.open(item.id) })
-  if (state && primary) {
+  if (primary && (state || info.missing)) {
     menu.push({
       id: 'primary',
       label: primary.label.startsWith('Pause')
@@ -148,6 +152,9 @@ export const DownloadRow = memo(function DownloadRow({
       run: primary.run,
       divider: true
     })
+  }
+  if (fixLink) {
+    menu.push({ id: 'fix', label: 'Fix link', icon: Link2, run: () => handlers.fix(item) })
   }
   menu.push({
     id: 'copy',
@@ -176,7 +183,7 @@ export const DownloadRow = memo(function DownloadRow({
   } else {
     menu.push({
       id: 'cancel',
-      label: 'Cancel download…',
+      label: 'Cancel and delete partial data…',
       icon: Trash2,
       danger: true,
       run: () => handlers.cancel(item),
@@ -206,7 +213,7 @@ export const DownloadRow = memo(function DownloadRow({
             )}
           />
           <span className="truncate text-[11px] leading-none text-muted-foreground">
-            {info.missing ? `${host} · moved or deleted` : host}
+            {info.missing ? `${host} · The file was moved or deleted` : host}
           </span>
         </button>
       </div>
@@ -247,7 +254,11 @@ export const DownloadRow = memo(function DownloadRow({
           onDoubleClick={(event) => {
             if (!onControl(event.target)) handlers.open(item.id)
           }}
-          className={cn(ROW_CLASS, selected && 'bg-primary/10 hover:bg-primary/15')}
+          className={cn(
+            ROW_CLASS,
+            info.missing && 'text-muted-foreground opacity-70',
+            selected && 'bg-primary/10 hover:bg-primary/15'
+          )}
           style={stateEdge(statusKeyOf(item))}
         >
           <div role="cell" className="flex items-center justify-center">
@@ -272,6 +283,16 @@ export const DownloadRow = memo(function DownloadRow({
                   {primary.label}
                 </Button>
               ))}
+            {fixLink && (
+              <Button
+                type="button"
+                size="xs"
+                variant="secondary"
+                onClick={() => handlers.fix(item)}
+              >
+                Fix link
+              </Button>
+            )}
             {finished && !info.missing && (
               <IconAction
                 label={`${REVEAL_LABEL} ${name}`}

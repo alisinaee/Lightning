@@ -3,6 +3,7 @@ import { Folder } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
+import { ConnectionPicker } from '../components/ConnectionPicker'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { CyclableChip } from '../components/CyclableChip'
 import { HeroBand } from '../components/HeroBand'
@@ -15,11 +16,14 @@ import { ThroughVpn } from '../components/ThroughVpn'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
+import { chooseConnection, switchNetworks } from '../utils/groupFiles'
 import { KIND_PALETTE, NETWORK_ROW_GRID_COLUMNS } from '../theme'
 import {
   describeError,
+  connectionsOf,
   describeFileCount,
   dirnameOf,
   fileExtensionBadge,
@@ -174,6 +178,20 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const [chipModeIndex, setChipModeIndex] = useState(0)
   const waiting = waitingFor(download)
 
+  // The same chooser as the list's: Auto (in an auto group), All, or the ticked networks. It
+  // offers every detected network, not just the ones this download has used so far.
+  const networkOptions = useNetworkOptions()
+  const group = useAppStore((store) =>
+    download.groupId ? store.groups.find((entry) => entry.id === download.groupId) : undefined
+  )
+  const [chooseError, setChooseError] = useState<string | null>(null)
+  const inAutoGroup = group?.mode === 'auto'
+  const pinned = inAutoGroup && group.pinned.includes(download.id)
+  const attemptChoose = (work: () => Promise<unknown>): void => {
+    setChooseError(null)
+    void work().catch((error: unknown) => setChooseError(describeError(error)))
+  }
+
   const totalRetries = rows.reduce((sum, row) => sum + row.retries, 0)
   const remainingBytes = knownSize
     ? Math.max(0, wantedBytes(download) - download.bytesDownloaded)
@@ -260,26 +278,31 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                   }
                 />
               </div>
-              {isPaused || waiting
-                ? (download.error || waiting) && (
-                    <div
-                      role="alert"
-                      className="mt-0.5 font-sans text-[11px] leading-[1.2] font-medium text-destructive"
-                    >
-                      {download.error ? describeError(download.error) : waiting}
-                    </div>
-                  )
-                : activeChipOption && (
-                    <CyclableChip
-                      label={activeChipOption.label}
-                      tooltip={`${activeChipOption.tooltip}${chipOptions.length > 1 ? ' (click to toggle)' : ''}`}
-                      bg={activeChipOption.visual.bg}
-                      border={activeChipOption.visual.border}
-                      color={activeChipOption.visual.text}
-                      cyclable={chipOptions.length > 1}
-                      onClick={() => setChipModeIndex((i) => (i + 1) % chipOptions.length)}
-                    />
-                  )}
+              {/* A fixed-height slot: the alert (any length) and the chip come and go in it
+                  without moving the band. The full text is in the tooltip. */}
+              <div className="flex h-[22px] w-full min-w-0 items-center overflow-hidden">
+                {isPaused || waiting
+                  ? (download.error || waiting) && (
+                      <div
+                        role="alert"
+                        title={download.error ? describeError(download.error) : (waiting ?? '')}
+                        className="line-clamp-1 font-sans text-[11px] leading-[1.2] font-medium text-destructive"
+                      >
+                        {download.error ? describeError(download.error) : waiting}
+                      </div>
+                    )
+                  : activeChipOption && (
+                      <CyclableChip
+                        label={activeChipOption.label}
+                        tooltip={`${activeChipOption.tooltip}${chipOptions.length > 1 ? ' (click to toggle)' : ''}`}
+                        bg={activeChipOption.visual.bg}
+                        border={activeChipOption.visual.border}
+                        color={activeChipOption.visual.text}
+                        cyclable={chipOptions.length > 1}
+                        onClick={() => setChipModeIndex((i) => (i + 1) % chipOptions.length)}
+                      />
+                    )}
+              </div>
             </>
           </div>
 
@@ -432,6 +455,41 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           pad themselves. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
         <div className="mt-3">
+          <div className="flex items-center gap-2 px-5 pb-2">
+            <span className="font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground uppercase">
+              Connections
+            </span>
+            <ConnectionPicker
+              options={networkOptions}
+              value={connectionsOf(download.networks)
+                .filter((network) => network.enabled)
+                .map((network) => network.id)}
+              label={download.fileName}
+              auto={
+                group && inAutoGroup
+                  ? {
+                      pinned,
+                      onAuto: () =>
+                        attemptChoose(() =>
+                          chooseConnection(group, { kind: 'download', download }, null)
+                        )
+                    }
+                  : undefined
+              }
+              onChange={(ids) =>
+                attemptChoose(() =>
+                  group
+                    ? chooseConnection(group, { kind: 'download', download }, ids)
+                    : switchNetworks(download, ids)
+                )
+              }
+            />
+            {chooseError && (
+              <span className="truncate text-[11.5px] text-[var(--color-danger)]">
+                {chooseError}
+              </span>
+            )}
+          </div>
           <div
             role="table"
             aria-label="Networks"
@@ -487,9 +545,22 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 }
                 totalBytes={wantedBytes(download)}
                 blocks={download.kind === 'http' ? download.blocks : undefined}
-                onSwitch={(enabled) =>
-                  void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
-                }
+                onSwitch={(enabled) => {
+                  // In an auto group the choice pins the file, or Auto would undo it.
+                  const current = connectionsOf(download.networks)
+                    .filter((network) => network.enabled)
+                    .map((network) => network.id)
+                  const next = enabled
+                    ? [...current, row.id]
+                    : current.filter((id) => id !== row.id)
+                  if (group && next.length > 0) {
+                    attemptChoose(() =>
+                      chooseConnection(group, { kind: 'download', download }, next)
+                    )
+                  } else {
+                    void window.plexo.setDownloadNetwork(download.id, row.id, enabled)
+                  }
+                }}
               />
             ))}
           </div>
