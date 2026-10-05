@@ -118,7 +118,9 @@ export class LightningApp {
     }
     if (saved.dismissedUpdateVersion !== undefined) return
     await mkdir(this.dirs.userData, { recursive: true })
-    await writeFile(file, JSON.stringify({ ...saved, dismissedUpdateVersion: '0.0.1-e2e' }))
+    // The Logs and Debug buttons are off by default; the specs that use them find them on.
+    const prefs = { showLogs: true, showDebug: true, ...(saved.prefs as object | undefined) }
+    await writeFile(file, JSON.stringify({ ...saved, prefs, dismissedUpdateVersion: '0.0.1-e2e' }))
   }
 
   /** `args` follow the app on its command line, as a link the OS hands over would. */

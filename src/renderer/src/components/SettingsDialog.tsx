@@ -48,15 +48,24 @@ function applyAccent(accent: string): void {
 function Row({
   checked,
   onChange,
-  label
+  label,
+  disabled = false
 }: {
   checked: boolean
   onChange: (on: boolean) => void
   label: string
+  disabled?: boolean
 }): React.JSX.Element {
   return (
-    <label className="flex items-start gap-3 py-1.5 text-[13px] leading-5">
-      <Checkbox checked={checked} onCheckedChange={onChange} className="mt-0.5" />
+    <label
+      className={`flex items-start gap-3 py-1.5 text-[13px] leading-5 ${disabled ? 'opacity-50' : ''}`}
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        className="mt-0.5"
+      />
       <span>{label}</span>
     </label>
   )
@@ -118,6 +127,7 @@ export function SettingsDialog({
   const setDownloadsAtOnce = useAppStore((store) => store.setDownloadsAtOnce)
   const checkForUpdateNow = useAppStore((store) => store.checkForUpdateNow)
   const availableUpdate = useAppStore((store) => store.availableUpdate)
+  const setTitleBarButtons = useAppStore((store) => store.setTitleBarButtons)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<'available' | 'current' | 'failed' | null>(null)
 
@@ -126,6 +136,9 @@ export function SettingsDialog({
     setPrefs(next)
     if (patch.uiScale !== undefined) applyScale(patch.uiScale)
     if (patch.accent !== undefined) applyAccent(patch.accent)
+    if (patch.showLogs !== undefined || patch.showDebug !== undefined) {
+      setTitleBarButtons({ showLogs: next.showLogs, showDebug: next.showDebug })
+    }
     void window.lightning.updateSettings({ prefs: next })
   }
 
@@ -362,6 +375,22 @@ export function SettingsDialog({
                   checked={prefs.hideDock}
                   onChange={(hideDock) => save({ hideDock })}
                   label="Hide the Dock icon"
+                />
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Title bar</div>
+                <Row
+                  checked={prefs.showLogs}
+                  onChange={(showLogs) => save({ showLogs })}
+                  label="Show the Logs button"
+                />
+                <Row
+                  checked={prefs.showDebug && initial.labEnabled}
+                  onChange={(showDebug) => save({ showDebug })}
+                  disabled={!initial.labEnabled}
+                  label={
+                    initial.labEnabled
+                      ? 'Show the Debug button (the Test lab)'
+                      : 'Show the Debug button (only in development builds)'
+                  }
                 />
               </>
             )}

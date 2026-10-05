@@ -336,6 +336,9 @@ export interface AppPrefs {
   preventSleep?: boolean
   closeToBackground?: boolean
   hideDock?: boolean
+  /** The Logs and Debug (Test lab) buttons in the title bar; both off until switched on. */
+  showLogs?: boolean
+  showDebug?: boolean
   /** system: the OS proxy. direct: none. manual: the addresses below. */
   proxyMode?: 'system' | 'direct' | 'manual'
   proxyHttp?: string
@@ -354,6 +357,8 @@ export const DEFAULT_PREFS: Required<AppPrefs> = {
   preventSleep: true,
   closeToBackground: true,
   hideDock: false,
+  showLogs: false,
+  showDebug: false,
   proxyMode: 'system',
   proxyHttp: '',
   proxyHttps: '',

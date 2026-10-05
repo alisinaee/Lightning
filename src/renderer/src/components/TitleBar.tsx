@@ -1,4 +1,5 @@
 import { BugIcon, ScrollTextIcon } from 'lucide-react'
+import { useAppStore } from '../store/useAppStore'
 import { useLogsStore } from '../store/useLogsStore'
 import { useLabStore } from '../store/useLabStore'
 import { TITLE_BAR_HEIGHT } from '../theme'
@@ -18,10 +19,6 @@ function Debug(): React.JSX.Element {
       aria-label="Debug: open the Test lab"
       aria-pressed={open}
       onClick={() => setOpen(!open)}
-      // Clear of the OS window controls; the strip itself drags the window.
-      className={`absolute top-1/2 -translate-y-1/2 [-webkit-app-region:no-drag] ${
-        isMac ? 'right-3' : 'right-[148px]'
-      }`}
     >
       <BugIcon data-icon="inline-start" className={running ? 'animate-pulse text-sky-500' : ''} />
       Debug
@@ -31,16 +28,15 @@ function Debug(): React.JSX.Element {
 
 /** Opens the Logs window (see LogsDialog), beside Debug. */
 function Logs(): React.JSX.Element {
+  const open = useLogsStore((store) => store.open)
   const setOpen = useLogsStore((store) => store.setOpen)
   return (
     <Button
-      variant="ghost"
+      variant={open ? 'secondary' : 'ghost'}
       size="xs"
       aria-label="Open the logs"
+      aria-pressed={open}
       onClick={() => setOpen(true)}
-      className={`absolute top-1/2 -translate-y-1/2 [-webkit-app-region:no-drag] ${
-        isMac ? 'right-[88px]' : 'right-[228px]'
-      }`}
     >
       <ScrollTextIcon data-icon="inline-start" />
       Logs
@@ -50,8 +46,13 @@ function Logs(): React.JSX.Element {
 
 /** The window's title bar, the same on every OS: its name, centered, on a strip the window is
  * dragged by. The OS's own controls sit over it (see main/index.ts): macOS's traffic lights at
- * the left, Windows' and Linux's minimize/maximize/close at the right. */
+ * the left, Windows' and Linux's minimize/maximize/close at the right. The Logs and Debug buttons
+ * (Settings → Interface) share one row, so whichever are on sit together against the right edge,
+ * clear of those controls. */
 export function TitleBar(): React.JSX.Element {
+  const showLogs = useAppStore((store) => store.showLogs)
+  const showDebug = useAppStore((store) => store.showDebug)
+  const debug = showDebug && window.lightning.initialState.labEnabled
   return (
     <div
       style={{ height: TITLE_BAR_HEIGHT }}
@@ -60,8 +61,16 @@ export function TitleBar(): React.JSX.Element {
       <div className="pointer-events-none whitespace-nowrap font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">
         {window.lightning.initialState.appName ?? 'Lightning'}
       </div>
-      <Logs />
-      {window.lightning.initialState.labEnabled && <Debug />}
+      {(showLogs || debug) && (
+        <div
+          className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-1 [-webkit-app-region:no-drag] ${
+            isMac ? 'right-3' : 'right-[148px]'
+          }`}
+        >
+          {showLogs && <Logs />}
+          {debug && <Debug />}
+        </div>
+      )}
     </div>
   )
 }

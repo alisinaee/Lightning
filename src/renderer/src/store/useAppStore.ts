@@ -134,6 +134,10 @@ interface AppStore {
   /** Null until the one-time startup check resolves, or if it found nothing worth showing
    * (already up to date, already dismissed, or the check failed). */
   availableUpdate: UpdateInfo | null
+  /** Which title bar buttons Settings → Interface has switched on. */
+  showLogs: boolean
+  showDebug: boolean
+  setTitleBarButtons: (patch: { showLogs?: boolean; showDebug?: boolean }) => void
 
   homeDir: string
   downloadsDir: string
@@ -253,6 +257,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   networkPreferences: initial.networkPreferences,
   themeSource: initial.themeSource,
   availableUpdate: null,
+  showLogs: window.lightning.initialState.prefs.showLogs,
+  showDebug: window.lightning.initialState.prefs.showDebug,
+  setTitleBarButtons: (patch) => set(patch),
 
   homeDir: initial.homeDir,
   downloadsDir: initial.downloadsDir,

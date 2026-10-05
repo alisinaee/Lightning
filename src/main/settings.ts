@@ -119,7 +119,9 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'notifyWhenInactive',
     'preventSleep',
     'closeToBackground',
-    'hideDock'
+    'hideDock',
+    'showLogs',
+    'showDebug'
   ] as const) {
     const value = flag(parsed[key])
     if (value !== undefined) prefs[key] = value

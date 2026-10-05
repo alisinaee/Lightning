@@ -47,7 +47,7 @@ test.beforeAll(async () => {
   userData = await mkdtemp(join(tmpdir(), 'lightning-lab-e2e-'))
   await writeFile(
     join(userData, 'app-settings.json'),
-    JSON.stringify({ dismissedUpdateVersion: '0.0.1-lab' })
+    JSON.stringify({ dismissedUpdateVersion: '0.0.1-lab', prefs: { showDebug: true } })
   )
   await launch()
 })

@@ -538,3 +538,31 @@ test.describe('Check for updates in Settings @smoke', () => {
     await expect(page.getByRole('link', { name: 'Download it' })).toBeVisible()
   })
 })
+
+test.describe('title bar buttons @smoke', () => {
+  test('Logs and Debug are switched on and off in Settings → Interface', async ({ lightning }) => {
+    const page = lightning.page
+    const logs = page.getByRole('button', { name: 'Open the logs' })
+    const debug = page.getByRole('button', { name: /^Debug/ })
+    // Settings is modal, so the title bar is only looked at with it closed.
+    const toggle = async (name: RegExp | string): Promise<void> => {
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Interface' }).click()
+      await page.getByRole('checkbox', { name }).click()
+      await page.keyboard.press('Escape')
+    }
+    await expect(logs).toBeVisible()
+    await expect(debug).toBeVisible()
+
+    await toggle('Show the Logs button')
+    await expect(logs).toBeHidden()
+    await expect(debug).toBeVisible()
+
+    await toggle(/Show the Debug button/)
+    await expect(debug).toBeHidden()
+
+    await toggle('Show the Logs button')
+    await expect(logs).toBeVisible()
+    await expect(debug).toBeHidden()
+  })
+})
