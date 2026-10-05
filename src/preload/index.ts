@@ -86,6 +86,7 @@ const lightningApi = {
   setGroupFileChoice: (id: string, fileId: string, networks: string[] | null) =>
     invoke('setGroupFileChoice', id, fileId, networks),
   checkForUpdate: () => invoke('checkForUpdate'),
+  checkForUpdateNow: () => invoke('checkForUpdateNow'),
   takePendingLink: () => invoke('takePendingLink'),
   labList: () => invoke('labList'),
   labGetState: () => invoke('labGetState'),

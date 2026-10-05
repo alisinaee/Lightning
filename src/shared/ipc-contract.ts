@@ -120,6 +120,9 @@ export interface IpcContract {
     result: void
   }
   checkForUpdate: { args: []; result: UpdateInfo | null }
+  /** The user pressed Check for updates: asks GitHub now (not the startup answer) and says
+   * whether that worked. A found update is never marked dismissed. */
+  checkForUpdateNow: { args: []; result: { ok: boolean; update: UpdateInfo | null } }
   /** A link the OS handed over (main/openLinks.ts), once; null when there's none. */
   takePendingLink: { args: []; result: string | null }
   /** The Test lab (main/debug/lab.ts): its plans, and what a run (or the last run) has done. */

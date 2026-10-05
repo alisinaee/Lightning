@@ -116,8 +116,10 @@ export function SettingsDialog({
   const setTheme = useAppStore((store) => store.setThemeSource)
   const downloadsAtOnce = useAppStore((store) => store.downloadsAtOnce)
   const setDownloadsAtOnce = useAppStore((store) => store.setDownloadsAtOnce)
-  const checkForUpdate = useAppStore((store) => store.checkForUpdate)
+  const checkForUpdateNow = useAppStore((store) => store.checkForUpdateNow)
+  const availableUpdate = useAppStore((store) => store.availableUpdate)
   const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState<'available' | 'current' | 'failed' | null>(null)
 
   const save = (patch: Partial<AppPrefs>): void => {
     const next = { ...prefs, ...patch }
@@ -164,11 +166,39 @@ export function SettingsDialog({
                   disabled={checking}
                   onClick={() => {
                     setChecking(true)
-                    void checkForUpdate().finally(() => setChecking(false))
+                    setCheckResult(null)
+                    void checkForUpdateNow()
+                      .then(setCheckResult)
+                      .finally(() => setChecking(false))
                   }}
                 >
                   {checking ? 'Checking…' : 'Check for updates'}
                 </Button>
+                <div className="min-h-5 text-[12.5px]" role="status">
+                  {checkResult === 'current' && (
+                    <span className="text-muted-foreground">
+                      You have the latest version ({initial.version}).
+                    </span>
+                  )}
+                  {checkResult === 'failed' && (
+                    <span className="text-destructive">
+                      Couldn’t reach GitHub. Check your connection and try again.
+                    </span>
+                  )}
+                  {checkResult === 'available' && availableUpdate && (
+                    <span>
+                      Lightning {availableUpdate.version} is available.{' '}
+                      <a
+                        href={availableUpdate.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-primary underline underline-offset-2"
+                      >
+                        Download it
+                      </a>
+                    </span>
+                  )}
+                </div>
                 <div className="mt-2 text-[12px] font-medium text-muted-foreground">Downloads</div>
                 <label className="flex items-center gap-3">
                   Files at once

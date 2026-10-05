@@ -47,6 +47,7 @@ export const IpcChannels = {
   linkReceived: 'app:link-received',
   takePendingLink: 'app:take-pending-link',
   checkForUpdate: 'update:check',
+  checkForUpdateNow: 'update:check-now',
   labList: 'lab:list',
   labGetState: 'lab:get-state',
   labRun: 'lab:run',

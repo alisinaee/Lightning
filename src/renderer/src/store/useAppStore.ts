@@ -195,6 +195,8 @@ interface AppStore {
   setNetworkPreference: (id: string, patch: NetworkPreference) => void
   setThemeSource: (source: ThemeSource) => void
   checkForUpdate: () => Promise<void>
+  /** The Settings button: a fresh check. 'failed' when GitHub couldn't be reached. */
+  checkForUpdateNow: () => Promise<'available' | 'current' | 'failed'>
   dismissUpdate: () => void
   /** A snapshot or an update of a download, from the main process. */
   receiveDownloadUpdate: (update: DownloadUpdate) => void
@@ -389,6 +391,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ availableUpdate })
     } catch {
       // Best-effort — a failed check just leaves the banner hidden.
+    }
+  },
+
+  checkForUpdateNow: async () => {
+    try {
+      const { ok, update } = await window.lightning.checkForUpdateNow()
+      if (!ok) return 'failed'
+      // Shown inline by Settings and as the title bar icon — not as a second dialog on top.
+      set({ availableUpdate: update ? { ...update, dismissed: true } : null })
+      return update ? 'available' : 'current'
+    } catch {
+      return 'failed'
     }
   },
 

@@ -525,6 +525,20 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     return { ...info, dismissed: info.version === dismissedUpdateVersion }
   })
 
+  handle('checkForUpdateNow', async () => {
+    log.info('update', 'checking for a newer version (asked for)')
+    try {
+      const info = testKnobs.forceUpdateVersion
+        ? { version: testKnobs.forceUpdateVersion, url: UPDATE_PAGE_URL }
+        : await checkForUpdate(app.getVersion(), true)
+      log.info('update', info ? `newer version ${info.version} found` : 'up to date')
+      return { ok: true, update: info ? { ...info, dismissed: false } : null }
+    } catch (error) {
+      log.warn('update', 'check failed', { error: String(error) })
+      return { ok: false, update: null }
+    }
+  })
+
   // Not in a packaged build: the lab can rewrite settings and the network list.
   if (!app.isPackaged) {
     // The Test lab (title bar's Debug button) drives the app through the same operations as above.

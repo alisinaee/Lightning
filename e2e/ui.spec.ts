@@ -525,3 +525,16 @@ test('all downloads reset to defaults on Save, leaving each network’s limits',
   expect(saved.slowMode).toBeUndefined()
   expect(saved.networkPreferences).toMatchObject({ [id]: { speedLimit: 1024 ** 2 } })
 })
+
+test.describe('Check for updates in Settings @smoke', () => {
+  test.use({ appEnv: { LIGHTNING_FORCE_UPDATE_VERSION: '9.9.9' } })
+
+  test('says a newer version is available, with a link to it', async ({ lightning }) => {
+    const page = lightning.page
+    await page.getByRole('button', { name: 'Not now' }).click()
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('button', { name: 'Check for updates' }).click()
+    await expect(page.getByRole('status')).toContainText('Lightning 9.9.9 is available')
+    await expect(page.getByRole('link', { name: 'Download it' })).toBeVisible()
+  })
+})
