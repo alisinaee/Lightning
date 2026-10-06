@@ -86,7 +86,7 @@ export const GroupFileRow = memo(
       const failed = entry.item.error ? describeError(entry.item.error) : undefined
       info = {
         status: failed ? 'failed' : 'queued',
-        label: failed ? 'Failed' : 'Waiting for a network',
+        label: failed ? 'Failed' : 'Queued',
         reason: failed?.split(/(?<=[.!?])\s/)[0],
         reasonFull: failed,
         percent: 0,
@@ -98,7 +98,7 @@ export const GroupFileRow = memo(
         addedAt: group.createdAt,
         missing: false
       }
-      if (!failed && chosen.length > 0) reason = `waiting for ${chosen.map(nameOf).join(' + ')}`
+      if (!failed && chosen.length > 0) reason = `next on ${chosen.map(nameOf).join(' + ')}`
       chips = chosen.map((networkId) => ({
         id: networkId,
         name: nameOf(networkId),

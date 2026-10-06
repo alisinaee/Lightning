@@ -400,7 +400,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 }
 
 function statusOf(row: FileRow): string {
-  if (row.kind === 'waiting') return row.item.error ?? 'Waiting for a network'
+  if (row.kind === 'waiting') return row.item.error ?? 'Queued'
   if (row.kind === 'done')
     return `${formatBytes(wantedBytes(row.download) || row.download.bytesDownloaded)} · finished`
   const { download } = row
