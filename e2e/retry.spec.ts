@@ -83,3 +83,59 @@ test.describe('looking at a link goes out on a real network @smoke', () => {
     expect(new Set(origin.log.map((entry) => entry.from))).toEqual(new Set([LAN_ADDRESS]))
   })
 })
+
+test.describe('a network that has only just come back @smoke', () => {
+  test.skip(!LAN_ADDRESS, 'needs a second local address')
+  test.use({
+    appEnv: {
+      LIGHTNING_E2E_INTERFACES: interfacesEnv({ a: '127.0.0.1' }),
+      LIGHTNING_E2E_NETWORK_STABLE_MS: '5000'
+    }
+  })
+
+  test('gets no new file in an Auto group until it has stayed up a while', async ({
+    lightning,
+    serve
+  }) => {
+    const requests: StartDownloadRequest[] = []
+    for (const name of ['one.bin', 'two.bin', 'three.bin']) {
+      const origin = await serve({ size: 40 * BLOCK, bytesPerSecond: 20_000 })
+      const probe = await lightning.api.probeUrl(origin.url())
+      requests.push({
+        kind: 'http',
+        url: probe.finalUrl,
+        destinationDir: lightning.dirs.dest,
+        suggestedFileName: name,
+        totalBytes: probe.totalBytes ?? 0,
+        supportsRanges: probe.supportsRanges,
+        interfaceIds: ['a', 'b'],
+        etag: probe.etag,
+        lastModified: probe.lastModified
+      })
+    }
+    await lightning.api.createGroup({
+      name: 'Flaky',
+      destinationDir: lightning.dirs.dest,
+      mode: 'auto',
+      interfaceIds: ['a', 'b'],
+      requests
+    })
+    const running = async (): Promise<number> =>
+      (await lightning.all()).filter((state) => state.status === 'downloading').length
+    await expect.poll(running, { timeout: 15_000 }).toBe(1)
+
+    // The second network appears. For a moment it is not trusted: no second file starts.
+    await lightning.evaluateMain(
+      (_electron, value) => {
+        process.env['LIGHTNING_E2E_INTERFACES'] = value
+      },
+      interfacesEnv({ a: '127.0.0.1', b: LAN_ADDRESS ?? '' })
+    )
+    await lightning.api.listInterfaces()
+    await lightning.page.waitForTimeout(2500)
+    expect(await running()).toBe(1)
+
+    // Once it has stayed up, it takes a file of its own.
+    await expect.poll(running, { timeout: 20_000 }).toBe(2)
+  })
+})

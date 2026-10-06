@@ -1,4 +1,5 @@
 import { log } from '../logger'
+import { networkStableMs } from '../testKnobs'
 import type {
   DownloadState,
   GroupInfo,
@@ -58,6 +59,11 @@ export class AutoScheduler {
   private starting = new Set<string>()
   private timer: NodeJS.Timeout | null = null
   private ticking = false
+  /** When each network now present came up (0 for those there when the app started, which have
+   * had all the time they need). A network that goes away is forgotten, so its return starts the
+   * count again. */
+  private upSince = new Map<string, number>()
+  private seenNetworks = false
 
   constructor(
     private manager: DownloadManager,
@@ -185,10 +191,22 @@ export class AutoScheduler {
     }
   }
 
+  /** Keeps `upSince` to the networks there now; see networkStableMs. */
+  private watchNetworks(): void {
+    const now = Date.now()
+    const ids = new Set(this.networks.selectable().map((iface) => iface.id))
+    for (const id of ids) {
+      if (!this.upSince.has(id)) this.upSince.set(id, this.seenNetworks ? now : 0)
+    }
+    for (const id of [...this.upSince.keys()]) if (!ids.has(id)) this.upSince.delete(id)
+    this.seenNetworks = true
+  }
+
   private async tick(): Promise<void> {
     if (this.ticking) return
     this.ticking = true
     try {
+      this.watchNetworks()
       for (const group of this.store.list()) {
         if (group.mode === 'auto') await this.schedule(group)
       }
@@ -200,7 +218,13 @@ export class AutoScheduler {
   }
 
   private async schedule(group: GroupInfo): Promise<void> {
-    const selectable = this.networks.selectable()
+    const now = Date.now()
+    const stableFor = networkStableMs()
+    // Only networks that have stayed up a while count as there: one that has just come back gets
+    // no new file yet (it may be about to drop out again), but files already on it are not moved.
+    const selectable = this.networks
+      .selectable()
+      .filter((iface) => now - (this.upSince.get(iface.id) ?? now) >= stableFor)
     const present = new Set(selectable.map((iface) => iface.id))
     const names = new Map(selectable.map((iface) => [iface.id, iface.displayName]))
     const lanes = group.interfaceIds.filter((id) => present.has(id))

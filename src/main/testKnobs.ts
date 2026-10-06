@@ -37,6 +37,15 @@ export const testKnobs = {
   finishedAction: env['LIGHTNING_E2E_FINISHED_ACTION']
 }
 
+/** How long a network must have stayed up before an Auto group starts a file on it. A network
+ * that keeps dropping out and coming back (a bad cable or adapter) would otherwise get a new file
+ * each time it returned, and every file it lost would pile up on the other networks. Read on every
+ * call, so a test can change it. */
+export function networkStableMs(): number {
+  const value = app?.isPackaged ? 0 : Number(process.env['LIGHTNING_E2E_NETWORK_STABLE_MS'])
+  return value > 0 ? value : 20_000
+}
+
 /** `LIGHTNING_E2E_STREAMS=2` fixes how many streams each network runs and turns the automatic
  * sizing off, so a test can count requests. Read on every call rather than once, so a test can
  * change it between downloads. */
