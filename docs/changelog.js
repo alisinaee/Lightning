@@ -10,6 +10,31 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.15',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'Retry in groups',
+          text: 'A group and each of its failed files have a Retry button, and the top bar button retries failures when nothing is running. A file that can no longer continue starts over from a fresh look at its link.'
+        },
+        {
+          kind: 'fixed',
+          title: 'VPN and link checks',
+          text: 'Checking a link now goes out on a real network like the download does, so a VPN can no longer make a link look like a different file.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Steadier Auto groups',
+          text: 'A network that keeps dropping out gets a new file only after it has stayed up for 20 seconds, so files no longer pile up on the other networks.'
+        },
+        {
+          kind: 'improved',
+          title: 'Tidier windows',
+          text: 'Every dialog has a close button, Edit group has Cancel beside Done, hints sit on the button they describe at any text size, queued files say Queued, and running rows show just a bar and percentage.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.14',
       items: [
         {
