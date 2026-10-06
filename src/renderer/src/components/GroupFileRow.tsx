@@ -1,6 +1,6 @@
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
-import { Pause, Play, RotateCw, X } from 'lucide-react'
+import { Download, Pause, Play, RotateCw, X } from 'lucide-react'
 import { memo } from 'react'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
@@ -67,6 +67,10 @@ export const GroupFileRow = memo(
     const pinned = auto && group.pinned.includes(id)
     const nameOf = (networkId: string): string =>
       options.find((option) => option.id === networkId)?.name ?? networkId
+    const retryGroupFiles = async (groupId: string, only: string[]): Promise<void> => {
+      const { failed } = await window.lightning.retryGroup(groupId, only)
+      if (failed.length > 0) throw new Error(failed[0])
+    }
     const attempt = (work: () => Promise<unknown>): void =>
       void work().catch((error: unknown) => onError(describeError(error)))
 
@@ -101,6 +105,13 @@ export const GroupFileRow = memo(
         color: options.find((option) => option.id === networkId)?.solid ?? 'currentColor'
       }))
       host = sourceOf(entry.item.request.url)
+      if (failed) {
+        action = {
+          label: 'Retry',
+          icon: RotateCw,
+          run: () => attempt(() => retryGroupFiles(group.id, [id]))
+        }
+      }
     } else {
       const download = entry.download
       info = describeItem(download)
@@ -125,6 +136,14 @@ export const GroupFileRow = memo(
             label: 'Retry',
             icon: RotateCw,
             run: () => attempt(() => window.lightning.resumeDownload(id))
+          }
+        } else if (live.status === 'error') {
+          // It can't continue (the file on the server changed, say): it starts again from a fresh
+          // look at its link, in this group.
+          action = {
+            label: 'Download again',
+            icon: Download,
+            run: () => attempt(() => retryGroupFiles(group.id, [id]))
           }
         }
         if (auto && live.status === 'downloading') {

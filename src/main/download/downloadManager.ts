@@ -1097,7 +1097,8 @@ export class DownloadManager {
     const { auth } = splitUrlCredentials(url)
     const probe = await probeUrl(
       url,
-      auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload
+      auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload,
+      () => this.networks.selectable()
     )
     if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
     if ((probe.totalBytes ?? 0) !== totalBytes) {
@@ -1115,6 +1116,29 @@ export class DownloadManager {
     runtime.state.url = probe.finalUrl
     await this.persistNow(runtime)
     this.resume(id)
+  }
+
+  /** For a failed download that can't continue (the file on the server changed, say): a fresh look
+   * at its link, then the download is removed with what it had, and the request to start the same
+   * file over is handed back. The size and validators come from the new look, not the old one. */
+  async startOver(id: string): Promise<StartDownloadRequest> {
+    const runtime = this.runtimes.get(id)
+    if (runtime?.kind !== 'http') throw new Error('Only web downloads can be started over.')
+    const payload = runtime.requestPayload
+    const probe = await probeUrl(payload.url, payload, () => this.networks.selectable())
+    if (probe.kind !== 'http') throw new Error('That link is no longer a file.')
+    await this.remove(id)
+    const { groupLane, startPaused, ...rest } = payload
+    void groupLane
+    void startPaused
+    return {
+      ...rest,
+      url: probe.finalUrl,
+      totalBytes: probe.totalBytes ?? 0,
+      supportsRanges: probe.supportsRanges && probe.totalBytes !== null,
+      etag: probe.etag,
+      lastModified: probe.lastModified
+    }
   }
 
   resume(id: string): void {

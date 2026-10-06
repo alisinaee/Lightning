@@ -3,7 +3,8 @@ import { request as httpsRequest } from 'node:https'
 import { isAbsolute } from 'node:path'
 import { URL } from 'node:url'
 import { buildHeaders, headersForRedirect, splitUrlCredentials } from '../../shared/requestHeaders'
-import type { ProbeResult, RequestExtras } from '../../shared/types'
+import type { NetworkInterfaceInfo, ProbeResult, RequestExtras } from '../../shared/types'
+import { NoCompatibleRouteError, StreamConnection } from '../network/routes'
 import { testKnobs } from '../testKnobs'
 import {
   describeTorrent,
@@ -21,6 +22,11 @@ const NO_RESPONSE = 'The server did not respond — check the link and try again
 
 type Headers = Record<string, string | string[] | undefined>
 
+/** The networks a probe may go out on, best first. The download itself is bound to a network, so
+ * the probe must be too: through the computer's default route (a VPN, say) a server can answer
+ * differently from how it answers the download, and a size seen here would not hold there. */
+export type ProbeNetworks = () => NetworkInterfaceInfo[]
+
 function headerValue(headers: Headers, name: string): string | undefined {
   const value = headers[name]
   return Array.isArray(value) ? value[0] : value
@@ -33,7 +39,42 @@ interface ProbeResponse {
 
 /** GET with a 1-byte range: cheaper than fetching the body, and unlike HEAD it
  * also tells us (via the 206 status) whether range requests actually work. */
-function requestOneByte(
+async function requestOneByte(
+  url: URL,
+  deadline: number,
+  sent: Record<string, string>,
+  networks?: ProbeNetworks
+): Promise<ProbeResponse> {
+  const candidates = networks?.() ?? []
+  let lastError: unknown = null
+  for (const network of candidates) {
+    const connection = new StreamConnection(() => network, {
+      timeoutMs: Math.max(1, deadline - Date.now())
+    })
+    try {
+      const { res } = await connection.request(url, { ...sent, Range: 'bytes=0-0' })
+      res.destroy()
+      return { statusCode: res.statusCode ?? 0, headers: res.headers as Headers }
+    } catch (error) {
+      // A network with no way to this host (say IPv4 only for an IPv6 address) is skipped, not
+      // fatal; any other failure is kept in case no network gets through.
+      if (!(error instanceof NoCompatibleRouteError)) lastError = error
+    } finally {
+      connection.close()
+    }
+  }
+  if (lastError) {
+    // A network that connects but never gets an answer: the same words as the default route's.
+    if (lastError instanceof Error && /^Connection stalled/.test(lastError.message)) {
+      throw new Error(NO_RESPONSE)
+    }
+    throw lastError
+  }
+  // No network to bind to (none connected, or a simulated one): the default route.
+  return requestOneByteDefaultRoute(url, deadline, sent)
+}
+
+function requestOneByteDefaultRoute(
   url: URL,
   deadline: number,
   sent: Record<string, string>
@@ -127,7 +168,8 @@ function fileNameFromHeaders(headers: Headers, url: URL): string {
 
 async function requestFollowingRedirects(
   rawUrl: string,
-  extras?: RequestExtras
+  extras?: RequestExtras,
+  networks?: ProbeNetworks
 ): Promise<{ current: URL; response: ProbeResponse | null }> {
   let current = new URL(rawUrl)
   let sent = buildHeaders(extras)
@@ -135,7 +177,7 @@ async function requestFollowingRedirects(
   const deadline = Date.now() + PROBE_TIMEOUT_MS
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    response = await requestOneByte(current, deadline, sent)
+    response = await requestOneByte(current, deadline, sent, networks)
     if (response.statusCode >= 300 && response.statusCode < 400) {
       const location = headerValue(response.headers, 'location')
       if (!location) break
@@ -158,7 +200,11 @@ function isTorrentLink(headers: Headers, url: URL): boolean {
 
 /** What a link would download: a file over HTTP(S), or a torrent — a magnet link, a link to a
  * .torrent, or the path of a .torrent on this computer (opened or dropped on the window). */
-export async function probeUrl(link: string, extras?: RequestExtras): Promise<ProbeResult> {
+export async function probeUrl(
+  link: string,
+  extras?: RequestExtras,
+  networks?: ProbeNetworks
+): Promise<ProbeResult> {
   // Sign-in details written into the link (https://user:pass@host/…) become a header, and the link
   // everything else sees has none.
   const { url: rawUrl, auth } = splitUrlCredentials(link)
@@ -168,7 +214,7 @@ export async function probeUrl(link: string, extras?: RequestExtras): Promise<Pr
     return describeTorrent(await readTorrentFile(rawUrl), rawUrl)
   }
 
-  const { current, response } = await requestFollowingRedirects(rawUrl, sendWith)
+  const { current, response } = await requestFollowingRedirects(rawUrl, sendWith, networks)
 
   // An empty file can't satisfy a request for its first byte: the server answers 416 and gives
   // the size as `bytes */0`. That's a valid, empty download, not an error.

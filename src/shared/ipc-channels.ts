@@ -49,6 +49,7 @@ export const IpcChannels = {
   networksChanged: 'network:changed',
   linkReceived: 'app:link-received',
   takePendingLink: 'app:take-pending-link',
+  retryGroup: 'group:retry',
   checkForUpdate: 'update:check',
   checkForUpdateNow: 'update:check-now',
   labList: 'lab:list',

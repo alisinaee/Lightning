@@ -1,6 +1,15 @@
 import type { DownloadState } from '@shared/types'
 import { cn } from 'cn'
-import { ChevronDown, ChevronRight, Folder, Pause, Pencil, Play, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  Pause,
+  Pencil,
+  Play,
+  RotateCw,
+  Trash2
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
@@ -87,6 +96,10 @@ export function GroupTableRow({
   const pausable = live.filter((item) => item.status === 'downloading' || item.status === 'queued')
   const paused = live.filter((item) => item.status === 'paused')
   const waiting = group.pending.filter((item) => !item.error)
+  // Files that failed: those that stopped, and those that couldn't even start.
+  const failedCount =
+    live.filter((item) => item.status === 'error').length +
+    group.pending.filter((item) => item.error).length
   const done = items.filter((item) => isFinished(item) || item.status === 'completed').length
   const fileCount = items.length + group.pending.length
   const allDone = fileCount > 0 && done === fileCount
@@ -270,6 +283,16 @@ export function GroupTableRow({
                 void run(() =>
                   Promise.all(paused.map((item) => window.lightning.resumeDownload(item.id)))
                 )
+            )}
+          {failedCount > 0 &&
+            iconButton(
+              'Retry failed in',
+              <RotateCw />,
+              () =>
+                void run(async () => {
+                  const { failed } = await window.lightning.retryGroup(group.id)
+                  if (failed.length > 0) throw new Error(failed[0])
+                })
             )}
           {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
           {iconButton('Remove', <Trash2 />, () => setRemoving(true))}

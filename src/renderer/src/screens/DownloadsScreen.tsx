@@ -5,6 +5,7 @@ import {
   Link2,
   ListPlus,
   Pause,
+  RotateCw,
   Play,
   Plus,
   Search,
@@ -329,8 +330,36 @@ export function DownloadsScreen({
     (download) => download.status === 'downloading' || download.status === 'queued'
   )
   const resumableAll = downloads.filter((download) => download.status === 'paused')
-  // One button for both: it pauses while anything is running, and resumes once all is paused.
-  const pausing = pausableAll.length > 0 || resumableAll.length === 0
+  // Failed downloads the button can try again: single ones that can continue, and the groups with
+  // a file that failed (a group knows how to start over a file that can't continue).
+  const failedSingles = downloads.filter(
+    (download) =>
+      download.status === 'error' &&
+      download.resumable !== false &&
+      !download.groupId &&
+      !linkExpired(download)
+  )
+  const failedGroups = groupInfos.filter(
+    (group) =>
+      group.pending.some((item) => item.error) ||
+      downloads.some((download) => download.groupId === group.id && download.status === 'error')
+  )
+  const retryAll = failedSingles.length > 0 || failedGroups.length > 0
+  // One button for all of it: it pauses while anything is running; otherwise it resumes what is
+  // paused (and tries what failed again); with only failures left, it retries them.
+  const pausing = pausableAll.length > 0 || (resumableAll.length === 0 && !retryAll)
+  const resumeAll = async (): Promise<void> => {
+    await runAction([...resumableAll, ...failedSingles], 'resume')
+    for (const group of failedGroups) {
+      try {
+        const { failed } = await window.lightning.retryGroup(group.id)
+        if (failed.length > 0) setActionError(failed[0])
+      } catch (error) {
+        setActionError(describeError(error))
+      }
+    }
+  }
+  const resumeLabel = resumableAll.length > 0 ? 'Resume all' : 'Retry all failed'
 
   // Keyboard, as a file manager has it: Esc lets go of the selection, ⌘/Ctrl+A takes everything
   // listed, ⌘/Ctrl+F goes to the search box.
@@ -407,19 +436,21 @@ export function DownloadsScreen({
                   type="button"
                   size="icon"
                   variant="secondary"
-                  aria-label={pausing ? 'Pause all' : 'Resume all'}
-                  disabled={noDownloadsAtAll || (!pausing && resumableAll.length === 0)}
-                  onClick={() =>
-                    void (pausing
-                      ? runAction(pausableAll, 'pause')
-                      : runAction(resumableAll, 'resume'))
-                  }
+                  aria-label={pausing ? 'Pause all' : resumeLabel}
+                  disabled={noDownloadsAtAll || (pausing && pausableAll.length === 0)}
+                  onClick={() => void (pausing ? runAction(pausableAll, 'pause') : resumeAll())}
                 >
-                  {pausing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
+                  {pausing ? (
+                    <Pause className="fill-current" />
+                  ) : resumableAll.length > 0 ? (
+                    <Play className="fill-current" />
+                  ) : (
+                    <RotateCw />
+                  )}
                 </Button>
               }
             />
-            <TooltipContent>{pausing ? 'Pause all' : 'Resume all'}</TooltipContent>
+            <TooltipContent>{pausing ? 'Pause all' : resumeLabel}</TooltipContent>
           </Tooltip>
           <NetworksMenu
             onOpenLimits={(page) => {

@@ -90,6 +90,7 @@ const lightningApi = {
   removeGroupItem: (id: string, itemId: string) => invoke('removeGroupItem', id, itemId),
   setGroupFileChoice: (id: string, fileId: string, networks: string[] | null) =>
     invoke('setGroupFileChoice', id, fileId, networks),
+  retryGroup: (id: string, only?: string[]) => invoke('retryGroup', id, only),
   checkForUpdate: () => invoke('checkForUpdate'),
   checkForUpdateNow: () => invoke('checkForUpdateNow'),
   takePendingLink: () => invoke('takePendingLink'),

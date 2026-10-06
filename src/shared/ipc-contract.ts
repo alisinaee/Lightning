@@ -128,6 +128,9 @@ export interface IpcContract {
     args: [id: string, fileId: string, networks: string[] | null]
     result: void
   }
+  /** Tries a group's failed files again: those that can continue do, the rest start over from a
+   * fresh look at their link. `only` names the files (downloads or waiting ones); left out, all. */
+  retryGroup: { args: [id: string, only?: string[]]; result: { failed: string[] } }
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** The user pressed Check for updates: asks GitHub now (not the startup answer) and says
    * whether that worked. A found update is never marked dismissed. */

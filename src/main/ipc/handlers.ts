@@ -304,7 +304,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const failure = await shell.openPath(extensionFolder())
     if (failure) throw new Error(failure)
   })
-  handle('probeUrl', async (_event, url, extras) => probeUrl(url, sanitizeExtras(extras)))
+  handle('probeUrl', async (_event, url, extras) =>
+    probeUrl(url, sanitizeExtras(extras), () => networks.selectable())
+  )
 
   handle('chooseDestinationFolder', async (_event, defaultPath) => {
     const window = getWindow()
@@ -490,6 +492,32 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('setGroupFileChoice', async (_event, id, fileId, networks) =>
     groups.choose(id, fileId, networks)
   )
+
+  handle('retryGroup', async (_event, id, only) => {
+    if (typeof id !== 'string' || (only !== undefined && !Array.isArray(only))) {
+      throw new Error('Bad request')
+    }
+    log.info('action', 'retry group', { id })
+    const failed: string[] = []
+    const wanted = (itemId: string): boolean => !only || only.includes(itemId)
+    for (const state of manager.groupDownloads(id)) {
+      if (state.status !== 'error' || !wanted(state.id)) continue
+      if (state.resumable !== false) {
+        manager.resume(state.id)
+        continue
+      }
+      try {
+        const request = await manager.startOver(state.id)
+        const left = await addToGroup(id, [request])
+        failed.push(...left)
+      } catch (error) {
+        failed.push(`${state.fileName}: ${describeError(error)}`)
+      }
+    }
+    groups.retryPending(id, only)
+    autoScheduler.activate(id)
+    return { failed }
+  })
 
   handle('removeGroupItem', async (_event, id, itemId) => groups.removePending(id, itemId))
 

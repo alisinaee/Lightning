@@ -258,6 +258,19 @@ export class GroupStore {
     this.save()
   }
 
+  /** Lets files that failed to start try again: the ones named, or every failed one. */
+  retryPending(groupId: string, only?: string[]): number {
+    let retried = 0
+    for (const item of this.saved.pending[groupId] ?? []) {
+      if (item.error && (!only || only.includes(item.id))) {
+        item.error = undefined
+        retried++
+      }
+    }
+    if (retried > 0) this.save()
+    return retried
+  }
+
   failPending(groupId: string, itemId: string, error: string): void {
     const item = this.saved.pending[groupId]?.find((entry) => entry.id === itemId)
     if (!item) return
