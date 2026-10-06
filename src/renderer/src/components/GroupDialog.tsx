@@ -54,10 +54,7 @@ export function GroupDialog(): React.JSX.Element {
       disablePointerDismissal
       onOpenChange={(next) => !next && editGroup(null)}
     >
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]"
-      >
+      <DialogContent className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]">
         {group && <GroupForm group={group} onDone={() => editGroup(null)} />}
       </DialogContent>
     </Dialog>
@@ -123,11 +120,19 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
     }
   }
 
-  const commitName = (): void => {
+  // The new name is kept when Done is pressed, and dropped by Cancel or the close button.
+  // (Files added or removed here happen at once, as they always have.)
+  const saveAndClose = async (): Promise<void> => {
     const next = name.trim()
-    if (!next) setName(group.name)
-    else if (next !== group.name)
-      void run(() => window.lightning.updateGroup(group.id, { name: next }))
+    if (next && next !== group.name) {
+      try {
+        await window.lightning.updateGroup(group.id, { name: next })
+      } catch (error) {
+        setActionError(describeError(error))
+        return
+      }
+    }
+    onDone()
   }
 
   const handleAdd = (): void => {
@@ -194,7 +199,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-col gap-2 border-b-[0.5px] border-border px-5 py-4">
+      <div className="flex flex-col gap-2 border-b-[0.5px] border-border py-4 pr-12 pl-5">
         <DialogTitle className="text-[16px] font-semibold">Edit group</DialogTitle>
         <div className="flex items-center gap-2 text-[12.5px]">
           <span className="w-24 shrink-0 text-[var(--text-secondary)]">Name</span>
@@ -202,8 +207,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
             type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            onBlur={commitName}
-            onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+            onKeyDown={(event) => event.key === 'Enter' && void saveAndClose()}
             spellCheck={false}
             aria-label="Group name"
             className="h-9 min-w-0 flex-1 rounded-[9px] border border-input bg-[var(--input-bg)] px-3 text-[13px] text-foreground outline-none"
@@ -361,7 +365,10 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
       </div>
 
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
-        <Button type="button" onClick={onDone}>
+        <Button type="button" variant="secondary" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={() => void saveAndClose()}>
           Done
         </Button>
       </div>

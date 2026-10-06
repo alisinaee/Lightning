@@ -467,10 +467,7 @@ export function LimitsDialog({
 }): React.JSX.Element {
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[min(520px,calc(100%-2rem))] max-w-[680px] flex-col gap-0 p-0 sm:max-w-[680px]"
-      >
+      <DialogContent className="flex h-[min(520px,calc(100%-2rem))] max-w-[680px] flex-col gap-0 p-0 sm:max-w-[680px]">
         {/* Mounted only while open, so each opening starts a fresh draft. */}
         <LimitsEditor page={page} onPageChange={onPageChange} onClose={() => onOpenChange(false)} />
       </DialogContent>

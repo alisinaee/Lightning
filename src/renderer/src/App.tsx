@@ -60,7 +60,7 @@ function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
-    document.documentElement.style.zoom = String(window.lightning.initialState.prefs.uiScale)
+    window.lightning.setZoom(window.lightning.initialState.prefs.uiScale)
     document.documentElement.dataset.accent = window.lightning.initialState.prefs.accent
     checkForUpdate()
   }, [checkForUpdate])

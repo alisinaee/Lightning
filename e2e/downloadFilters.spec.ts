@@ -57,7 +57,7 @@ test('download filters show live counts, retain the filter, and clear hidden sel
   await expect(page.getByRole('button', { name: 'Fix link', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Fix link', exact: true }).click()
   const fixLink = page.getByRole('dialog', { name: 'Paste a new link', exact: true })
-  await expect(fixLink.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+  await expect(fixLink.getByRole('button', { name: 'Close', exact: true })).toHaveCount(1)
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
   await expect(fixLink).toBeVisible()
   await fixLink.getByRole('button', { name: 'Cancel', exact: true }).click()

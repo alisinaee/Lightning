@@ -331,7 +331,7 @@ test('new download and limits dialogs stay open after outside clicks and close w
   const page = lightning.page
   await lightning.newDownload()
   const newDownload = page.getByRole('dialog', { name: 'New download', exact: true })
-  await expect(newDownload.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+  await expect(newDownload.getByRole('button', { name: 'Close', exact: true })).toHaveCount(1)
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
   await expect(newDownload).toBeVisible()
   await newDownload.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -340,7 +340,7 @@ test('new download and limits dialogs stay open after outside clicks and close w
   await page.getByRole('button', { name: /^\d+ of \d+ networks? on$/ }).click()
   await page.getByRole('button', { name: 'Speed & data limits…', exact: true }).click()
   const limits = page.getByRole('dialog', { name: 'Speed & data limits', exact: true })
-  await expect(limits.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
+  await expect(limits.getByRole('button', { name: 'Close', exact: true })).toHaveCount(1)
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } })
   await expect(limits).toBeVisible()
   // Cancel leaves everything as it was.

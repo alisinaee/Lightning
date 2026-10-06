@@ -29,10 +29,7 @@ export function MultiLinkDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]"
-      >
+      <DialogContent className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]">
         {open && <MultiLinkForm onDone={close} />}
       </DialogContent>
     </Dialog>
@@ -215,7 +212,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     >
       <div className="flex items-baseline justify-between gap-3 border-b-[0.5px] border-border px-5 py-4">
         <DialogTitle className="text-[16px] font-semibold">{title}</DialogTitle>
-        <span className="text-[12px] text-muted-foreground">Step {stepNumber} of 3</span>
+        <span className="mr-9 text-[12px] text-muted-foreground">Step {stepNumber} of 3</span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">

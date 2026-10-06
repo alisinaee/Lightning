@@ -42,7 +42,7 @@ const ACCENTS: { id: AccentId; label: string; color: string }[] = [
 ]
 
 function applyScale(scale: number): void {
-  document.documentElement.style.zoom = String(scale)
+  window.lightning.setZoom(scale)
 }
 
 function applyAccent(accent: string): void {

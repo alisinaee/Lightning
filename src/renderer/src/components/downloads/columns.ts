@@ -49,10 +49,12 @@ export const COLUMNS: ColumnDef[] = [
   },
   { id: 'added', label: 'Added', width: 112, min: 84, max: 220, dropOrder: 5, canHide: true },
   {
+    // Coloured dots, one for each network in use: they need little room, and the header's label
+    // is short for the same reason.
     id: 'connections',
-    label: 'Connections',
-    width: 104,
-    min: 100,
+    label: 'Networks',
+    width: 92,
+    min: 88,
     max: 240,
     dropOrder: 6,
     canHide: true

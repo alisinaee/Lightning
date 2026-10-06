@@ -51,7 +51,7 @@ export function FixLinkDialog({
       open={download !== null}
       onOpenChange={(open) => !open && close()}
     >
-      <DialogContent showCloseButton={false}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Paste a new link</DialogTitle>
           <DialogDescription>

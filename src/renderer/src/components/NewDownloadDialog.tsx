@@ -57,10 +57,7 @@ export function NewDownloadDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]"
-      >
+      <DialogContent className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]">
         {/* Mounted only while open, so each opening starts fresh from the link field. */}
         {open && <NewDownloadForm onDone={close} />}
       </DialogContent>

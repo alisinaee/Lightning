@@ -135,16 +135,17 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
   if (showBar) {
     return (
       <div role="cell" className={cn(cellClass, 'gap-2')}>
-        <span
-          className="flex shrink-0 items-center gap-1.5 text-[12.5px] leading-none font-medium"
-          title={moving ? info.label : undefined}
-        >
-          {icon}
-          {!moving && word}
-        </span>
+        {/* A running download is its bar and percentage: no icon or word beside them. */}
+        {!moving && (
+          <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] leading-none font-medium">
+            {icon}
+            {word}
+          </span>
+        )}
         <div
           role="progressbar"
           aria-label="Progress"
+          title={moving ? info.label : undefined}
           aria-valuenow={info.percent}
           aria-valuemin={0}
           aria-valuemax={100}

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { LabEvent } from '../shared/lab'
@@ -91,6 +91,9 @@ const lightningApi = {
   setGroupFileChoice: (id: string, fileId: string, networks: string[] | null) =>
     invoke('setGroupFileChoice', id, fileId, networks),
   retryGroup: (id: string, only?: string[]) => invoke('retryGroup', id, only),
+  /** The text size choice (Settings → Appearance). Electron's own zoom, not CSS `zoom`: with CSS
+   * zoom the page's coordinates stop matching the pointer's, and popups land in the wrong place. */
+  setZoom: (factor: number) => webFrame.setZoomFactor(factor),
   checkForUpdate: () => invoke('checkForUpdate'),
   checkForUpdateNow: () => invoke('checkForUpdateNow'),
   takePendingLink: () => invoke('takePendingLink'),
