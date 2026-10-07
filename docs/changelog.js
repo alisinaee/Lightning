@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.21',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'The menu bar panel closes when you click elsewhere',
+          text: 'Like other menu bar apps, the panel under the icon now closes when you click outside it, even when Lightning was not the active app.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.20',
       items: [
         {
