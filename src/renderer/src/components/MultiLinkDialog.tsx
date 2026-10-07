@@ -125,7 +125,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     if (picked) setDestinationDir(picked)
   }
 
-  const handleStart = async (): Promise<void> => {
+  const handleStart = async (later = false): Promise<void> => {
     if (!canStart) return
     setStarting(true)
     setStartError(null)
@@ -150,7 +150,8 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         maxAtOnce: settings.maxAtOnce ?? undefined,
         dnsId: settings.dnsId ?? undefined,
         interfaceIds: layer(groupIds),
-        requests
+        requests,
+        ...(later ? { startLater: true } : {})
       })
       if (failed.length === 0) {
         onDone()
@@ -207,7 +208,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           if (found.links.length > 0) handleCheck()
         } else if (step === 'files') {
           if (chosen.length > 0 && !checking) setStep('settings')
-        } else void handleStart()
+        } else void handleStart(false)
       }}
     >
       <div className="flex items-baseline justify-between gap-3 border-b-[0.5px] border-border px-5 py-4">
@@ -417,9 +418,19 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           </Button>
         ) : (
           !started && (
-            <Button type="submit" disabled={!canStart}>
-              {starting ? 'Starting…' : `Download ${chosen.length} ${plural}`}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!canStart}
+                onClick={() => void handleStart(true)}
+              >
+                Download later
+              </Button>
+              <Button type="submit" disabled={!canStart}>
+                {starting ? 'Starting…' : `Download ${chosen.length} ${plural}`}
+              </Button>
+            </>
           )
         )}
       </div>

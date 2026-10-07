@@ -556,6 +556,8 @@ export interface DownloadGroup {
   dnsId?: string
   /** Lightning made the folder for this group: it may take it away again once it is empty. */
   ownsFolder?: boolean
+  /** Added with "Download later": its files wait until the group is started. */
+  held?: boolean
 }
 
 /** A file of an auto group that hasn't started yet: it starts when a network is free for it. */
@@ -615,6 +617,8 @@ export interface CreateGroupInput {
   dnsId?: string
   requests: StartDownloadRequest[]
   ownsFolder?: boolean
+  /** "Download later": the files are added and wait until the group is started. */
+  startLater?: boolean
 }
 
 export interface GroupPatch {

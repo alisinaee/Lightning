@@ -265,6 +265,12 @@ export function GroupTableRow({
         </div>
         {columns.map((column) => cells[column])}
         <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+          {group.held &&
+            iconButton(
+              'Start',
+              <Play />,
+              () => void run(() => window.lightning.startGroup(group.id))
+            )}
           {pausable.length > 0 &&
             iconButton(
               'Pause all in',
@@ -274,7 +280,8 @@ export function GroupTableRow({
                   Promise.all(pausable.map((item) => window.lightning.pauseDownload(item.id)))
                 )
             )}
-          {paused.length > 0 &&
+          {!group.held &&
+            paused.length > 0 &&
             pausable.length === 0 &&
             iconButton(
               'Resume all in',

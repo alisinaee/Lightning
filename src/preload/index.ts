@@ -93,6 +93,7 @@ const lightningApi = {
   setGroupFileChoice: (id: string, fileId: string, networks: string[] | null) =>
     invoke('setGroupFileChoice', id, fileId, networks),
   retryGroup: (id: string, only?: string[]) => invoke('retryGroup', id, only),
+  startGroup: (id: string) => invoke('startGroup', id),
   /** The text size choice (Settings → Appearance). Electron's own zoom, not CSS `zoom`: with CSS
    * zoom the page's coordinates stop matching the pointer's, and popups land in the wrong place. */
   setZoom: (factor: number) => webFrame.setZoomFactor(factor),

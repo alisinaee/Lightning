@@ -220,6 +220,8 @@ export class AutoScheduler {
   }
 
   private async schedule(group: GroupInfo): Promise<void> {
+    // Added for later: nothing starts until the person starts the group.
+    if (group.held) return
     const now = Date.now()
     const stableFor = networkStableMs()
     // Only networks that have stayed up a while count as there: one that has just come back gets

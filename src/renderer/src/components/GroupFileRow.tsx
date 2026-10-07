@@ -86,7 +86,7 @@ export const GroupFileRow = memo(
       const failed = entry.item.error ? describeError(entry.item.error) : undefined
       info = {
         status: failed ? 'failed' : 'queued',
-        label: failed ? 'Failed' : 'Queued',
+        label: failed ? 'Failed' : group.held ? 'Added for later' : 'Queued',
         reason: failed?.split(/(?<=[.!?])\s/)[0],
         reasonFull: failed,
         percent: 0,

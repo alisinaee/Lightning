@@ -245,7 +245,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (!group) throw new Error('This group no longer exists.')
     if (group.mode === 'auto') {
       groups.addPending(id, requests)
-      autoScheduler.activate(id)
+      if (!group.held) autoScheduler.activate(id)
       return []
     }
     const failed: string[] = []
@@ -257,7 +257,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
           ...(group.rule === 'general' ? { interfaceIds: group.interfaceIds } : {}),
           destinationDir: group.destinationDir,
           groupId: id,
-          groupLane: false
+          groupLane: false,
+          // Added for later: in the list, paused, until the group is started.
+          ...(group.held ? { startPaused: true } : {})
         })
       } catch (error) {
         failed.push(`${request.suggestedFileName}: ${describeError(error)}`)
@@ -566,6 +568,17 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('setGroupFileChoice', async (_event, id, fileId, networks) =>
     groups.choose(id, fileId, networks)
   )
+
+  // "Download later" ends: the group's files may begin.
+  handle('startGroup', async (_event, id) => {
+    if (typeof id !== 'string') throw new Error('Bad request')
+    log.info('action', 'start group', { id })
+    groups.release(id)
+    autoScheduler.activate(id)
+    for (const state of manager.groupDownloads(id)) {
+      if (state.status === 'paused') manager.resume(state.id)
+    }
+  })
 
   handle('retryGroup', async (_event, id, only) => {
     if (typeof id !== 'string' || (only !== undefined && !Array.isArray(only))) {

@@ -149,6 +149,7 @@ export class GroupStore {
     dnsId?: string
     fileCount: number
     ownsFolder?: boolean
+    startLater?: boolean
   }): DownloadGroup {
     const name =
       input.name.trim() ||
@@ -163,11 +164,20 @@ export class GroupStore {
       ...(input.maxAtOnce && input.maxAtOnce > 0 ? { maxAtOnce: Math.floor(input.maxAtOnce) } : {}),
       ...(input.mode === 'manual' ? { rule: input.rule ?? 'perFile' } : {}),
       ...(input.dnsId ? { dnsId: input.dnsId } : {}),
-      ...(input.ownsFolder ? { ownsFolder: true } : {})
+      ...(input.ownsFolder ? { ownsFolder: true } : {}),
+      ...(input.startLater ? { held: true } : {})
     }
     this.saved.groups.push(group)
     this.save()
     return group
+  }
+
+  /** A group added for later is started: its files may begin. */
+  release(id: string): void {
+    const group = this.saved.groups.find((entry) => entry.id === id)
+    if (!group?.held) return
+    delete group.held
+    this.save()
   }
 
   update(id: string, patch: GroupPatch): void {

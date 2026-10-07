@@ -137,6 +137,8 @@ export interface IpcContract {
   }
   /** Tries a group's failed files again: those that can continue do, the rest start over from a
    * fresh look at their link. `only` names the files (downloads or waiting ones); left out, all. */
+  /** Starts a group that was added for later. */
+  startGroup: { args: [id: string]; result: void }
   retryGroup: { args: [id: string, only?: string[]]; result: { failed: string[] } }
   checkForUpdate: { args: []; result: UpdateInfo | null }
   /** The user pressed Check for updates: asks GitHub now (not the startup answer) and says
