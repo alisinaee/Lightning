@@ -50,10 +50,97 @@ export function formatTime(seconds: number): string {
 const clip = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text
 
-const percentOf = (download: DownloadState): number =>
+export const percentOf = (download: DownloadState): number =>
   download.totalBytes > 0
     ? Math.min(100, Math.floor((download.bytesDownloaded / download.totalBytes) * 100))
     : 0
+
+/** What is moving on each network, from the downloads there are now: its speed, its open
+ * connections (streams, or a torrent's peers) and how many downloads use it. */
+export interface NetworkActivity {
+  id: string
+  label: string
+  kind: string
+  speed: number
+  open: number
+  moving: number
+  downloads: number
+}
+
+export interface Activity {
+  running: DownloadState[]
+  speed: number
+  received: number
+  left: number
+  networks: NetworkActivity[]
+  queued: number
+  paused: number
+  failed: number
+}
+
+export function summarizeActivity(
+  downloads: readonly DownloadState[],
+  names: Record<string, string>
+): Activity {
+  const running = downloads.filter((download) => download.status === 'downloading')
+  const count = (status: DownloadState['status']): number =>
+    downloads.filter((download) => download.status === status).length
+  const perNetwork = new Map<string, NetworkActivity>()
+  for (const download of running) {
+    const own = new Set<string>()
+    for (const network of download.networks) {
+      if (isVpn(network)) continue
+      const row = perNetwork.get(network.id) ?? {
+        id: network.id,
+        label: names[network.id] || network.label,
+        kind: network.kind,
+        speed: 0,
+        open: 0,
+        moving: 0,
+        downloads: 0
+      }
+      row.speed += network.speedBytesPerSec
+      if (network.speedBytesPerSec > 0 && !own.has(network.id)) {
+        own.add(network.id)
+        row.downloads += 1
+      }
+      perNetwork.set(network.id, row)
+    }
+    const connections =
+      download.kind === 'http'
+        ? download.streams.map((stream) => ({
+            id: stream.interfaceId,
+            open: stream.status === 'downloading' || stream.status === 'retrying',
+            moving: stream.status === 'downloading' && stream.speedBytesPerSec > 0
+          }))
+        : download.peers.map((peer) => ({
+            id: download.networks[0]?.id ?? '',
+            open: true,
+            moving: peer.speedBytesPerSec > 0
+          }))
+    for (const connection of connections) {
+      const row = perNetwork.get(connection.id)
+      if (!row) continue
+      if (connection.open) row.open += 1
+      if (connection.moving) row.moving += 1
+    }
+  }
+  return {
+    running,
+    speed: running.reduce((sum, download) => sum + download.speedBytesPerSec, 0),
+    received: running.reduce((sum, download) => sum + download.bytesDownloaded, 0),
+    left: running.reduce(
+      (sum, download) =>
+        sum +
+        (download.totalBytes > 0 ? Math.max(0, download.totalBytes - download.bytesDownloaded) : 0),
+      0
+    ),
+    networks: [...perNetwork.values()].sort((a, b) => b.speed - a.speed),
+    queued: count('queued'),
+    paused: count('paused'),
+    failed: count('error')
+  }
+}
 
 /** The status part of the menu from the downloads there are now. `names` are the names the
  * person gave their networks. */

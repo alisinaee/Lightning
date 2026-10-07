@@ -181,6 +181,13 @@ export class LightningApp {
     this.alive = true
 
     this.page = await this.electronApp.firstWindow()
+    // With the menu-bar panel made (LIGHTNING_E2E_TRAY_PANEL), the first window to show up can be
+    // that one: the app's own window is the one that is not it.
+    for (let tries = 0; tries < 200 && this.page.url().includes('tray.html'); tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      this.page =
+        this.electronApp.windows().find((page) => !page.url().includes('tray.html')) ?? this.page
+    }
     await this.page.waitForLoadState('domcontentloaded')
     const session: DownloadState[] = []
     const updates: DownloadUpdate[] = []

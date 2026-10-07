@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
-export const HISTORY_POINTS = 60
+import { HISTORY_POINTS } from '../components/SpeedGraph'
 
 /** The total speed, once a second for the last minute: what the graph in the status menu draws.
  * Kept while the bar is on screen, so the graph already has a past when the menu is opened. */

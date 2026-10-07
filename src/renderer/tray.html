@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" spellcheck="false">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lightning</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    />
+    <style>
+      /* The window is see-through (macOS vibrancy shows behind it): the page draws no background. */
+      html,
+      body {
+        background: transparent !important;
+      }
+    </style>
+  </head>
+
+  <body class="overflow-hidden text-foreground antialiased select-none">
+    <div id="root"></div>
+    <script type="module" src="/src/tray/main.tsx"></script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
+import { createTrayPanel } from './trayPanel'
 import {
   applyBehavior,
   behavior,
@@ -232,8 +233,19 @@ app.whenReady().then(async () => {
 
   createWindow()
   installAppMenu(() => mainWindow)
+  if (testKnobs.trayPanel) {
+    createTrayPanel({
+      downloads: () => downloadManager?.liveStates() ?? [],
+      version: app.getVersion(),
+      act: () => {},
+      always: true
+    })
+  }
   if (!testKnobs.hideWindow) {
-    installTray(() => mainWindow, { downloads: () => downloadManager?.liveStates() ?? [] })
+    installTray(() => mainWindow, {
+      downloads: () => downloadManager?.liveStates() ?? [],
+      pause: (id) => void downloadManager?.pause(id)
+    })
   }
   installClipboardWatcher(() => mainWindow)
   installLocalApi(() => mainWindow)

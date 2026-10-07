@@ -517,6 +517,23 @@ export function SettingsDialog({
                   The menu you get from the Lightning icon at the top of the screen.
                 </div>
                 <Row
+                  checked={bar.trayPanel}
+                  onChange={(trayPanel) => setBar({ trayPanel })}
+                  label="Clicking the icon opens a panel with bars and colours, instead of a menu (right-click always gives the menu)"
+                />
+                <Row
+                  checked={bar.trayGraph}
+                  onChange={(trayGraph) => setBar({ trayGraph })}
+                  label="A speed graph in the panel"
+                  disabled={!bar.trayPanel}
+                />
+                <Row
+                  checked={bar.trayActions}
+                  onChange={(trayActions) => setBar({ trayActions })}
+                  label="Quick buttons in the panel: new download, pause all and the rest"
+                  disabled={!bar.trayPanel}
+                />
+                <Row
                   checked={bar.trayTotals}
                   onChange={(trayTotals) => setBar({ trayTotals })}
                   label="How many are downloading and the total speed"

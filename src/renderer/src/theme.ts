@@ -177,4 +177,6 @@ export function resolveNetworkVisual(
 }
 
 /** In px. Drawn inside the window, so popups have to keep clear of it themselves. */
-export const TITLE_BAR_HEIGHT = window.lightning.platform === 'darwin' ? 32 : 44
+// The panel under the menu-bar icon shares this file and has no `window.lightning`.
+export const TITLE_BAR_HEIGHT =
+  (window as { lightning?: { platform: string } }).lightning?.platform === 'darwin' ? 32 : 44

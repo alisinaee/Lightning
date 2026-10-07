@@ -357,6 +357,10 @@ export interface StatusBarPrefs {
   trayQueue: boolean
   /** How many running downloads that menu lists at most. */
   trayRows: number
+  /** Clicking the icon opens a panel under it (with bars, colours and buttons) instead of a menu. */
+  trayPanel: boolean
+  trayGraph: boolean
+  trayActions: boolean
 }
 
 export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
@@ -381,7 +385,10 @@ export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   trayNetworks: true,
   trayDownloads: true,
   trayQueue: true,
-  trayRows: 4
+  trayRows: 4,
+  trayPanel: true,
+  trayGraph: true,
+  trayActions: true
 }
 
 /** Choices from Settings. Absent fields mean the defaults in DEFAULT_PREFS. */

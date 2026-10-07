@@ -1,12 +1,10 @@
 import type { DownloadState, HttpDownloadState } from '@shared/types'
 import { isVpn } from '@shared/networks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { HISTORY_POINTS as POINTS } from '../hooks/useSpeedHistory'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatDuration, formatSpeed } from '../utils/format'
 import { rankRunning } from '../utils/statusMenu'
-
-const HISTORY_POINTS = POINTS
+import { SpeedGraph } from './SpeedGraph'
 
 /** One row of the menu: a name and what it holds. */
 function Line({
@@ -42,52 +40,6 @@ function Section({
       </h3>
       {children}
     </section>
-  )
-}
-
-/** The speed over the last minute as a small filled line. */
-function Graph({ points }: { points: number[] }): React.JSX.Element {
-  const peak = Math.max(1, ...points)
-  const width = 280
-  const height = 44
-  const step = width / (HISTORY_POINTS - 1)
-  const offset = (HISTORY_POINTS - points.length) * step
-  const coords = points.map(
-    (value, index) =>
-      `${(offset + index * step).toFixed(1)},${(height - 2 - (value / peak) * (height - 6)).toFixed(1)}`
-  )
-  return (
-    <div>
-      <svg
-        role="img"
-        aria-label="Total speed over the last minute"
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-11 w-full text-primary"
-        preserveAspectRatio="none"
-      >
-        {points.length > 1 && (
-          <>
-            <polygon
-              points={`${offset},${height} ${coords.join(' ')} ${offset + (points.length - 1) * step},${height}`}
-              fill="currentColor"
-              opacity={0.15}
-            />
-            <polyline
-              points={coords.join(' ')}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-            />
-          </>
-        )}
-      </svg>
-      <div className="flex justify-between text-[10.5px] text-muted-foreground">
-        <span>1 min ago</span>
-        <span>peak {formatSpeed(peak === 1 ? 0 : peak)}</span>
-        <span>now</span>
-      </div>
-    </div>
   )
 }
 
@@ -180,7 +132,7 @@ export function StatusMenuContent({
     <div role="region" aria-label="Download activity" className="flex flex-col gap-3 font-sans">
       {prefs.menuGraph && (
         <Section title="Speed">
-          <Graph points={points} />
+          <SpeedGraph points={points} />
         </Section>
       )}
 

@@ -31,6 +31,9 @@ export const testKnobs = {
   /** A fixed time between a download's updates to the window, whatever the window shows (the
    * suite's windows are hidden, which would otherwise slow them). 0: by what is visible. */
   uiUpdateMs: positiveNumber('LIGHTNING_E2E_UI_UPDATE_MS', 0),
+  /** Makes the panel under the menu-bar icon without the icon, kept supplied while hidden, so a
+   * test can read it. */
+  trayPanel: env['LIGHTNING_E2E_TRAY_PANEL'] === '1',
   /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */
   torrentDht: env['LIGHTNING_E2E_DHT'] !== '0',
   /** Skips the real GitHub check and pretends this version is available, for exercising the
