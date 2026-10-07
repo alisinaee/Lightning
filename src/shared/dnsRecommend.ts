@@ -35,6 +35,11 @@ export interface DnsTestResult {
 export const SYSTEM_NAME = 'System DNS'
 /** The least improvement worth changing a setting for. */
 export const MIN_GAIN = 0.25
+/** And not a gain that is only large next to a tiny number: this much more per second (a link
+ * throttled to a trickle shows big percentages that are only noise), or this many milliseconds
+ * quicker to connect. */
+export const MIN_SPEED_GAIN = 100 * 1024
+export const MIN_CONNECT_GAIN_MS = 40
 
 const usable = (entry: DnsTestEntry): boolean =>
   entry.ip !== null && !entry.error && (entry.bytesPerSec !== null || entry.connectMs !== null)
@@ -93,6 +98,20 @@ export function recommend(entries: DnsTestEntry[], current = SYSTEM_NAME): DnsRe
       servers: baseline?.servers ?? [],
       gain,
       text: `${current} is within ${Math.round(MIN_GAIN * 100)}% of the best, so it is fine.`
+    }
+  }
+  if (baseline) {
+    const small = bySpeed
+      ? top.bytesPerSec! - baseline.bytesPerSec! < MIN_SPEED_GAIN
+      : baseline.connectMs! - top.connectMs! < MIN_CONNECT_GAIN_MS
+    if (small) {
+      return {
+        kind: 'keep',
+        name: current,
+        servers: baseline.servers,
+        gain,
+        text: `The best server is only slightly faster in absolute terms, so ${current} is fine.`
+      }
     }
   }
   const how = bySpeed ? 'faster' : 'quicker to connect to'

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { DNS_PRESETS, describeDns } from '../src/shared/dnsPresets'
 import { recommend, SYSTEM_NAME, type DnsTestEntry } from '../src/shared/dnsRecommend'
 
 // Which DNS to suggest from what each one measured: pure, so no app is needed.
@@ -92,5 +93,43 @@ test.describe('choosing a DNS from a test @smoke', () => {
   test('nothing measurable says so', () => {
     const result = recommend([entry('Radar', null, { error: 'No answer', connectMs: null })])
     expect(result.kind).toBe('none')
+  })
+})
+
+test.describe('a gain that is only noise @smoke', () => {
+  test('a big percentage on a trickle of a link is not worth a change', () => {
+    const result = recommend([
+      entry(SYSTEM_NAME, '1.1.1.1', { bytesPerSec: 20_000 }),
+      entry('Shecan', '2.2.2.2', { bytesPerSec: 40_000 })
+    ])
+    expect(result.kind).toBe('keep')
+  })
+
+  test('the same percentage on a real link is', () => {
+    const result = recommend([
+      entry(SYSTEM_NAME, '1.1.1.1', { bytesPerSec: 2_000_000 }),
+      entry('Shecan', '2.2.2.2', { bytesPerSec: 4_000_000 })
+    ])
+    expect(result.kind).toBe('better')
+  })
+
+  test('a few milliseconds quicker to connect is not worth a change', () => {
+    const result = recommend([
+      entry(SYSTEM_NAME, '1.1.1.1', { bytesPerSec: null, connectMs: 30 }),
+      entry('Begzar', '2.2.2.2', { bytesPerSec: null, connectMs: 10 })
+    ])
+    expect(result.kind).toBe('keep')
+  })
+})
+
+test.describe('what each DNS is @smoke', () => {
+  test('every well-known DNS has a description, and it is found by name or by servers', () => {
+    for (const preset of DNS_PRESETS) {
+      expect(preset.description.length, preset.name).toBeGreaterThan(30)
+      expect(describeDns(preset.name)).toBe(preset.description)
+      expect(describeDns(preset.servers)).toBe(preset.description)
+    }
+    expect(describeDns(SYSTEM_NAME)).toMatch(/internet provider/)
+    expect(describeDns('Some DNS of mine')).toBeUndefined()
   })
 })

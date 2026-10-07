@@ -34,6 +34,10 @@ test.describe('testing DNS @smoke', () => {
     const picker = page.getByRole('button', { name: 'DNS', exact: true })
     await picker.click()
     await expect(page.getByText('The best DNS found for each site')).toBeVisible()
+    // Each DNS says what it is.
+    await expect(page.getByText(/Tests a site the first time/)).toBeVisible()
+    await expect(page.getByText(/well known with gamers/)).toBeVisible()
+    await expect(page.getByText(/blocks sites known to spread malware/)).toBeVisible()
     await expect(page.getByText('Well-known · Iran')).toBeVisible()
     for (const name of ['Electro', 'Shecan', 'Begzar', '403 online', 'Radar']) {
       await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible()
@@ -63,5 +67,24 @@ test.describe('testing DNS @smoke', () => {
       })
       .toBe('System DNS')
     await lightning.waitForStatus('completed', 30_000)
+  })
+
+  test('resuming a download after Auto was switched on also has its site tested', async ({
+    lightning,
+    serve
+  }) => {
+    const origin = await serve({ size: 40 * BLOCK, bytesPerSecond: 40_000 })
+    const id = await lightning.start(origin.url(), origin.sha256)
+    await lightning.api.pauseDownload(id)
+    await lightning.waitForStatus('paused')
+    expect((await lightning.api.getDns()).best).toBeUndefined()
+    await lightning.api.setDefaultDns('auto')
+    await lightning.api.resumeDownload(id)
+    await expect
+      .poll(async () => (await lightning.api.getDns()).best?.['127.0.0.1']?.name, {
+        timeout: 30_000
+      })
+      .toBe('System DNS')
+    await lightning.api.pauseDownload(id)
   })
 })

@@ -1147,6 +1147,8 @@ export class DownloadManager {
     if (!runtime || runtime.cancelPromise) return
     const { status, resumable } = runtime.state
     if (status !== 'paused' && !(status === 'error' && resumable !== false)) return
+    // A resumed download on Auto DNS gets its site looked at too, as a new one does.
+    this.onStart?.({ ...runtime.requestPayload, dnsId: runtime.state.dnsId })
 
     log.info('download', `resume ${runtime.state.fileName}`, { id })
     runtime.pausedBySchedule = undefined

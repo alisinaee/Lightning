@@ -16,6 +16,8 @@ const SAMPLE_BYTES = 1024 * 1024
 const SAMPLE_MS = 4000
 const LOOKUP_TIMEOUT_MS = 2500
 const MAX_SERVERS = 8
+/** How many of the best-looking servers get a second sample. */
+const SECOND_SAMPLE_FOR = 3
 /** Under this a sample says too little about speed to be used as one. */
 const MIN_SAMPLE_BYTES = 256 * 1024
 
@@ -147,6 +149,30 @@ export async function testDnsForUrl(
   const headers = buildHeaders(extras)
   const measured = new Map<string, Awaited<ReturnType<typeof measure>>>()
   for (const ip of ips) measured.set(ip, await measure(ip, target, network, headers))
+  // A single sample is noisy (a slow start, one bad moment), so servers get a second one and
+  // keep their better result: the speed they can sustain. With many, only the best-looking few
+  // and the current DNS's server do, so the comparison that matters is like for like.
+  const currentIp = found[candidates.findIndex((candidate) => candidate.name === current)]?.ip
+  const finalists = [...measured.entries()]
+    .filter(([, one]) => !one.error)
+    .sort((a, b) => (b[1].bytesPerSec ?? 0) - (a[1].bytesPerSec ?? 0))
+    .map(([ip]) => ip)
+    .filter(
+      (ip, index) =>
+        measured.size <= SECOND_SAMPLE_FOR + 1 || index < SECOND_SAMPLE_FOR || ip === currentIp
+    )
+  for (const ip of finalists) {
+    const first = measured.get(ip)!
+    const second = await measure(ip, target, network, headers)
+    if (second.error) continue
+    measured.set(ip, {
+      connectMs:
+        first.connectMs !== null && second.connectMs !== null
+          ? Math.min(first.connectMs, second.connectMs)
+          : (first.connectMs ?? second.connectMs),
+      bytesPerSec: Math.max(first.bytesPerSec ?? 0, second.bytesPerSec ?? 0) || null
+    })
+  }
 
   const entries: DnsTestEntry[] = candidates.map((candidate, index) => {
     const answer = found[index]

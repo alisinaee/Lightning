@@ -1,5 +1,5 @@
 import type { DnsProfile } from '@shared/types'
-import { DNS_PRESETS } from '@shared/dnsPresets'
+import { AUTO_DESCRIPTION, DNS_PRESETS, SYSTEM_DESCRIPTION, describeDns } from '@shared/dnsPresets'
 import { Check, ChevronDown, Gauge, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { dnsLabel, useDns } from '../hooks/useDns'
@@ -93,7 +93,7 @@ export function DnsPicker({
           <span className="truncate">{text}</span>
           <ChevronDown data-icon="inline-end" />
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[300px] gap-0 p-1.5">
+        <PopoverContent align="end" className="w-[340px] gap-0 p-1.5">
           <div className="max-h-[320px] overflow-y-auto">
             {followLabel && (
               <Row selected={!value} title={followLabel} onClick={() => choose(null)} />
@@ -102,12 +102,14 @@ export function DnsPicker({
               selected={value === 'system'}
               title="System DNS"
               hint="What your computer uses"
+              note={SYSTEM_DESCRIPTION}
               onClick={() => choose('system')}
             />
             <Row
               selected={value === 'auto'}
               title="Auto"
               hint="The best DNS found for each site"
+              note={AUTO_DESCRIPTION}
               onClick={() => choose('auto')}
             />
             {profiles.map((profile) => (
@@ -116,6 +118,7 @@ export function DnsPicker({
                 selected={value === profile.id}
                 title={profile.name}
                 hint={profile.servers.join(', ')}
+                note={describeDns(profile.servers)}
                 onClick={() => choose(profile.id)}
                 onRemove={() => void window.lightning.removeDns(profile.id)}
               />
@@ -134,7 +137,7 @@ export function DnsPicker({
                       selected={false}
                       title={preset.name}
                       hint={preset.servers.join(', ')}
-                      note={preset.note}
+                      note={[preset.note, preset.description].filter(Boolean).join(' ')}
                       onClick={() => void saveAndChoose(preset)}
                     />
                   ))}

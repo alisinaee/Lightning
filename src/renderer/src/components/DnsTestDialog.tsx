@@ -1,4 +1,5 @@
 import type { DnsTestEntry, DnsTestResult } from '@shared/dnsRecommend'
+import { describeDns } from '@shared/dnsPresets'
 import { SYSTEM_NAME } from '@shared/dnsRecommend'
 import { AlertTriangle, Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -168,6 +169,7 @@ function rank(result: DnsTestResult): DnsTestEntry[] {
 
 function Row({ entry, best }: { entry: DnsTestEntry; best: boolean }): React.JSX.Element {
   const failed = entry.ip === null || !!entry.error
+  const about = describeDns(entry.name === SYSTEM_NAME ? SYSTEM_NAME : entry.servers)
   return (
     <div
       role="row"
@@ -177,7 +179,17 @@ function Row({ entry, best }: { entry: DnsTestEntry; best: boolean }): React.JSX
         <span className="size-4 shrink-0">
           {best && <Check aria-label="Best" className="size-4 text-primary" />}
         </span>
-        <span className="truncate">{entry.name === SYSTEM_NAME ? 'System DNS' : entry.name}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate">{entry.name === SYSTEM_NAME ? 'System DNS' : entry.name}</span>
+          {about && (
+            <span
+              title={about}
+              className="line-clamp-2 text-[11px] leading-tight font-normal text-muted-foreground"
+            >
+              {about}
+            </span>
+          )}
+        </span>
       </span>
       {failed ? (
         <span role="cell" className="col-span-4 truncate text-muted-foreground">
