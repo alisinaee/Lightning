@@ -1,6 +1,7 @@
 import { join } from 'node:path'
-import { BrowserWindow, ipcMain, screen, type Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, type Tray } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { shouldClosePanel } from '../shared/panelFocus'
 import { buildPanelState, type PanelAction } from '../shared/trayPanel'
 import type { DownloadState } from '../shared/types'
 import { getTrayConfig } from './trayConfig'
@@ -48,6 +49,8 @@ export function createTrayPanel(deps: {
 }): TrayPanel {
   let current: BrowserWindow | null = null
   let hiddenAt = 0
+  let shownAt = 0
+  let watch: NodeJS.Timeout | null = null
 
   /** The window, made the first time it is wanted. */
   function ensure(): BrowserWindow {
@@ -101,6 +104,8 @@ export function createTrayPanel(deps: {
     })
     window.on('hide', () => {
       hiddenAt = Date.now()
+      if (watch) clearInterval(watch)
+      watch = null
     })
     window.on('closed', () => {
       current = null
@@ -185,8 +190,27 @@ export function createTrayPanel(deps: {
       if (Date.now() - hiddenAt < REOPEN_GUARD_MS) return
       place(window, tray)
       push()
+      // An app that is not the active one (its Dock icon hidden, its window closed) must be made
+      // active, or the panel never has the focus it would lose when someone clicks elsewhere.
+      if (process.platform === 'darwin') app.focus({ steal: true })
       window.show()
       window.focus()
+      shownAt = Date.now()
+      // The "blur" event is not always sent, so a click elsewhere is also noticed here.
+      if (watch) clearInterval(watch)
+      watch = setInterval(() => {
+        if (
+          shouldClosePanel({
+            visible: window.isVisible(),
+            focused: window.isFocused(),
+            shownAt,
+            now: Date.now()
+          })
+        ) {
+          window.hide()
+        }
+      }, 250)
+      watch.unref()
     }
   }
 }
