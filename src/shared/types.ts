@@ -648,6 +648,16 @@ export interface DnsProfile {
 /** The saved DNS profiles, and which one the app uses unless a group or download says otherwise. */
 export interface DnsConfig {
   profiles: DnsProfile[]
-  /** A profile id; unset is the system's DNS. */
+  /** A profile id, 'auto', or unset for the system's DNS. */
   defaultId?: string
+  /** What 'auto' uses, by host: the best DNS a test found for it. */
+  best?: Record<string, DnsBest>
+}
+
+/** The DNS a test found best for one host (see DnsService.setBest). */
+export interface DnsBest {
+  name: string
+  /** Empty: the system's own DNS is as good as any. */
+  servers: string[]
+  at: number
 }

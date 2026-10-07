@@ -35,6 +35,8 @@ const lightningApi = {
   openNetworkSettings: () => invoke('openNetworkSettings'),
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
   getDns: () => invoke('getDns'),
+  testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>
+    invoke('testDns', url, currentDnsId, extras),
   saveDns: (input: IpcContract['saveDns']['args'][0]) => invoke('saveDns', input),
   removeDns: (id: string) => invoke('removeDns', id),
   setDefaultDns: (id: string | null) => invoke('setDefaultDns', id),

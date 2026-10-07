@@ -194,7 +194,9 @@ export class AutoScheduler {
   /** Keeps `upSince` to the networks there now; see networkStableMs. */
   private watchNetworks(): void {
     const now = Date.now()
-    const ids = new Set(this.networks.selectable().map((iface) => iface.id))
+    // Every network the computer has, not only those the settings let downloads use: switching
+    // "use VPN" on is not a network coming back.
+    const ids = new Set((this.networks.current ?? []).map((iface) => iface.id))
     for (const id of ids) {
       if (!this.upSince.has(id)) this.upSince.set(id, this.seenNetworks ? now : 0)
     }

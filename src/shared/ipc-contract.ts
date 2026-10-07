@@ -1,4 +1,5 @@
 import type { DuplicateMatch, DuplicateOptions } from './duplicates'
+import type { DnsTestResult } from './dnsRecommend'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
@@ -31,6 +32,12 @@ export interface IpcContract {
   updateSettings: { args: [patch: AppSettings]; result: void }
   /** The saved DNS profiles and the app's default. */
   getDns: { args: []; result: DnsConfig }
+  /** Looks the link's host up with every DNS (the system's, saved and well-known ones), measures
+   * each server they lead to, and says which DNS suits it. The winner is remembered for Auto. */
+  testDns: {
+    args: [url: string, currentDnsId: string | null, extras?: RequestExtras]
+    result: DnsTestResult
+  }
   /** Adds or replaces a profile; servers are IP addresses, as a list or typed text. */
   saveDns: {
     args: [input: { id?: string; name: string; servers: string[] | string }]

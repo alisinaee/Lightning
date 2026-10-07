@@ -52,7 +52,7 @@ Faster networks take more pieces, so a slow one never holds the others back.
 ### Control
 
 - **Limits.** Cap total speed, switch on slow mode, or give each network its own speed and daily, weekly or monthly data limit.
-- **DNS.** Pick DNS servers for the app, a group, or one download, with named recent servers.
+- **DNS, with a test.** Pick DNS servers for the app, a group or one download, from a list that includes well-known Iranian ones (Electro, Shecan, Begzar and more). **Test DNS for this site** tries every DNS on a link's real host and measures the servers they lead to. **Auto** uses the best one found for each site. A DNS that sends a site to a server with the wrong certificate is flagged and never chosen.
 - **Proxy.** Use the system proxy, none, or a manual HTTP, HTTPS, FTP or SOCKS5 proxy for the app's own requests.
 - **VPN.** Lightning detects your VPN and lets you switch whether downloads may use it, from the top bar.
 - **Power.** Keeps the computer awake while a download runs.

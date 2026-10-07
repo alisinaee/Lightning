@@ -3,13 +3,18 @@ import { Resolver } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { DnsConfig, DnsProfile, IpFamily } from '../../shared/types'
+import type { DnsBest, DnsConfig, DnsProfile, IpFamily } from '../../shared/types'
 import { readJson, updateJson } from '../jsonFile'
 import { log } from '../logger'
 import { systemResolve, type RemoteAddress, type ResolveHost } from './routes'
 
 /** What a profile id means when a download or group asks for the system's DNS outright. */
 export const SYSTEM_DNS = 'system'
+/** Picks, for each site, the DNS a test found best for it (see setBest); the system's until then. */
+export const AUTO_DNS = 'auto'
+const MAX_BEST = 300
+/** A test result is trusted this long: CDNs and ISPs change what is best. */
+const BEST_TTL_MS = 14 * 24 * 60 * 60 * 1000
 
 const MAX_PROFILES = 24
 const MAX_SERVERS = 4
@@ -46,10 +51,24 @@ function sanitize(raw: unknown): DnsConfig {
     }
   }
   const defaultId =
-    typeof raw.defaultId === 'string' && profiles.some((one) => one.id === raw.defaultId)
+    typeof raw.defaultId === 'string' &&
+    (raw.defaultId === AUTO_DNS || profiles.some((one) => one.id === raw.defaultId))
       ? raw.defaultId
       : undefined
-  return { profiles: profiles.slice(0, MAX_PROFILES), ...(defaultId ? { defaultId } : {}) }
+  const best: Record<string, DnsBest> = {}
+  if (isRecord(raw.best)) {
+    for (const [host, value] of Object.entries(raw.best).slice(0, MAX_BEST)) {
+      if (!isRecord(value) || typeof value.name !== 'string' || typeof value.at !== 'number')
+        continue
+      const servers = parseServers(Array.isArray(value.servers) ? (value.servers as string[]) : [])
+      best[host] = { name: value.name.slice(0, 40), servers, at: value.at }
+    }
+  }
+  return {
+    profiles: profiles.slice(0, MAX_PROFILES),
+    ...(defaultId ? { defaultId } : {}),
+    ...(Object.keys(best).length > 0 ? { best } : {})
+  }
 }
 
 /** Names looked up through chosen DNS servers instead of the system's: saved by name, picked for
@@ -105,15 +124,16 @@ export class DnsService {
   async remove(id: string): Promise<void> {
     const defaultId = this.config.defaultId === id ? undefined : this.config.defaultId
     await this.write({
+      ...this.config,
       profiles: this.config.profiles.filter((one) => one.id !== id),
-      ...(defaultId ? { defaultId } : {})
+      defaultId
     })
   }
 
   /** The app's DNS: a profile id, or null for the system's. */
   async setDefault(id: string | null): Promise<void> {
-    if (id !== null && !this.config.profiles.some((one) => one.id === id)) return
-    await this.write({ profiles: this.config.profiles, ...(id ? { defaultId: id } : {}) })
+    if (id !== null && id !== AUTO_DNS && !this.config.profiles.some((one) => one.id === id)) return
+    await this.write({ ...this.config, defaultId: id ?? undefined })
     log.info('dns', 'app default', { id })
   }
 
@@ -126,9 +146,41 @@ export class DnsService {
     this.onChange(this.config)
   }
 
+  /** The id a download, group or the app ends up with: what the download asked, else its group,
+   * else the app's default. */
+  effectiveId(...ids: (string | undefined)[]): string | undefined {
+    return ids.find((id) => id !== undefined) ?? this.config.defaultId
+  }
+
+  /** The best DNS a test found for `host`, while it is still recent. */
+  bestFor(host: string): DnsBest | undefined {
+    const found = this.config.best?.[host]
+    return found && Date.now() - found.at < BEST_TTL_MS ? found : undefined
+  }
+
+  /** Remembers what a test found best for `host`, for the Auto choice to use. */
+  async setBest(host: string, entry: { name: string; servers: string[] }): Promise<void> {
+    const best = { ...(this.config.best ?? {}), [host]: { ...entry, at: Date.now() } }
+    // The oldest go first when there are too many.
+    const kept = Object.entries(best)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, MAX_BEST)
+    this.config = { ...this.config, best: Object.fromEntries(kept) }
+    await updateJson(this.path(), () => this.config)
+    this.onChange(this.config)
+    log.info('dns', 'best for a site', { host, name: entry.name })
+  }
+
   /** The lookup for what a download asked, else its group, else the app: or the system's. */
   resolverFor(...ids: (string | undefined)[]): ResolveHost {
-    const chosen = ids.find((id) => id !== undefined) ?? this.config.defaultId
+    const chosen = this.effectiveId(...ids)
+    if (chosen === AUTO_DNS) {
+      return (host) => {
+        const best = this.bestFor(host)
+        if (!best || best.servers.length === 0) return systemResolve(host)
+        return this.lookup({ id: `auto ${host}`, name: best.name, servers: best.servers }, host)
+      }
+    }
     const profile =
       chosen && chosen !== SYSTEM_DNS
         ? this.config.profiles.find((one) => one.id === chosen)

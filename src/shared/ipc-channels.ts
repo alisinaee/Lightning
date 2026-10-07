@@ -60,6 +60,7 @@ export const IpcChannels = {
   labStop: 'lab:stop',
   labEvent: 'lab:event',
   getDns: 'dns:get',
+  testDns: 'dns:test',
   saveDns: 'dns:save',
   removeDns: 'dns:remove',
   setDefaultDns: 'dns:set-default',

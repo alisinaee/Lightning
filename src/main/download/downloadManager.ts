@@ -899,6 +899,7 @@ export class DownloadManager {
     }
     await ensureDirectory(requestPayload.destinationDir)
     const id = randomUUID()
+    this.onStart?.(requestPayload)
     let runtime: DownloadRuntime
     if (requestPayload.kind === 'torrent') {
       const torrentFile = probedTorrentFile(requestPayload.infoHash)
@@ -1256,6 +1257,9 @@ export class DownloadManager {
 
     this.launch(runtime)
   }
+
+  /** Set by main: told of every download as it starts (the Auto DNS learns a new site then). */
+  onStart: ((request: StartDownloadRequest) => void) | null = null
 
   /** Set by main: the lookup for a download's DNS choice (see DnsService.resolverFor). */
   dnsFor: ((dnsId: string | undefined, groupId: string | undefined) => ResolveHost) | null = null

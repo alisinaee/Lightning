@@ -22,6 +22,7 @@ import {
   type GroupInfo,
   type GroupPatch,
   type InitialState,
+  type RequestExtras,
   type SettingsPush,
   type StartDownloadRequest,
   type ThemeSource
@@ -49,7 +50,10 @@ import { findDuplicates } from '../download/findDuplicates'
 import { appVariant } from '../variant'
 import { applyBehavior, integrationPort } from '../appBehavior'
 import { loadSettings, prefsOf, saveSettings } from '../settings'
-import { DnsService, SYSTEM_DNS } from '../network/dns'
+import { AUTO_DNS, DnsService, SYSTEM_DNS } from '../network/dns'
+import { testDnsForUrl, type DnsCandidate } from '../network/dnsTest'
+import { DNS_PRESETS } from '../../shared/dnsPresets'
+import { SYSTEM_NAME } from '../../shared/dnsRecommend'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
 
@@ -140,6 +144,76 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   })
   manager.dnsFor = (dnsId, groupId) =>
     dns.resolverFor(dnsId, groupId ? groups.dnsOf(groupId) : undefined)
+  // Every DNS worth trying for a site: the system's, the saved ones, then the well-known ones not
+  // saved yet.
+  const dnsCandidates = (): DnsCandidate[] => {
+    const saved = dns.get().profiles
+    const known = new Set(saved.map((profile) => profile.servers.join()))
+    return [
+      { name: SYSTEM_NAME, servers: [] },
+      ...saved.map((profile) => ({ name: profile.name, servers: profile.servers })),
+      ...DNS_PRESETS.filter((preset) => !known.has(preset.servers.join())).map((preset) => ({
+        name: preset.name,
+        servers: preset.servers
+      }))
+    ]
+  }
+  /** Tests a link's host, and remembers what suited it for the Auto choice. */
+  const testAndRemember = async (
+    url: string,
+    currentId: string | null,
+    extras?: RequestExtras
+  ): Promise<ReturnType<typeof testDnsForUrl>> => {
+    await dns.loaded
+    const candidates = dnsCandidates()
+    const currentProfile = dns.get().profiles.find((profile) => profile.id === currentId)
+    const current = currentProfile?.name ?? SYSTEM_NAME
+    // The host that matters is the one the file is served from, after any redirects.
+    const probe = await probeUrl(url, extras, () => networks.selectable()).catch(() => null)
+    const final = probe?.kind === 'http' ? probe.finalUrl : url
+    const result = await testDnsForUrl(final, candidates, networks.selectable()[0], extras, current)
+    const { recommendation } = result
+    if (recommendation.kind === 'better' && recommendation.name) {
+      await dns.setBest(result.host, {
+        name: recommendation.name,
+        servers: recommendation.servers
+      })
+    } else if (recommendation.kind !== 'none') {
+      await dns.setBest(result.host, {
+        name: current,
+        servers: currentProfile?.servers ?? []
+      })
+    }
+    return result
+  }
+  handle('testDns', async (_event, url, currentId, extras) => {
+    if (typeof url !== 'string' || (currentId !== null && typeof currentId !== 'string')) {
+      throw new Error('Bad request')
+    }
+    return testAndRemember(url, currentId, sanitizeExtras(extras))
+  })
+  // A download that starts on Auto DNS with no result for its site yet: its site is tested in
+  // the background, so the next connections (and downloads) use what suits it. At most one test
+  // for a host at a time, and a failure only means the system's DNS carries on.
+  const learning = new Set<string>()
+  manager.onStart = (request) => {
+    const chosen = dns.effectiveId(
+      request.dnsId,
+      request.groupId ? groups.dnsOf(request.groupId) : undefined
+    )
+    if (chosen !== AUTO_DNS || request.kind !== 'http') return
+    let host: string
+    try {
+      host = new URL(request.url).hostname
+    } catch {
+      return
+    }
+    if (dns.bestFor(host) || learning.has(host)) return
+    learning.add(host)
+    void testAndRemember(request.url, null, request)
+      .catch((error) => log.warn('dns', 'learning a site failed', { host, error: String(error) }))
+      .finally(() => learning.delete(host))
+  }
   handle('getDns', async () => {
     await dns.loaded
     return dns.get()

@@ -499,6 +499,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               value={download.dnsId ?? null}
               followLabel={group?.dnsId ? "Group's DNS" : 'Default'}
               label={`DNS for ${download.fileName}`}
+              testUrl={download.kind === 'http' ? download.url : undefined}
               onChange={(id) => void window.lightning.setDownloadDns(download.id, id)}
             />
             {chooseError && (

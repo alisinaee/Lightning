@@ -442,7 +442,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
         <div className="flex items-center gap-3">
           <div className={labelClass}>DNS</div>
-          <DnsPicker value={dnsId} followLabel="Default" onChange={setDnsId} />
+          <DnsPicker
+            value={dnsId}
+            followLabel="Default"
+            onChange={setDnsId}
+            testUrl={/^https?:\/\//i.test(url.trim()) ? url.trim() : undefined}
+          />
         </div>
 
         {!torrent && (

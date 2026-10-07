@@ -14,15 +14,6 @@ const useDnsStore = create<DnsStore>((set) => ({
   set: (config) => set({ config, loaded: true })
 }))
 
-/** What the Cloudflare, Google and other well-known DNS servers are, offered until saved. */
-export const DNS_SUGGESTIONS: { name: string; servers: string[] }[] = [
-  { name: 'Cloudflare', servers: ['1.1.1.1', '1.0.0.1'] },
-  { name: 'Google', servers: ['8.8.8.8', '8.8.4.4'] },
-  { name: 'Quad9', servers: ['9.9.9.9', '149.112.112.112'] },
-  { name: 'AdGuard', servers: ['94.140.14.14', '94.140.15.15'] },
-  { name: 'OpenDNS', servers: ['208.67.222.222', '208.67.220.220'] }
-]
-
 /** The saved DNS profiles, kept current: main says whenever they change. Most recently used first. */
 export function useDns(): {
   profiles: DnsProfile[]
@@ -47,9 +38,11 @@ export function dnsLabel(
   defaultId?: string
 ): string {
   if (id === 'system') return 'System DNS'
+  if (id === 'auto') return 'Auto'
   const profile = profiles.find((one) => one.id === id)
   if (profile) return profile.name
   if (id) return 'System DNS'
+  if (defaultId === 'auto') return 'Default (Auto)'
   const fallback = profiles.find((one) => one.id === defaultId)
   return fallback ? `Default (${fallback.name})` : 'Default (system)'
 }
