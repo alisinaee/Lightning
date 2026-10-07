@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.20',
+      items: [
+        {
+          kind: 'new',
+          title: 'A panel under the menu bar icon',
+          text: 'Click the Lightning icon for a live panel: the total speed, a speed graph, each network in its colour with its connections, the running downloads with progress bars, the queue and quick buttons. Right-click still gives the menu. Settings → Status bar chooses every part.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.19',
       items: [
         {
