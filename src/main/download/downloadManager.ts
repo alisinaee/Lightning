@@ -35,6 +35,7 @@ import {
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { selectableNetworks } from '../../shared/networks'
+import { UI_UPDATE_HIDDEN_MS, uiUpdateDelay } from '../../shared/uiThrottle'
 import { loadSettings } from '../settings'
 import {
   addToHistory,
@@ -144,7 +145,6 @@ type PersistedDownload = PersistedDownloadBase & {
 
 /** How long after a download ends the manager waits to see whether the queue is really empty. */
 const IDLE_CHECK_MS = 3000
-const UI_UPDATE_MS = 200
 /** How often a running download takes stock (see run). */
 const TICK_MS = 500
 // Syncing a growing file can briefly monopolize a slow destination drive. Keep recovery
@@ -1975,10 +1975,20 @@ export class DownloadManager {
   private scheduleUpdate(runtime: DownloadRuntime): void {
     if (runtime.pushScheduled) return
     runtime.pushScheduled = true
+    const window = this.getWindow()
+    const delay =
+      testKnobs.uiUpdateMs ||
+      (window && !window.isDestroyed()
+        ? uiUpdateDelay({
+            visible: window.isVisible(),
+            minimized: window.isMinimized(),
+            focused: window.isFocused()
+          })
+        : UI_UPDATE_HIDDEN_MS)
     setTimeout(() => {
       runtime.pushScheduled = false
       this.pushUpdate(runtime)
-    }, UI_UPDATE_MS)
+    }, delay)
   }
 
   private pushUpdate(runtime: DownloadRuntime, persist = true): void {

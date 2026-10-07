@@ -146,6 +146,8 @@ export class LightningApp {
             LIGHTNING_E2E_BLOCK_BYTES: String(BLOCK),
             LIGHTNING_E2E_RETRY_BASE_MS: '20',
             LIGHTNING_E2E_STALL_MS: '1500',
+            // The suite's window is hidden: updates still come as often as when it is in front.
+            LIGHTNING_E2E_UI_UPDATE_MS: '200',
             // A network counts for an Auto group at once, unless a test is about waiting for it.
             LIGHTNING_E2E_NETWORK_STABLE_MS: '1',
             // A busy server gives up after its retries alone, as any other wrong answer does,

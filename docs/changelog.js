@@ -10,6 +10,21 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.18',
+      items: [
+        {
+          kind: 'new',
+          title: 'Status bar menu',
+          text: 'Click the count and speed in the bar for a live menu: a speed graph, totals, each network with its connections, the running downloads, the queue and the disk. Settings → Status bar switches every item of the bar and every part of the menu.'
+        },
+        {
+          kind: 'faster',
+          title: 'Easier on your computer',
+          text: 'When Lightning is behind other windows, minimized or hidden, its window is sent progress far less often. Downloads run at full speed, and the CPU and fans are left alone.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.17',
       items: [
         {

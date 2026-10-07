@@ -34,6 +34,7 @@ async function launch(): Promise<void> {
       LIGHTNING_USER_DATA: userData,
       LIGHTNING_E2E_HIDE_WINDOW: '1',
       LIGHTNING_E2E_DHT: '0',
+      LIGHTNING_E2E_UI_UPDATE_MS: '200',
       LIGHTNING_E2E_NETWORK_STABLE_MS: '1',
       // Pretend an update exists that was already dismissed, so the real check can't raise a
       // dialog over the window part way through.
