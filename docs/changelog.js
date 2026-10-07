@@ -10,6 +10,26 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.16',
+      items: [
+        {
+          kind: 'new',
+          title: 'Test DNS for a site',
+          text: 'Try every DNS on a link and see which server each leads to, how fast it connects and how fast it sends a sample. Iranian DNSs (Electro, Shecan, Begzar, 403, Radar) are in the list, and one that sends a site to a server with a bad certificate is flagged.'
+        },
+        {
+          kind: 'new',
+          title: 'Auto DNS',
+          text: 'Choose Auto and Lightning remembers the best DNS it found for each site, and tests a new site in the background when a download starts.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Auto groups and the VPN switch',
+          text: 'Turning the VPN option on is no longer treated as a network coming back, so it gets files at once.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.15',
       items: [
         {
