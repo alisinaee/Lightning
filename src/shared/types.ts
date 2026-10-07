@@ -326,6 +326,50 @@ export interface UpdateInfo {
   dismissed: boolean
 }
 
+/** What the status bar along the bottom shows, and what the menu opened by clicking it holds.
+ * Every part can be switched off from Settings → Status bar. */
+export interface StatusBarPrefs {
+  /** In the bar itself. */
+  showCount: boolean
+  showSpeed: boolean
+  showLimit: boolean
+  showWaiting: boolean
+  showNetworks: boolean
+  showSlowMode: boolean
+  showFree: boolean
+  /** Clicking the count and speed opens a menu of live details. */
+  menu: boolean
+  /** The menu's parts. */
+  menuGraph: boolean
+  menuTotals: boolean
+  menuNetworks: boolean
+  menuConnections: boolean
+  menuDownloads: boolean
+  menuQueue: boolean
+  menuDisk: boolean
+  /** How many running downloads the menu lists at most. */
+  menuRows: number
+}
+
+export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
+  showCount: true,
+  showSpeed: true,
+  showLimit: true,
+  showWaiting: true,
+  showNetworks: true,
+  showSlowMode: true,
+  showFree: true,
+  menu: true,
+  menuGraph: true,
+  menuTotals: true,
+  menuNetworks: true,
+  menuConnections: true,
+  menuDownloads: true,
+  menuQueue: true,
+  menuDisk: true,
+  menuRows: 5
+}
+
 /** Choices from Settings. Absent fields mean the defaults in DEFAULT_PREFS. */
 export type AccentId = 'amber' | 'blue' | 'teal' | 'green' | 'violet' | 'rose'
 
@@ -339,6 +383,8 @@ export interface AppPrefs {
   preventSleep?: boolean
   closeToBackground?: boolean
   hideDock?: boolean
+  /** The status bar's items and menu; a part left out is as in DEFAULT_STATUS_BAR. */
+  statusBar?: Partial<StatusBarPrefs>
   /** Start Lightning when the user signs in, hidden in the tray. */
   openAtLogin?: boolean
   /** Offer to download a link to a file when one is copied while Lightning is in the background. */
@@ -358,7 +404,10 @@ export interface AppPrefs {
   proxySocks?: string
 }
 
-export const DEFAULT_PREFS: Required<AppPrefs> = {
+/** Every choice, with its default filled in: what the app reads. */
+export type ResolvedPrefs = Omit<Required<AppPrefs>, 'statusBar'> & { statusBar: StatusBarPrefs }
+
+export const DEFAULT_PREFS: ResolvedPrefs = {
   uiScale: 1,
   accent: 'amber',
   notifyAdded: true,
@@ -368,6 +417,7 @@ export const DEFAULT_PREFS: Required<AppPrefs> = {
   preventSleep: true,
   closeToBackground: true,
   hideDock: false,
+  statusBar: DEFAULT_STATUS_BAR,
   openAtLogin: false,
   watchClipboard: false,
   askWhenFinished: false,
@@ -426,7 +476,7 @@ export interface InitialState {
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
   version: string
-  prefs: Required<AppPrefs>
+  prefs: ResolvedPrefs
   schedule: ScheduleSettings
   /** What the schedule asks of the downloads right now. */
   scheduleStatus: ScheduleStatus

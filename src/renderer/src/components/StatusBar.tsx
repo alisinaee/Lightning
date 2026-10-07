@@ -7,6 +7,8 @@ import { ScheduleChip } from './ScheduleChip'
 import { ScreenFooter } from './ScreenFooter'
 import { ThemeToggle } from './ThemeToggle'
 import { SpeedInput } from './LimitFields'
+import { useSpeedHistory } from '../hooks/useSpeedHistory'
+import { StatusMenuContent } from './StatusMenu'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Switch } from './ui/switch'
 import { UpdateIndicator } from './UpdateIndicator'
@@ -23,6 +25,8 @@ export function StatusBar(): React.JSX.Element {
   const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
   const destinationDir = useAppStore((store) => store.destinationDir)
   const interfaces = useAppStore((store) => store.interfaces)
+  const bar = useAppStore((store) => store.statusBar)
+  const points = useSpeedHistory(bar.menu && bar.menuGraph)
   const networkVisual = useNetworkVisuals()
   const [free, setFree] = useState<number | null>(null)
 
@@ -65,32 +69,62 @@ export function StatusBar(): React.JSX.Element {
     return { id, bytes, name: visual.name, color: visual.solid }
   })
 
-  return (
-    <ScreenFooter className="gap-3 font-mono text-[11.5px] text-muted-foreground">
-      <span className="shrink-0 text-foreground">
-        {listed} {listed === 1 ? 'download' : 'downloads'}
-      </span>
-      {speed > 0 && (
+  const summary = (
+    <>
+      {bar.showCount && (
+        <span className="shrink-0 text-foreground">
+          {listed} {listed === 1 ? 'download' : 'downloads'}
+        </span>
+      )}
+      {bar.showSpeed && speed > 0 && (
         <span className="shrink-0 tabular-nums">
           ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
         </span>
       )}
-      {limit !== undefined && (
+    </>
+  )
+
+  return (
+    <ScreenFooter className="gap-3 font-mono text-[11.5px] text-muted-foreground">
+      {bar.menu ? (
+        <Popover>
+          <PopoverTrigger
+            aria-label="Show download activity"
+            className="flex shrink-0 items-center gap-3 rounded-sm px-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {summary}
+            {!bar.showCount && !bar.showSpeed && <span>Activity</span>}
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            // The menu opens at its top, not scrolled to the first row it could focus.
+            initialFocus={false}
+            className="max-h-[70vh] w-[320px] overflow-y-auto p-3"
+          >
+            <StatusMenuContent points={points} free={free} />
+          </PopoverContent>
+        </Popover>
+      ) : (
+        summary
+      )}
+      {bar.showLimit && limit !== undefined && (
         <span className="shrink-0 tabular-nums">limit {formatSpeed(limit)}</span>
       )}
-      {waiting > 0 && <span className="shrink-0">{waiting} waiting</span>}
+      {bar.showWaiting && waiting > 0 && <span className="shrink-0">{waiting} waiting</span>}
       <ScheduleChip />
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
-        {chips.map((chip) => (
-          <span key={chip.id} className="flex shrink-0 items-center gap-1.5 tabular-nums">
-            <span className="size-1.5 rounded-full" style={{ background: chip.color }} />
-            <span className="max-w-[120px] truncate">{chip.name}</span>
-            <span className="text-foreground">{formatSpeed(chip.bytes)}</span>
-          </span>
-        ))}
+        {bar.showNetworks &&
+          chips.map((chip) => (
+            <span key={chip.id} className="flex shrink-0 items-center gap-1.5 tabular-nums">
+              <span className="size-1.5 rounded-full" style={{ background: chip.color }} />
+              <span className="max-w-[120px] truncate">{chip.name}</span>
+              <span className="text-foreground">{formatSpeed(chip.bytes)}</span>
+            </span>
+          ))}
       </div>
-      <SlowModeControl />
-      {free !== null && <span className="shrink-0">{formatBytes(free)} free</span>}
+      {bar.showSlowMode && <SlowModeControl />}
+      {bar.showFree && free !== null && <span className="shrink-0">{formatBytes(free)} free</span>}
       <UpdateIndicator />
       <ThemeToggle />
     </ScreenFooter>

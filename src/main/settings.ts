@@ -2,7 +2,10 @@ import { rm } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { app, nativeTheme } from 'electron'
 import {
+  ResolvedPrefs,
   DEFAULT_PREFS,
+  DEFAULT_STATUS_BAR,
+  type StatusBarPrefs,
   DOWNLOADS_AT_ONCE,
   type AppPrefs,
   type AppSettings,
@@ -111,6 +114,24 @@ function shortText(value: unknown): string | undefined {
   return typeof value === 'string' ? value.trim().slice(0, 200) : undefined
 }
 
+/** The status bar choices that are what they should be: switches, and a row count from 1 to 12. */
+export function sanitizeStatusBar(parsed: unknown): Partial<StatusBarPrefs> {
+  if (!isRecord(parsed)) return {}
+  const kept: Partial<StatusBarPrefs> = {}
+  for (const key of Object.keys(DEFAULT_STATUS_BAR) as (keyof StatusBarPrefs)[]) {
+    if (key === 'menuRows') {
+      const rows = parsed.menuRows
+      if (typeof rows === 'number' && Number.isInteger(rows) && rows >= 1 && rows <= 12) {
+        kept.menuRows = rows
+      }
+    } else {
+      const value = flag(parsed[key])
+      if (value !== undefined) kept[key] = value
+    }
+  }
+  return kept
+}
+
 /** Keeps a saved Settings page. Readers apply DEFAULT_PREFS for anything left out. */
 export function sanitizePrefs(parsed: unknown): AppPrefs {
   if (!isRecord(parsed)) return {}
@@ -138,6 +159,7 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     const value = flag(parsed[key])
     if (value !== undefined) prefs[key] = value
   }
+  if (parsed.statusBar !== undefined) prefs.statusBar = sanitizeStatusBar(parsed.statusBar)
   if ((PROXY_MODES as readonly string[]).includes(parsed.proxyMode as string)) {
     prefs.proxyMode = parsed.proxyMode as AppPrefs['proxyMode']
   }
@@ -150,8 +172,14 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
 }
 
 /** Saved prefs over the defaults, so a missing field is the default. */
-export function prefsOf(settings: AppSettings): Required<AppPrefs> {
-  return { ...DEFAULT_PREFS, ...sanitizePrefs(settings.prefs) }
+export function prefsOf(settings: AppSettings): ResolvedPrefs {
+  const saved = sanitizePrefs(settings.prefs)
+  return {
+    ...DEFAULT_PREFS,
+    ...saved,
+    // A part left out of what was saved stays as the default.
+    statusBar: { ...DEFAULT_STATUS_BAR, ...saved.statusBar }
+  }
 }
 
 export async function loadSettings(): Promise<AppSettings> {

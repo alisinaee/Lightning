@@ -1,4 +1,5 @@
-import type { AccentId, AppPrefs } from '@shared/types'
+import { DEFAULT_STATUS_BAR } from '@shared/types'
+import type { AccentId, AppPrefs, ResolvedPrefs, StatusBarPrefs } from '@shared/types'
 import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
 import { isProxyAddress } from '@shared/networks'
@@ -29,7 +30,8 @@ const PAGES = [
   'Power',
   'Schedule',
   'Browser',
-  'Interface'
+  'Interface',
+  'Status bar'
 ] as const
 
 const ACCENTS: { id: AccentId; label: string; color: string }[] = [
@@ -124,7 +126,7 @@ export function SettingsDialog({
 }): React.JSX.Element {
   const initial = window.lightning.initialState
   const [page, setPage] = useState<(typeof PAGES)[number]>('General')
-  const [prefs, setPrefs] = useState<Required<AppPrefs>>(initial.prefs)
+  const [prefs, setPrefs] = useState<ResolvedPrefs>(initial.prefs)
   const [schedule, setSchedule] = useState(initial.schedule)
   const theme = useAppStore((store) => store.themeSource)
   const setTheme = useAppStore((store) => store.setThemeSource)
@@ -133,19 +135,28 @@ export function SettingsDialog({
   const checkForUpdateNow = useAppStore((store) => store.checkForUpdateNow)
   const availableUpdate = useAppStore((store) => store.availableUpdate)
   const setTitleBarButtons = useAppStore((store) => store.setTitleBarButtons)
+  const setStatusBar = useAppStore((store) => store.setStatusBar)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<'available' | 'current' | 'failed' | null>(null)
 
   const save = (patch: Partial<AppPrefs>): void => {
-    const next = { ...prefs, ...patch }
+    const next: ResolvedPrefs = {
+      ...prefs,
+      ...patch,
+      statusBar: { ...prefs.statusBar, ...patch.statusBar }
+    }
     setPrefs(next)
     if (patch.uiScale !== undefined) applyScale(patch.uiScale)
     if (patch.accent !== undefined) applyAccent(patch.accent)
     if (patch.showLogs !== undefined || patch.showDebug !== undefined) {
       setTitleBarButtons({ showLogs: next.showLogs, showDebug: next.showDebug })
     }
+    if (patch.statusBar !== undefined) setStatusBar(next.statusBar)
     void window.lightning.updateSettings({ prefs: next })
   }
+
+  const bar = prefs.statusBar
+  const setBar = (patch: Partial<StatusBarPrefs>): void => save({ statusBar: patch })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -390,6 +401,125 @@ export function SettingsDialog({
                 enabled={prefs.browserIntegration}
                 onEnabledChange={(browserIntegration) => save({ browserIntegration })}
               />
+            )}
+            {page === 'Status bar' && (
+              <>
+                <div className="text-[12.5px] text-muted-foreground">
+                  Choose what the bar along the bottom shows, and what the menu holds when you click
+                  its count and speed.
+                </div>
+                <div className="mt-1 text-[12px] font-medium text-muted-foreground">In the bar</div>
+                <Row
+                  checked={bar.showCount}
+                  onChange={(showCount) => setBar({ showCount })}
+                  label="How many downloads there are"
+                />
+                <Row
+                  checked={bar.showSpeed}
+                  onChange={(showSpeed) => setBar({ showSpeed })}
+                  label="The total speed"
+                />
+                <Row
+                  checked={bar.showLimit}
+                  onChange={(showLimit) => setBar({ showLimit })}
+                  label="The speed limit, when one is set"
+                />
+                <Row
+                  checked={bar.showWaiting}
+                  onChange={(showWaiting) => setBar({ showWaiting })}
+                  label="How many are waiting"
+                />
+                <Row
+                  checked={bar.showNetworks}
+                  onChange={(showNetworks) => setBar({ showNetworks })}
+                  label="The speed of each network"
+                />
+                <Row
+                  checked={bar.showSlowMode}
+                  onChange={(showSlowMode) => setBar({ showSlowMode })}
+                  label="Slow mode"
+                />
+                <Row
+                  checked={bar.showFree}
+                  onChange={(showFree) => setBar({ showFree })}
+                  label="Free disk space"
+                />
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">The menu</div>
+                <Row
+                  checked={bar.menu}
+                  onChange={(menu) => setBar({ menu })}
+                  label="Open a menu of live details when the count and speed are clicked"
+                />
+                <fieldset disabled={!bar.menu} className={bar.menu ? '' : 'opacity-50'}>
+                  <Row
+                    checked={bar.menuGraph}
+                    onChange={(menuGraph) => setBar({ menuGraph })}
+                    label="A graph of the speed over the last minute"
+                    disabled={!bar.menu}
+                  />
+                  <Row
+                    checked={bar.menuTotals}
+                    onChange={(menuTotals) => setBar({ menuTotals })}
+                    label="Totals: speed, received, left and time left"
+                    disabled={!bar.menu}
+                  />
+                  <Row
+                    checked={bar.menuNetworks}
+                    onChange={(menuNetworks) => setBar({ menuNetworks })}
+                    label="The speed of each network"
+                    disabled={!bar.menu}
+                  />
+                  <Row
+                    checked={bar.menuConnections}
+                    onChange={(menuConnections) => setBar({ menuConnections })}
+                    label="Connections on each network"
+                    disabled={!bar.menu || !bar.menuNetworks}
+                  />
+                  <Row
+                    checked={bar.menuDownloads}
+                    onChange={(menuDownloads) => setBar({ menuDownloads })}
+                    label="The downloads running now"
+                    disabled={!bar.menu}
+                  />
+                  <Row
+                    checked={bar.menuQueue}
+                    onChange={(menuQueue) => setBar({ menuQueue })}
+                    label="Waiting, paused and failed counts"
+                    disabled={!bar.menu}
+                  />
+                  <Row
+                    checked={bar.menuDisk}
+                    onChange={(menuDisk) => setBar({ menuDisk })}
+                    label="Free disk space and the folder"
+                    disabled={!bar.menu}
+                  />
+                  <label className="mt-2 flex items-center gap-3 text-[13px]">
+                    Running downloads listed
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      aria-label="Running downloads listed"
+                      value={bar.menuRows}
+                      disabled={!bar.menu || !bar.menuDownloads}
+                      onChange={(event) => {
+                        const rows = Math.round(Number(event.target.value))
+                        if (rows >= 1 && rows <= 12) setBar({ menuRows: rows })
+                      }}
+                      className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center text-[13px] outline-none"
+                    />
+                  </label>
+                </fieldset>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2 self-start"
+                  onClick={() => setBar(DEFAULT_STATUS_BAR)}
+                >
+                  Reset to the defaults
+                </Button>
+              </>
             )}
             {page === 'Interface' && (
               <>

@@ -12,6 +12,7 @@ import type {
   NetworkPreferences,
   RequestExtras,
   SettingsPush,
+  StatusBarPrefs,
   ThemeSource,
   UpdateInfo
 } from '@shared/types'
@@ -139,6 +140,9 @@ interface AppStore {
   showLogs: boolean
   showDebug: boolean
   setTitleBarButtons: (patch: { showLogs?: boolean; showDebug?: boolean }) => void
+  /** The status bar's items and menu (Settings → Status bar). */
+  statusBar: StatusBarPrefs
+  setStatusBar: (statusBar: StatusBarPrefs) => void
 
   homeDir: string
   downloadsDir: string
@@ -263,6 +267,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   showLogs: window.lightning.initialState.prefs.showLogs,
   showDebug: window.lightning.initialState.prefs.showDebug,
   setTitleBarButtons: (patch) => set(patch),
+  statusBar: window.lightning.initialState.prefs.statusBar,
+  setStatusBar: (statusBar) => set({ statusBar }),
 
   homeDir: initial.homeDir,
   downloadsDir: initial.downloadsDir,
