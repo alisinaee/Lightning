@@ -232,7 +232,9 @@ app.whenReady().then(async () => {
 
   createWindow()
   installAppMenu(() => mainWindow)
-  if (!testKnobs.hideWindow) installTray(() => mainWindow)
+  if (!testKnobs.hideWindow) {
+    installTray(() => mainWindow, { downloads: () => downloadManager?.liveStates() ?? [] })
+  }
   installClipboardWatcher(() => mainWindow)
   installLocalApi(() => mainWindow)
   await applyBehavior(await loadSettings())

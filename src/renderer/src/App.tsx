@@ -66,13 +66,32 @@ function App(): React.JSX.Element {
   }, [checkForUpdate])
 
   useEffect(() => {
-    return window.lightning.onAppCommand((command) => {
+    return window.lightning.onAppCommand((command, argument) => {
       const store = useAppStore.getState()
       if (command === 'new-download') store.openNewDownload()
       else if (command === 'several-links') store.openMultiLinks()
       else if (command === 'settings') setSettingsOpen(true)
-      else if (command === 'check-update') void store.checkForUpdate()
-      else if (command === 'logs') useLogsStore.getState().setOpen(true)
+      else if (command === 'open-download' && argument)
+        store.setView({ name: 'download', id: argument })
+      else if (command === 'check-update') {
+        // A check the person asked for from the menu: it says what it found.
+        void store.checkForUpdateNow().then((result) => {
+          if (result === 'available') {
+            useAppStore.setState((state) => ({
+              availableUpdate: state.availableUpdate && {
+                ...state.availableUpdate,
+                dismissed: false
+              }
+            }))
+          } else {
+            window.alert(
+              result === 'current'
+                ? `You have the latest version (${window.lightning.initialState.version}).`
+                : 'Couldn’t reach GitHub. Check your connection and try again.'
+            )
+          }
+        })
+      } else if (command === 'logs') useLogsStore.getState().setOpen(true)
       else if (command === 'pause-all' || command === 'resume-all') {
         for (const download of Object.values(store.downloads)) {
           if (

@@ -42,7 +42,7 @@ test.describe('status bar menu @smoke', () => {
     const choose = async (name: string | RegExp): Promise<void> => {
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       await page.getByRole('button', { name: 'Status bar', exact: true }).click()
-      await page.getByRole('checkbox', { name }).click()
+      await page.getByRole('checkbox', { name, exact: typeof name === 'string' }).click()
       await page.keyboard.press('Escape')
     }
 
@@ -83,5 +83,17 @@ test.describe('status bar menu @smoke', () => {
       expect(saved).toBe(false)
       await expect(lightning.page.getByText(/ free$/)).toBeHidden()
     }).toPass({ timeout: 30_000 })
+  })
+})
+
+test.describe('commands from the menu bar icon @smoke', () => {
+  test('a running download clicked in that menu opens its page', async ({ lightning, serve }) => {
+    const origin = await serve({ size: 60 * BLOCK, bytesPerSecond: 60_000 })
+    const id = await lightning.start(origin.url(), origin.sha256, { fileName: 'delta.bin' })
+    await lightning.evaluateMain(({ BrowserWindow }, downloadId) => {
+      BrowserWindow.getAllWindows()[0].webContents.send('app:command', 'open-download', downloadId)
+    }, id)
+    await expect(lightning.page.getByText('delta.bin').first()).toBeVisible()
+    await expect(lightning.page.getByRole('button', { name: /Downloads/ }).first()).toBeVisible()
   })
 })

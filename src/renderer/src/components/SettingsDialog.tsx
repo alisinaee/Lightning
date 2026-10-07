@@ -510,6 +510,53 @@ export function SettingsDialog({
                     />
                   </label>
                 </fieldset>
+                <div className="mt-3 text-[12px] font-medium text-muted-foreground">
+                  Menu bar icon
+                </div>
+                <div className="text-[12px] text-muted-foreground">
+                  The menu you get from the Lightning icon at the top of the screen.
+                </div>
+                <Row
+                  checked={bar.trayTotals}
+                  onChange={(trayTotals) => setBar({ trayTotals })}
+                  label="How many are downloading and the total speed"
+                />
+                <Row
+                  checked={bar.trayNetworks}
+                  onChange={(trayNetworks) => setBar({ trayNetworks })}
+                  label="The speed and connections of each network"
+                />
+                <Row
+                  checked={bar.trayDownloads}
+                  onChange={(trayDownloads) => setBar({ trayDownloads })}
+                  label="The downloads running now (click one to open it)"
+                />
+                <Row
+                  checked={bar.trayQueue}
+                  onChange={(trayQueue) => setBar({ trayQueue })}
+                  label="Waiting, paused and failed counts"
+                />
+                <Row
+                  checked={bar.trayTitle}
+                  onChange={(trayTitle) => setBar({ trayTitle })}
+                  label="The total speed as text beside the icon"
+                />
+                <label className="mt-1 flex items-center gap-3 text-[13px]">
+                  Running downloads listed
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    aria-label="Menu bar downloads listed"
+                    value={bar.trayRows}
+                    disabled={!bar.trayDownloads}
+                    onChange={(event) => {
+                      const rows = Math.round(Number(event.target.value))
+                      if (rows >= 1 && rows <= 10) setBar({ trayRows: rows })
+                    }}
+                    className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center text-[13px] outline-none"
+                  />
+                </label>
                 <Button
                   type="button"
                   variant="secondary"

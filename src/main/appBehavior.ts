@@ -1,3 +1,4 @@
+import { setTrayConfig } from './appMenu'
 import { app, session, type BrowserWindow } from 'electron'
 import type { AppSettings } from '../shared/types'
 import { isProxyAddress } from '../shared/networks'
@@ -62,6 +63,7 @@ function applyLoginItem(enabled: boolean): void {
 export async function applyBehavior(settings: AppSettings): Promise<void> {
   const prefs = prefsOf(settings)
   behavior.closeHides = prefs.closeToBackground
+  setTrayConfig(prefs.statusBar, settings.networkPreferences)
   applyLoginItem(prefs.openAtLogin)
   clipboardWatcher?.setEnabled(prefs.watchClipboard)
   await localApi?.setEnabled(prefs.browserIntegration)

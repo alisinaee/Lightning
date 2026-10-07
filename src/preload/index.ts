@@ -122,8 +122,9 @@ const lightningApi = {
   },
 
   /** The OS handed Lightning a link (a magnet link, a .torrent): takePendingLink() has it. */
-  onAppCommand: (callback: (command: string) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, command: string): void => callback(command)
+  onAppCommand: (callback: (command: string, argument?: string) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, command: string, argument?: string): void =>
+      callback(command, argument)
     ipcRenderer.on(IpcChannels.appCommand, listener)
     return () => ipcRenderer.removeListener(IpcChannels.appCommand, listener)
   },

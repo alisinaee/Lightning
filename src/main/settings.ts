@@ -119,10 +119,11 @@ export function sanitizeStatusBar(parsed: unknown): Partial<StatusBarPrefs> {
   if (!isRecord(parsed)) return {}
   const kept: Partial<StatusBarPrefs> = {}
   for (const key of Object.keys(DEFAULT_STATUS_BAR) as (keyof StatusBarPrefs)[]) {
-    if (key === 'menuRows') {
-      const rows = parsed.menuRows
-      if (typeof rows === 'number' && Number.isInteger(rows) && rows >= 1 && rows <= 12) {
-        kept.menuRows = rows
+    if (key === 'menuRows' || key === 'trayRows') {
+      const rows = parsed[key]
+      const most = key === 'menuRows' ? 12 : 10
+      if (typeof rows === 'number' && Number.isInteger(rows) && rows >= 1 && rows <= most) {
+        kept[key] = rows
       }
     } else {
       const value = flag(parsed[key])

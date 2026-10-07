@@ -2,6 +2,13 @@ import { readFileSync } from 'fs'
 import { app, Menu, Tray, nativeImage, type BrowserWindow } from 'electron'
 import trayTemplate from '../../resources/trayTemplate.png?asset'
 import { IpcChannels } from '../shared/ipc-channels'
+import { buildTrayModel } from '../shared/trayModel'
+import {
+  DEFAULT_STATUS_BAR,
+  type DownloadState,
+  type NetworkPreferences,
+  type StatusBarPrefs
+} from '../shared/types'
 
 export type AppCommand =
   | 'new-download'
@@ -11,13 +18,32 @@ export type AppCommand =
   | 'settings'
   | 'check-update'
   | 'logs'
+  /** Opens one download's page; the id goes with it. */
+  | 'open-download'
 
-function send(getWindow: () => BrowserWindow | null, command: AppCommand): void {
+function send(getWindow: () => BrowserWindow | null, command: AppCommand, argument?: string): void {
   const window = getWindow()
   if (!window || window.isDestroyed()) return
   if (!window.isVisible()) window.show()
   window.focus()
-  window.webContents.send(IpcChannels.appCommand, command)
+  window.webContents.send(IpcChannels.appCommand, command, argument)
+}
+
+/** What the tray menu shows is set from Settings → Status bar, and the names are the ones the
+ * person gave their networks. */
+let trayConfig: { prefs: StatusBarPrefs; names: Record<string, string> } = {
+  prefs: DEFAULT_STATUS_BAR,
+  names: {}
+}
+let rebuildTray: (() => void) | null = null
+
+export function setTrayConfig(prefs: StatusBarPrefs, networks?: NetworkPreferences): void {
+  const names: Record<string, string> = {}
+  for (const [id, preference] of Object.entries(networks ?? {})) {
+    if (preference.customName) names[id] = preference.customName
+  }
+  trayConfig = { prefs, names }
+  rebuildTray?.()
 }
 
 function show(getWindow: () => BrowserWindow | null): void {
@@ -106,27 +132,62 @@ export function installAppMenu(getWindow: () => BrowserWindow | null): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-/** The menu-bar status icon: a filled bolt the system tints, like other menu-bar apps. */
-export function installTray(getWindow: () => BrowserWindow | null): Tray {
+/** The menu-bar status icon: a filled bolt the system tints, like other menu-bar apps. Its menu
+ * says what is downloading (as Settings → Status bar allows) above the commands, and is
+ * rebuilt when that changes. */
+export function installTray(
+  getWindow: () => BrowserWindow | null,
+  source: { downloads: () => readonly DownloadState[] }
+): Tray {
   // 36px artwork at scale 2, so the menu bar shows an 18pt filled bolt and stays sharp.
   const image = nativeImage.createFromBuffer(readFileSync(trayTemplate), { scaleFactor: 2 })
   image.setTemplateImage(true)
   const tray = new Tray(image)
   tray.setToolTip(app.name)
-  const menu = Menu.buildFromTemplate([
-    { label: 'Show Lightning', click: () => show(getWindow) },
-    { type: 'separator' },
-    { label: 'New Download…', click: () => send(getWindow, 'new-download') },
-    { label: 'Add Several Links…', click: () => send(getWindow, 'several-links') },
-    { label: 'Pause All', click: () => send(getWindow, 'pause-all') },
-    { label: 'Resume All', click: () => send(getWindow, 'resume-all') },
-    { type: 'separator' },
-    { label: 'Settings…', click: () => send(getWindow, 'settings') },
-    { label: 'Check for Updates…', click: () => send(getWindow, 'check-update') },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ])
-  tray.setContextMenu(menu)
+  let shown = ''
+
+  const rebuild = (): void => {
+    const model = buildTrayModel(source.downloads(), trayConfig.names, trayConfig.prefs)
+    if (model.signature === shown) return
+    shown = model.signature
+    if (process.platform === 'darwin') tray.setTitle(model.title)
+    const status: Electron.MenuItemConstructorOptions[] = model.lines.map((line) =>
+      line.kind === 'separator'
+        ? { type: 'separator' }
+        : line.kind === 'download'
+          ? { label: line.text, click: () => send(getWindow, 'open-download', line.id) }
+          : { label: line.text, enabled: false }
+    )
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        ...status,
+        ...(status.length > 0 ? [{ type: 'separator' as const }] : []),
+        { label: 'Show Lightning', click: () => show(getWindow) },
+        { type: 'separator' },
+        { label: 'New Download…', click: () => send(getWindow, 'new-download') },
+        { label: 'Add Several Links…', click: () => send(getWindow, 'several-links') },
+        { label: 'Pause All', enabled: model.canPause, click: () => send(getWindow, 'pause-all') },
+        {
+          label: 'Resume All',
+          enabled: model.canResume,
+          click: () => send(getWindow, 'resume-all')
+        },
+        { type: 'separator' },
+        { label: 'Settings…', click: () => send(getWindow, 'settings') },
+        { label: 'Check for Updates…', click: () => send(getWindow, 'check-update') },
+        { type: 'separator' },
+        { label: 'Quit', click: () => app.quit() }
+      ])
+    )
+  }
+
+  rebuildTray = () => {
+    shown = ''
+    rebuild()
+  }
+  rebuild()
+  // A menu is rebuilt only when what it says changed, so this costs next to nothing when idle.
+  setInterval(rebuild, 2000).unref()
   tray.on('click', () => show(getWindow))
   return tray
 }

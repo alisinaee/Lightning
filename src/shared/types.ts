@@ -349,6 +349,14 @@ export interface StatusBarPrefs {
   menuDisk: boolean
   /** How many running downloads the menu lists at most. */
   menuRows: number
+  /** The menu of the icon in the menu bar (the system tray). */
+  trayTitle: boolean
+  trayTotals: boolean
+  trayNetworks: boolean
+  trayDownloads: boolean
+  trayQueue: boolean
+  /** How many running downloads that menu lists at most. */
+  trayRows: number
 }
 
 export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
@@ -367,7 +375,13 @@ export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   menuDownloads: true,
   menuQueue: true,
   menuDisk: true,
-  menuRows: 5
+  menuRows: 5,
+  trayTitle: false,
+  trayTotals: true,
+  trayNetworks: true,
+  trayDownloads: true,
+  trayQueue: true,
+  trayRows: 4
 }
 
 /** Choices from Settings. Absent fields mean the defaults in DEFAULT_PREFS. */
