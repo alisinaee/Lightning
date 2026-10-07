@@ -10,6 +10,26 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.17',
+      items: [
+        {
+          kind: 'new',
+          title: 'Download later for several links',
+          text: 'The last step of Several links has a Download later button. The group is added and waits; its Start button begins it.'
+        },
+        {
+          kind: 'improved',
+          title: 'DNS you can understand',
+          text: 'Every DNS in the list says what it is. The test takes a second sample from the best servers and only suggests a change that is worth making.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Auto DNS on resume',
+          text: 'A resumed download on Auto DNS has its site tested, just as a new one does.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.16',
       items: [
         {
