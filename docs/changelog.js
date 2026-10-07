@@ -10,6 +10,21 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.19',
+      items: [
+        {
+          kind: 'new',
+          title: 'Live menu bar icon',
+          text: 'The menu behind the Lightning icon at the top of the screen now shows what is downloading: the total speed, each network and its connections, the running downloads (click one to open it) and the waiting, paused and failed counts. Settings → Status bar chooses every part.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Check for Updates from the menu',
+          text: 'It asks GitHub straight away and tells you what it found.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.18',
       items: [
         {
