@@ -135,6 +135,11 @@ test.describe('file names @smoke', () => {
       'an ISO-8859-1 filename* is decoded',
       "attachment; filename*=iso-8859-1'en'%A3%20rates.txt",
       /^£ rates\.txt$/
+    ],
+    [
+      'an RFC 2047 encoded-word name is decoded',
+      'attachment; filename="=?UTF-8?B?w6l0w6kudHh0?="',
+      /^été\.txt$/
     ]
   ]
   for (const [label, disposition, expected] of cases) {
