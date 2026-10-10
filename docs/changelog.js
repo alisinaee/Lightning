@@ -10,6 +10,26 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.22',
+      items: [
+        {
+          kind: 'faster',
+          title: 'Kinder to slow disks',
+          text: 'On a slow drive, many streams writing at once make the disk the bottleneck. Auto now uses fewer streams when the disk falls behind and brings them back when it catches up, and no longer mistakes a connection held up by the disk for a slow one.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Mail-style file names',
+          text: 'Names a server sends in the mail style (=?UTF-8?B?...?=) are decoded instead of being saved as that text.'
+        },
+        {
+          kind: 'fixed',
+          title: 'The menu bar panel closes when you click elsewhere',
+          text: 'Like other menu bar apps, the panel under the icon closes when you click outside it, even when Lightning was not the active app.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.21',
       items: [
         {
