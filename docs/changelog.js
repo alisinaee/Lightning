@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.23',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'Actions when you select downloads',
+          text: 'The selection bar now has Remove from list, Delete files and Cancel for what is selected, each showing how many it applies to and asking first. Before, a selection of finished or failed downloads showed no actions.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.22',
       items: [
         {
