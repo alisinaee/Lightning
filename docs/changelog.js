@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.29',
+      items: [
+        {
+          kind: 'improved',
+          title: 'Cleaner rows',
+          text: 'The coloured line down the left edge of running and failed rows is gone; the tint, the percentage and the progress line along the bottom remain.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.28',
       items: [
         {
