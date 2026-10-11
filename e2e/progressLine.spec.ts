@@ -42,5 +42,4 @@ test('a running row has a progress line and a percentage, and Settings can turn 
   await expect(bar).toHaveCount(1)
   const barBox = await bar.boundingBox()
   expect(barBox!.width).toBeLessThan(rowBox!.width * 0.5)
-  await page.screenshot({ path: '$S/line-off.png' })
 })
