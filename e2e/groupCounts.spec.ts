@@ -61,3 +61,30 @@ test('counts, filters and search follow the files of a group @smoke', async ({
   await expect(page.getByText('broken-one.bin')).toBeHidden()
   await expect(page.getByText('1/1')).toBeVisible()
 })
+
+test('the up and down buttons mark the match being looked at @smoke', async ({
+  lightning,
+  serve
+}) => {
+  for (const name of ['find-a.bin', 'find-b.bin', 'find-c.bin']) {
+    const origin = await serve({ size: 2 * BLOCK })
+    await lightning.start(origin.url(), origin.sha256, { fileName: name })
+    await lightning.waitForStatus('completed')
+  }
+  const page = lightning.page
+  await page.getByRole('searchbox', { name: 'Search downloads' }).fill('find-')
+  await expect(page.getByText('1/3')).toBeVisible()
+  const current = page.locator('[data-current="true"]')
+  await expect(page.locator('[data-hit="true"]')).toHaveCount(3)
+  await expect(current).toHaveCount(1)
+  const first = await current.getAttribute('data-file-id')
+
+  await page.getByRole('button', { name: 'Next result' }).click()
+  await expect(page.getByText('2/3')).toBeVisible()
+  await expect(current).toHaveCount(1)
+  expect(await current.getAttribute('data-file-id')).not.toBe(first)
+
+  await page.getByRole('button', { name: 'Previous result' }).click()
+  await expect(page.getByText('1/3')).toBeVisible()
+  expect(await current.getAttribute('data-file-id')).toBe(first)
+})

@@ -407,3 +407,14 @@
     --color-accent-onsolid: #240810;
   }
 }
+
+/* Search: the files found are tinted, and the one stepped to is marked. */
+[data-hit='true'] {
+  background-color: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+[data-hit='true'][data-current='true'] {
+  background-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow:
+    inset 3px 0 0 var(--primary),
+    inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent);
+}

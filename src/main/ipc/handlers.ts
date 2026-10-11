@@ -293,7 +293,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
     const saved = await loadSettings()
+    const vpnWasOn = networks.useVpn
     networks.useVpn = saved.useVpn ?? true
+    // Switched on: downloads already running (or paused) take the tunnel too, as new ones would.
+    if (networks.useVpn && !vpnWasOn) await manager.enableVpn()
     manager.applySettings(saved)
     scheduleController.apply(saved.schedule)
     await applyBehavior(saved)

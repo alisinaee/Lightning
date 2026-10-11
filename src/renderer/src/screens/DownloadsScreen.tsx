@@ -175,6 +175,16 @@ export function DownloadsScreen({
     const hit = document.querySelectorAll<HTMLElement>('[data-hit="true"]')[matchIndex]
     hit?.scrollIntoView({ block: 'nearest' })
   }, [matchIndex, search])
+  // The match being looked at is marked (and the others found lightly), also when the list is
+  // drawn again: marked on the page, not in the rows, so a progress update cannot clear it.
+  useEffect(() => {
+    const hits = document.querySelectorAll<HTMLElement>('[data-hit="true"]')
+    hits.forEach((row, index) => {
+      if (index === matchIndex) row.setAttribute('data-current', 'true')
+      else row.removeAttribute('data-current')
+    })
+    return () => hits.forEach((row) => row.removeAttribute('data-current'))
+  })
 
   // Every file of what is listed, a group's included, open or not; a group narrowed by the
   // filters lists only the files that match, so those are the ones it can select.

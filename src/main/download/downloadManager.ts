@@ -341,6 +341,20 @@ export class DownloadManager {
     this.pump()
   }
 
+  /** "Use VPN for downloads" was switched on: every unfinished download gets the VPN tunnels
+   * switched on, as one started now would. (Switching it off is handled by dropVpn.) */
+  async enableVpn(): Promise<void> {
+    for (const runtime of this.runtimes.values()) {
+      const { status } = runtime.state
+      if (status !== 'downloading' && status !== 'queued' && status !== 'paused') continue
+      for (const network of runtime.state.networks) {
+        if (network.kind === 'vpn' && !network.enabled && this.networks.find(network.id)) {
+          await this.setNetworkEnabled(runtime.state.id, network.id, true).catch(() => {})
+        }
+      }
+    }
+  }
+
   /** A network ran out of data, or a limit changed: each download's networks are looked at
    * again, so one at its limit stops being used, and one no longer at it is used again. */
   async resetNetworkUsage(id: string): Promise<void> {

@@ -64,3 +64,24 @@ test.describe('the VPN control in the top bar @smoke', () => {
     ).not.toBeChecked()
   })
 })
+
+test.describe('switching the VPN on reaches downloads already there @smoke', () => {
+  test.use({
+    appEnv: { LIGHTNING_E2E_INTERFACES: 'a=127.0.0.1,v=127.0.0.2=255.0.0.0=vpn=Fake VPN' }
+  })
+
+  test('a paused download takes the tunnel when the VPN is switched on', async ({
+    lightning,
+    serve
+  }) => {
+    const origin = await serve({ size: 60 * 64 * 1024, bytesPerSecond: 30_000 })
+    const id = await lightning.start(origin.url(), origin.sha256, { fileName: 'tunnel.bin' })
+    await lightning.api.pauseDownload(id)
+    await lightning.waitForStatus('paused')
+    const tunnel = async (): Promise<boolean | undefined> =>
+      (await lightning.byId(id))?.networks.find((network) => network.kind === 'vpn')?.enabled
+    expect(await tunnel()).toBe(false)
+    await lightning.page.getByRole('switch', { name: 'Use VPN for downloads' }).click()
+    await expect.poll(tunnel, { timeout: 15_000 }).toBe(true)
+  })
+})
