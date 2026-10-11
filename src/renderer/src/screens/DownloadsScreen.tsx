@@ -313,6 +313,11 @@ export function DownloadsScreen({
     (item): item is DownloadState =>
       !isFinished(item) && item.status === 'error' && item.resumable !== false && !linkExpired(item)
   )
+  // What the destructive buttons of the selection bar apply to: each only to the selected
+  // downloads it fits, and each asks first (the same confirmations as a row's menu).
+  const removable = chosen.filter((item) => !isUnfinished(item))
+  const trashable = chosen.filter(isTrashable)
+  const cancelable = chosen.filter(isUnfinished)
   const confirmationItems = confirmation
     ? allItems.filter(
         (item) =>
@@ -608,6 +613,48 @@ export function DownloadsScreen({
                 onClick={() => void runAction(retryable, 'resume')}
               >
                 Retry ({retryable.length})
+              </Button>
+            )}
+            {removable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                title="Takes them off the list; the files stay on your computer"
+                onClick={() =>
+                  setConfirmation({ kind: 'remove', ids: removable.map((item) => item.id) })
+                }
+              >
+                Remove from list ({removable.length})
+              </Button>
+            )}
+            {trashable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                title={`Moves the files to the ${platformTrash()}`}
+                onClick={() =>
+                  setConfirmation({ kind: 'trash', ids: trashable.map((item) => item.id) })
+                }
+              >
+                Delete files ({trashable.length})
+              </Button>
+            )}
+            {cancelable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                title="Stops them and deletes what was downloaded so far"
+                onClick={() =>
+                  setConfirmation({ kind: 'cancel', ids: cancelable.map((item) => item.id) })
+                }
+              >
+                Cancel ({cancelable.length})
               </Button>
             )}
           </div>
