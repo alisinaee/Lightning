@@ -45,11 +45,14 @@ export const GroupFileRow = memo(
     onSelect,
     onOpen,
     onError,
-    getVisual
+    getVisual,
+    hit
   }: {
     group: GroupInfo
     entry: GroupFileEntry
     selected: boolean
+    /** The search found this file. */
+    hit?: boolean
     selecting?: boolean
     onSelect: (id: string, on: boolean) => void
     onOpen: (id: string) => void
@@ -238,6 +241,8 @@ export const GroupFileRow = memo(
     return (
       <div
         role="row"
+        data-file-id={id}
+        data-hit={hit ? 'true' : undefined}
         data-selected={selected || undefined}
         data-status={info.status}
         onDoubleClick={(event) => {
@@ -321,6 +326,7 @@ export const GroupFileRow = memo(
     a.entry.kind === b.entry.kind &&
     subject(a.entry) === subject(b.entry) &&
     a.selected === b.selected &&
+    a.hit === b.hit &&
     a.group === b.group &&
     a.visualsKey === b.visualsKey &&
     a.onSelect === b.onSelect &&

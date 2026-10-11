@@ -52,6 +52,9 @@ import { FileKindIcon } from './FileKindIcon'
 export function GroupTableRow({
   entry,
   selected,
+  only,
+  forceOpen,
+  hits,
   getVisual,
   onToggle,
   onSelect,
@@ -59,6 +62,12 @@ export function GroupTableRow({
 }: {
   entry: GroupEntry
   selected: Set<string>
+  /** The files to list (the ones the filters and search keep); undefined lists all of them. */
+  only?: Set<string>
+  /** Opened while the list is narrowed, whatever the user left it as. */
+  forceOpen?: boolean
+  /** The files the search found. */
+  hits?: Set<string>
   getVisual: ResolveNetworkVisual
   onToggle: (ids: string[], on: boolean) => void
   onSelect: (id: string, on: boolean) => void
@@ -79,7 +88,8 @@ export function GroupTableRow({
   const editGroup = useAppStore((store) => store.editGroup)
   // In the store, not here: the row moves around the table as its files change state, which can
   // remount it, and it must stay as the user left it.
-  const open = useAppStore((store) => store.groupUi[group.id]?.open ?? false)
+  const storedOpen = useAppStore((store) => store.groupUi[group.id]?.open ?? false)
+  const open = forceOpen || storedOpen
   const toggleUi = useAppStore((store) => store.toggleGroupUi)
   const toggleOpen = (): void => toggleUi(group.id, 'open')
   const [now, setNow] = useState(() => Date.now())
@@ -343,34 +353,40 @@ export function GroupTableRow({
               <div className="py-1 text-[12px] text-muted-foreground">No files in this group.</div>
             )}
           </div>
-          {sortedItems.map((item) => (
-            <GroupFileRow
-              key={item.id}
-              group={group}
-              entry={
-                isFinished(item) || item.status === 'completed'
-                  ? { kind: 'finished', download: item }
-                  : { kind: 'download', download: item }
-              }
-              selected={selected.has(item.id)}
-              getVisual={getVisual}
-              onSelect={onSelect}
-              onOpen={onOpen}
-              onError={setError}
-            />
-          ))}
-          {sortedPending.map((item) => (
-            <GroupFileRow
-              key={item.id}
-              group={group}
-              entry={{ kind: 'waiting', item }}
-              selected={false}
-              getVisual={getVisual}
-              onSelect={onSelect}
-              onOpen={onOpen}
-              onError={setError}
-            />
-          ))}
+          {sortedItems
+            .filter((item) => !only || only.has(item.id))
+            .map((item) => (
+              <GroupFileRow
+                key={item.id}
+                group={group}
+                entry={
+                  isFinished(item) || item.status === 'completed'
+                    ? { kind: 'finished', download: item }
+                    : { kind: 'download', download: item }
+                }
+                selected={selected.has(item.id)}
+                hit={hits?.has(item.id)}
+                getVisual={getVisual}
+                onSelect={onSelect}
+                onOpen={onOpen}
+                onError={setError}
+              />
+            ))}
+          {sortedPending
+            .filter((item) => !only || only.has(item.id))
+            .map((item) => (
+              <GroupFileRow
+                key={item.id}
+                group={group}
+                entry={{ kind: 'waiting', item }}
+                selected={false}
+                hit={hits?.has(item.id)}
+                getVisual={getVisual}
+                onSelect={onSelect}
+                onOpen={onOpen}
+                onError={setError}
+              />
+            ))}
         </>
       )}
 

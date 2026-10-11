@@ -58,7 +58,8 @@ import {
   entryItems,
   filterEntries,
   queuePositions,
-  sortEntries
+  sortEntries,
+  type ListEntry
 } from '../utils/downloadList'
 import { FILE_KINDS, type FileKind } from '../utils/fileKind'
 import { describeError, linkExpired } from '../utils/format'
@@ -71,6 +72,14 @@ const EMPTY_MESSAGES: Partial<Record<DownloadFilter, string>> = {
   downloading: 'Nothing is downloading right now',
   queued: 'Nothing is waiting in the queue',
   paused: 'Nothing is paused'
+}
+
+/** The files of an entry that are listed: a group the filters narrowed lists only its matching ones. */
+const listedItems = (entry: ListEntry, only: Map<string, Set<string>> | null): Item[] => {
+  const items = entryItems(entry)
+  if (!only || entry.type === 'item') return items
+  const matching = only.get(entry.id)
+  return matching ? items.filter((item) => matching.has(item.id)) : []
 }
 
 const platformTrash = (): string =>
@@ -145,36 +154,41 @@ export function DownloadsScreen({
   )
   const counts = useMemo(() => countEntries(entries), [entries])
   const positions = useMemo(() => queuePositions(downloads), [downloads])
-  const shown = useMemo(
-    () => sortEntries(filterEntries(entries, filter, kindFilter, search), sort),
-    [entries, filter, kindFilter, search, sort]
+  const filtered = useMemo(
+    () => filterEntries(entries, filter, kindFilter, search),
+    [entries, filter, kindFilter, search]
   )
+  const shown = useMemo(() => sortEntries(filtered.entries, sort), [filtered, sort])
   const [matchIndex, setMatchIndex] = useState(0)
-  const matchCount = search.trim() === '' ? 0 : shown.length
+  const matchCount = search.trim() === '' ? 0 : filtered.hits.size
   const stepMatch = (dir: 1 | -1): void => {
     if (matchCount === 0) return
     setMatchIndex((index) => (index + dir + matchCount) % matchCount)
   }
   useEffect(() => setMatchIndex(0), [search])
+  // Only a move through the results or a new search scrolls: a progress push does not.
   useEffect(() => {
-    if (matchCount === 0) return
-    const row = document.querySelectorAll<HTMLElement>('[data-row-entry]')[matchIndex]
-    row?.scrollIntoView({ block: 'nearest' })
-  }, [matchIndex, matchCount, shown])
+    const hit = document.querySelectorAll<HTMLElement>('[data-hit="true"]')[matchIndex]
+    hit?.scrollIntoView({ block: 'nearest' })
+  }, [matchIndex, search])
 
-  // Every file of what is listed, a group's included, open or not.
-  const items = useMemo(() => shown.flatMap(entryItems), [shown])
+  // Every file of what is listed, a group's included, open or not; a group narrowed by the
+  // filters lists only the files that match, so those are the ones it can select.
+  const items = useMemo(
+    () => shown.flatMap((entry) => listedItems(entry, filtered.only)),
+    [shown, filtered.only]
+  )
   // What is on screen top to bottom, for a Shift-click range.
   const orderedIds = useMemo(
     () =>
       shown.flatMap((entry) =>
         entry.type === 'item'
           ? [entry.item.id]
-          : groupUi[entry.id]?.open
-            ? entry.entry.items.map((item) => item.id)
+          : filtered.only || groupUi[entry.id]?.open
+            ? listedItems(entry, filtered.only).map((item) => item.id)
             : []
       ),
-    [shown, groupUi]
+    [shown, groupUi, filtered.only]
   )
   const allItems = useMemo(() => entries.flatMap(entryItems), [entries])
   // Only what's still listed counts: one that finished or went is no longer selected.
@@ -795,6 +809,7 @@ export function DownloadsScreen({
                       item={entry.item}
                       queuePosition={positions.get(entry.id)}
                       selected={selected.has(entry.id)}
+                      hit={filtered.hits.has(entry.id)}
                       handlers={handlers}
                       getVisual={getVisual}
                       visualsKey={visualsKey}
@@ -804,6 +819,9 @@ export function DownloadsScreen({
                       key={entry.id}
                       entry={entry.entry}
                       selected={selected}
+                      only={filtered.only?.get(entry.id)}
+                      forceOpen={filtered.only !== null}
+                      hits={filtered.hits}
                       getVisual={getVisual}
                       onToggle={toggle}
                       onSelect={selectRow}

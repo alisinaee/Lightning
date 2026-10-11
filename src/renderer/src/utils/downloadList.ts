@@ -86,8 +86,51 @@ export interface ListCounts {
   kinds: Record<FileKind, number>
 }
 
-/** What each sidebar item would show: a group counts once under its status, and once under every
- * file kind it holds. */
+/** One file of what is listed: a download on its own, a file of a group (finished or not), or a
+ * file of a group that is still waiting to start. Counts, filters and search all work on these,
+ * not on rows, so a group of five finished files is five finished files. */
+export interface FileRef {
+  id: string
+  status: StatusKey
+  kind: FileKind
+  name: string
+  url: string
+}
+
+/** What state a file is in for the sidebar and the filters. */
+export function fileStatus(item: Item): StatusKey {
+  if (isFinished(item) || item.status === 'completed') return 'completed'
+  return statusKeyOf(item)
+}
+
+/** Every file of a list entry, a group's waiting ones included. */
+export function filesOf(entry: ListEntry): FileRef[] {
+  const files = entryItems(entry).map((item): FileRef => ({
+    id: item.id,
+    status: fileStatus(item),
+    kind: kindOfDownload(item),
+    name: item.fileName,
+    url: item.url
+  }))
+  if (entry.type === 'group') {
+    for (const waiting of entry.entry.group.pending) {
+      files.push({
+        id: waiting.id,
+        // A file waiting its turn is queued; one that could not start has failed.
+        status: waiting.error ? 'failed' : 'queued',
+        kind: kindOfDownload({
+          kind: waiting.request.kind,
+          fileName: waiting.request.suggestedFileName
+        }),
+        name: waiting.request.suggestedFileName,
+        url: waiting.request.url
+      })
+    }
+  }
+  return files
+}
+
+/** What each sidebar item would show: every count is a number of files. */
 export function countEntries(entries: ListEntry[]): ListCounts {
   const statuses: Record<DownloadFilter, number> = {
     all: 0,
@@ -110,35 +153,59 @@ export function countEntries(entries: ListEntry[]): ListCounts {
     other: 0
   }
   for (const entry of entries) {
-    const status = entryStatus(entry)
-    for (const filter of Object.keys(statuses) as DownloadFilter[]) {
-      if (matchesFilter(filter, status)) statuses[filter]++
+    for (const file of filesOf(entry)) {
+      for (const filter of Object.keys(statuses) as DownloadFilter[]) {
+        if (matchesFilter(filter, file.status)) statuses[filter]++
+      }
+      kinds[file.kind]++
     }
-    for (const kind of new Set(entryItems(entry).map(kindOfDownload))) kinds[kind]++
   }
   return { statuses, kinds }
 }
+
+/** What a status, a kind and a search leave of the list. */
+export interface FilteredList {
+  entries: ListEntry[]
+  /** While anything narrows the list: for each group, the ids of its files that match, which are
+   * the only ones it lists (and it is shown opened). Null when nothing narrows it. */
+  only: Map<string, Set<string>> | null
+  /** With a search: the ids of the files it found, a group's name matching all of that group's. */
+  hits: Set<string>
+}
+
+const mentions = (file: FileRef, needle: string): boolean =>
+  file.name.toLowerCase().includes(needle) ||
+  file.url.toLowerCase().includes(needle) ||
+  sourceOf(file.url).toLowerCase().includes(needle)
 
 export function filterEntries(
   entries: ListEntry[],
   filter: DownloadFilter,
   kind: FileKind | null,
   search: string
-): ListEntry[] {
+): FilteredList {
   const needle = search.trim().toLowerCase()
-  return entries.filter((entry) => {
-    if (!matchesFilter(filter, entryStatus(entry))) return false
-    const items = entryItems(entry)
-    if (kind && !items.some((item) => kindOfDownload(item) === kind)) return false
-    if (!needle) return true
-    if (entry.type === 'group' && entry.entry.group.name.toLowerCase().includes(needle)) return true
-    return items.some(
-      (item) =>
-        item.fileName.toLowerCase().includes(needle) ||
-        item.url.toLowerCase().includes(needle) ||
-        sourceOf(item.url).toLowerCase().includes(needle)
+  const narrowing = filter !== 'all' || kind !== null || needle !== ''
+  const only = new Map<string, Set<string>>()
+  const hits = new Set<string>()
+  const kept: ListEntry[] = []
+  for (const entry of entries) {
+    const byName =
+      needle !== '' &&
+      entry.type === 'group' &&
+      entry.entry.group.name.toLowerCase().includes(needle)
+    const matching = filesOf(entry).filter(
+      (file) =>
+        matchesFilter(filter, file.status) &&
+        (kind === null || file.kind === kind) &&
+        (needle === '' || byName || mentions(file, needle))
     )
-  })
+    if (matching.length === 0) continue
+    kept.push(entry)
+    if (entry.type === 'group') only.set(entry.id, new Set(matching.map((file) => file.id)))
+    if (needle !== '') for (const file of matching) hits.add(file.id)
+  }
+  return { entries: kept, only: narrowing ? only : null, hits }
 }
 
 function sortValue(entry: ListEntry, key: SortKey): string | number {

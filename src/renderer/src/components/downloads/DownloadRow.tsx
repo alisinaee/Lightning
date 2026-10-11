@@ -83,12 +83,15 @@ export const DownloadRow = memo(function DownloadRow({
   item,
   queuePosition,
   selected,
+  hit,
   handlers,
   getVisual
 }: {
   item: Item
   queuePosition?: number
   selected: boolean
+  /** The search found this file. */
+  hit?: boolean
   handlers: RowHandlers
   getVisual: ResolveNetworkVisual
   /** Changes when a network's name or colour does, so the row repaints. */
@@ -273,6 +276,8 @@ export const DownloadRow = memo(function DownloadRow({
         <div
           role="row"
           data-row-entry={item.id}
+          data-file-id={item.id}
+          data-hit={hit ? 'true' : undefined}
           data-selected={selected || undefined}
           data-status={info.status}
           onClick={(event) => {
