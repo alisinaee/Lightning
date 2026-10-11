@@ -107,6 +107,8 @@ interface RuntimeFields {
   pausedForNoNetwork?: boolean
   /** Paused by the schedule closing, so that it opening again resumes it (and not what the user paused). */
   pausedBySchedule?: boolean
+  /** Since when none of the networks switched on for it has been connected (see useWhatIsThere). */
+  noNetworkSince?: number
   /** When the speeds last went into the history (see sampleSpeeds). */
   speedSampledAt: number
   /** The best combined speed this run has shown: the peak of one done before it held one. */
@@ -147,6 +149,8 @@ type PersistedDownload = PersistedDownloadBase & {
 
 /** How long after a download ends the manager waits to see whether the queue is really empty. */
 const IDLE_CHECK_MS = 3000
+/** How long a download may have none of its networks connected before others are switched on. */
+const NO_NETWORK_GRACE_MS = 5000
 /** How often a running download takes stock (see run). */
 const TICK_MS = 500
 // Syncing a growing file can briefly monopolize a slow destination drive. Keep recovery
@@ -1885,6 +1889,36 @@ export class DownloadManager {
     for (const network of networks) if (network.kind === 'vpn') network.enabled = false
   }
 
+  /** A download started where it was and resumed somewhere else (a USB cable left behind, the
+   * office Wi-Fi) has only networks that are not there: it would sit waiting for ever. After a few
+   * seconds of that it switches on the real networks that are connected, and says so. Not for a
+   * download an Auto group runs: its planner decides its networks. */
+  private useWhatIsThere(runtime: DownloadRuntime): void {
+    const { state } = runtime
+    if (this.networks.current === null || runtime.requestPayload.groupLane) return
+    if (state.status !== 'downloading' && state.status !== 'queued') return
+    const enabled = state.networks.filter((network) => network.enabled)
+    if (enabled.length === 0 || enabled.some((network) => this.networks.find(network.id))) {
+      runtime.noNetworkSince = undefined
+      return
+    }
+    const now = Date.now()
+    runtime.noNetworkSince ??= now
+    if (now - runtime.noNetworkSince < NO_NETWORK_GRACE_MS) return
+    const there = this.networks
+      .selectable()
+      .filter((iface) => iface.kind !== 'vpn')
+      .map((iface) => iface.id)
+    const usable = state.networks.filter((network) => there.includes(network.id))
+    if (usable.length === 0) return
+    for (const network of usable) network.enabled = true
+    runtime.noNetworkSince = undefined
+    log.info(
+      'download',
+      `${enabled.map((n) => n.id).join(', ')} not connected, so ${usable.map((n) => n.id).join(', ')} switched on for ${state.fileName}`
+    )
+  }
+
   /**
    * Brings the download's networks up to date with the computer's, and each network's streams in
    * line with what it can do now. Runs every tick and whenever something changes — a network
@@ -1936,6 +1970,7 @@ export class DownloadManager {
       }
     }
     this.dropVpn(state.networks)
+    this.useWhatIsThere(runtime)
     for (const network of state.networks) {
       const iface = this.networks.find(network.id)
       const status: NetworkStatus = !network.enabled
