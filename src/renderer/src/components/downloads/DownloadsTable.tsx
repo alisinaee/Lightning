@@ -51,10 +51,55 @@ export function DownloadsTable({
   const setColumnWidths = useAppStore((store) => store.setColumnWidths)
   const toggleColumn = useAppStore((store) => store.toggleColumn)
   const setWrapNames = useAppStore((store) => store.setWrapNames)
+  const setListScrolled = useAppStore((store) => store.setListScrolled)
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   // Widths while a drag is under way; written to the store only when it ends.
   const [dragging, setDragging] = useState<Partial<Record<ColumnId, number>>>({})
+
+  // Which row is at the top of the view, and how far down it sits: when what is above it changes
+  // height (a group's panel, a banner, a row finishing) the view is moved by the same amount, so
+  // the rows being read do not slide away. The browser's own scroll anchoring does not cover this.
+  const content = useRef<HTMLDivElement>(null)
+  const anchor = useRef<{ attribute: string; id: string; offset: number } | null>(null)
+  const rememberAnchor = useCallback((): void => {
+    const scroller = ref.current
+    if (!scroller) return
+    const top = scroller.getBoundingClientRect().top
+    for (const row of scroller.querySelectorAll<HTMLElement>('[data-file-id],[data-row-entry]')) {
+      const box = row.getBoundingClientRect()
+      if (box.bottom > top + 1) {
+        const file = row.getAttribute('data-file-id')
+        anchor.current = {
+          attribute: file !== null ? 'data-file-id' : 'data-row-entry',
+          id: file ?? row.getAttribute('data-row-entry') ?? '',
+          offset: box.top - top
+        }
+        return
+      }
+    }
+    anchor.current = null
+  }, [])
+  useLayoutEffect(() => {
+    const scroller = ref.current
+    const inner = content.current
+    if (!scroller || !inner) return
+    const observer = new ResizeObserver(() => {
+      const held = anchor.current
+      // At the top there is nothing to hold: new rows and changes belong there.
+      if (!held || scroller.scrollTop <= 40) return rememberAnchor()
+      const row = scroller.querySelector<HTMLElement>(
+        `[${held.attribute}="${CSS.escape(held.id)}"]`
+      )
+      if (!row) return rememberAnchor()
+      const shift =
+        row.getBoundingClientRect().top - scroller.getBoundingClientRect().top - held.offset
+      if (Math.abs(shift) > 0.5) scroller.scrollTop += shift
+      else rememberAnchor()
+    })
+    observer.observe(inner)
+    return () => observer.disconnect()
+  }, [rememberAnchor])
 
   useLayoutEffect(() => {
     const element = ref.current
@@ -245,29 +290,40 @@ export function DownloadsTable({
         data-wrap={tableLayout.wrapNames}
         className="group/table flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       >
-        <div ref={ref} role="rowgroup" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <ContextMenu>
-            <ContextMenuTrigger render={header} />
-            <ContextMenuContent className="w-44">
-              {HIDEABLE.map((column) => (
+        <div
+          ref={ref}
+          role="rowgroup"
+          // Scrolled away from the top, the rows hold their order instead of re-sorting under it.
+          onScroll={(event) => {
+            setListScrolled(event.currentTarget.scrollTop > 40)
+            rememberAnchor()
+          }}
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        >
+          <div ref={content}>
+            <ContextMenu>
+              <ContextMenuTrigger render={header} />
+              <ContextMenuContent className="w-44">
+                {HIDEABLE.map((column) => (
+                  <ContextMenuCheckboxItem
+                    key={column.id}
+                    checked={!tableLayout.hidden.includes(column.id)}
+                    onCheckedChange={() => toggleColumn(column.id)}
+                  >
+                    {column.label}
+                  </ContextMenuCheckboxItem>
+                ))}
+                <ContextMenuSeparator />
                 <ContextMenuCheckboxItem
-                  key={column.id}
-                  checked={!tableLayout.hidden.includes(column.id)}
-                  onCheckedChange={() => toggleColumn(column.id)}
+                  checked={tableLayout.wrapNames}
+                  onCheckedChange={setWrapNames}
                 >
-                  {column.label}
+                  Show full file names
                 </ContextMenuCheckboxItem>
-              ))}
-              <ContextMenuSeparator />
-              <ContextMenuCheckboxItem
-                checked={tableLayout.wrapNames}
-                onCheckedChange={setWrapNames}
-              >
-                Show full file names
-              </ContextMenuCheckboxItem>
-            </ContextMenuContent>
-          </ContextMenu>
-          {children}
+              </ContextMenuContent>
+            </ContextMenu>
+            {children}
+          </div>
         </div>
       </div>
     </ColumnsContext.Provider>

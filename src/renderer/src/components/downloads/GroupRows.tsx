@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  FolderOpen,
+  ListChecks,
   Pause,
   Pencil,
   Play,
@@ -13,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
+import { useKeptOrder } from '../../utils/keepOrder'
 import { sortItems, sortPending, statusOfGroup, type GroupEntry } from '../../utils/downloadList'
 import { describeError, formatPercent, toDisplayPath, wantedBytes } from '../../utils/format'
 import { isFinished, statusStyle, type Item, type RowInfo } from '../../utils/status'
@@ -44,7 +47,8 @@ import {
   type ConnectionChip
 } from './cells'
 import { useColumns } from './columns'
-import { chipsOf, onControl, ROW_CLASS, stateEdge } from './rowHelpers'
+import { chipsOf, onControl, ROW_CLASS, stateEdge, type RowHandlers } from './rowHelpers'
+import { RowContextMenu, type RowAction } from './rowMenu'
 import { FileKindIcon } from './FileKindIcon'
 
 /** A group of downloads as one expandable row of the table, its files indented below it and, for
@@ -58,7 +62,8 @@ export function GroupTableRow({
   getVisual,
   onToggle,
   onSelect,
-  onOpen
+  onOpen,
+  handlers
 }: {
   entry: GroupEntry
   selected: Set<string>
@@ -68,6 +73,8 @@ export function GroupTableRow({
   forceOpen?: boolean
   /** The files the search found. */
   hits?: Set<string>
+  /** The list's row actions, given to each file of the group. */
+  handlers: RowHandlers
   getVisual: ResolveNetworkVisual
   onToggle: (ids: string[], on: boolean) => void
   onSelect: (id: string, on: boolean) => void
@@ -78,12 +85,26 @@ export function GroupTableRow({
   const sort = useAppStore((store) => store.tableLayout.sort)
   // The files follow the column the user sorted by, like the rows of the list itself.
   // Whatever is downloading right now comes first; the chosen sort orders the rest.
-  const sortedItems = useMemo(() => {
+  const listScrolled = useAppStore((store) => store.listScrolled)
+  const ordered = useMemo(() => {
     const sorted = sortItems(items, sort)
     const live = (item: Item): boolean => !isFinished(item) && item.status === 'downloading'
     return [...sorted.filter(live), ...sorted.filter((item) => !live(item))]
   }, [items, sort])
-  const sortedPending = useMemo(() => sortPending(group.pending, sort), [group.pending, sort])
+  const orderedPending = useMemo(() => sortPending(group.pending, sort), [group.pending, sort])
+  // Scrolled down, a group's files keep their places while they change state.
+  const sortedItems = useKeptOrder(
+    `group:${group.id}:files`,
+    ordered,
+    (item) => item.id,
+    listScrolled
+  )
+  const sortedPending = useKeptOrder(
+    `group:${group.id}:waiting`,
+    orderedPending,
+    (item) => item.id,
+    listScrolled
+  )
   const homeDir = useAppStore((store) => store.homeDir)
   const editGroup = useAppStore((store) => store.editGroup)
   // In the store, not here: the row moves around the table as its files change state, which can
@@ -185,6 +206,70 @@ export function GroupTableRow({
     })
   }
 
+  // The group's own actions: its header's buttons and its right-click menu both run these.
+  const startAll = (): Promise<void> => run(() => window.lightning.startGroup(group.id))
+  const pauseAll = (): Promise<void> =>
+    run(() => Promise.all(pausable.map((item) => window.lightning.pauseDownload(item.id))))
+  const resumeAll = (): Promise<void> =>
+    run(() => Promise.all(paused.map((item) => window.lightning.resumeDownload(item.id))))
+  const retryFailed = (): Promise<void> =>
+    run(async () => {
+      const { failed } = await window.lightning.retryGroup(group.id)
+      if (failed.length > 0) throw new Error(failed[0])
+    })
+  const menu: RowAction[] = [
+    {
+      id: 'toggle',
+      label: open ? 'Hide files' : 'Show files',
+      icon: open ? ChevronDown : ChevronRight,
+      run: toggleOpen
+    },
+    ...(group.held
+      ? [{ id: 'start', label: 'Start', icon: Play, run: () => void startAll() }]
+      : []),
+    ...(pausable.length > 0
+      ? [{ id: 'pause', label: 'Pause all in group', icon: Pause, run: () => void pauseAll() }]
+      : []),
+    ...(!group.held && paused.length > 0 && pausable.length === 0
+      ? [{ id: 'resume', label: 'Resume all in group', icon: Play, run: () => void resumeAll() }]
+      : []),
+    ...(failedCount > 0
+      ? [{ id: 'retry', label: 'Retry failed', icon: RotateCw, run: () => void retryFailed() }]
+      : []),
+    ...(revealId
+      ? [
+          {
+            id: 'reveal',
+            label: 'Open folder',
+            icon: FolderOpen,
+            run: () => void window.lightning.revealDownload(revealId)
+          }
+        ]
+      : []),
+    {
+      id: 'edit',
+      label: 'Edit group',
+      icon: Pencil,
+      run: () => editGroup(group.id),
+      divider: true
+    },
+    {
+      id: 'select-all',
+      label: 'Select all files',
+      icon: ListChecks,
+      disabled: ids.length === 0,
+      run: () => onToggle(ids, true)
+    },
+    {
+      id: 'remove',
+      label: 'Remove group…',
+      icon: Trash2,
+      danger: true,
+      run: () => setRemoving(true),
+      divider: true
+    }
+  ]
+
   const iconButton = (
     label: string,
     icon: React.JSX.Element,
@@ -252,69 +337,44 @@ export function GroupTableRow({
     connections: <ConnectionsCell key="connections" chips={[...chips.values()]} />
   }
 
+  const headerRow = (
+    <div
+      role="row"
+      data-row-entry={group.id}
+      data-group={group.id}
+      onClick={(event) => {
+        if (!onControl(event.target)) toggleOpen()
+      }}
+      className={cn(ROW_CLASS, 'font-medium')}
+      style={stateEdge(status)}
+    >
+      <div role="cell" className="flex items-center justify-center">
+        <Checkbox
+          aria-label={`Select all files in ${group.name}`}
+          checked={all}
+          indeterminate={some}
+          disabled={ids.length === 0}
+          onCheckedChange={(on) => onToggle(ids, on)}
+        />
+      </div>
+      {columns.map((column) => cells[column])}
+      <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+        {group.held && iconButton('Start', <Play />, () => void startAll())}
+        {pausable.length > 0 && iconButton('Pause all in', <Pause />, () => void pauseAll())}
+        {!group.held &&
+          paused.length > 0 &&
+          pausable.length === 0 &&
+          iconButton('Resume all in', <Play />, () => void resumeAll())}
+        {failedCount > 0 && iconButton('Retry failed in', <RotateCw />, () => void retryFailed())}
+        {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
+        {iconButton('Remove', <Trash2 />, () => setRemoving(true))}
+      </div>
+    </div>
+  )
+
   return (
     <div role="rowgroup">
-      <div
-        role="row"
-        data-row-entry={group.id}
-        data-group={group.id}
-        onClick={(event) => {
-          if (!onControl(event.target)) toggleOpen()
-        }}
-        className={cn(ROW_CLASS, 'font-medium')}
-        style={stateEdge(status)}
-      >
-        <div role="cell" className="flex items-center justify-center">
-          <Checkbox
-            aria-label={`Select all files in ${group.name}`}
-            checked={all}
-            indeterminate={some}
-            disabled={ids.length === 0}
-            onCheckedChange={(on) => onToggle(ids, on)}
-          />
-        </div>
-        {columns.map((column) => cells[column])}
-        <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
-          {group.held &&
-            iconButton(
-              'Start',
-              <Play />,
-              () => void run(() => window.lightning.startGroup(group.id))
-            )}
-          {pausable.length > 0 &&
-            iconButton(
-              'Pause all in',
-              <Pause />,
-              () =>
-                void run(() =>
-                  Promise.all(pausable.map((item) => window.lightning.pauseDownload(item.id)))
-                )
-            )}
-          {!group.held &&
-            paused.length > 0 &&
-            pausable.length === 0 &&
-            iconButton(
-              'Resume all in',
-              <Play />,
-              () =>
-                void run(() =>
-                  Promise.all(paused.map((item) => window.lightning.resumeDownload(item.id)))
-                )
-            )}
-          {failedCount > 0 &&
-            iconButton(
-              'Retry failed in',
-              <RotateCw />,
-              () =>
-                void run(async () => {
-                  const { failed } = await window.lightning.retryGroup(group.id)
-                  if (failed.length > 0) throw new Error(failed[0])
-                })
-            )}
-          {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
-          {iconButton('Remove', <Trash2 />, () => setRemoving(true))}
-        </div>
-      </div>
+      <RowContextMenu actions={menu} row={headerRow} />
       {error && (
         <div
           role="alert"
@@ -370,6 +430,7 @@ export function GroupTableRow({
                 onSelect={onSelect}
                 onOpen={onOpen}
                 onError={setError}
+                handlers={handlers}
               />
             ))}
           {sortedPending
@@ -385,6 +446,7 @@ export function GroupTableRow({
                 onSelect={onSelect}
                 onOpen={onOpen}
                 onError={setError}
+                handlers={handlers}
               />
             ))}
         </>

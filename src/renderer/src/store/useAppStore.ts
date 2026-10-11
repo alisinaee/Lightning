@@ -139,6 +139,9 @@ interface AppStore {
   availableUpdate: UpdateInfo | null
   /** Which title bar buttons Settings → Interface has switched on. */
   showLogs: boolean
+  /** The list is scrolled away from its top: it then holds its order instead of re-sorting. */
+  listScrolled: boolean
+  setListScrolled: (scrolled: boolean) => void
   showDebug: boolean
   setTitleBarButtons: (patch: { showLogs?: boolean; showDebug?: boolean }) => void
   /** Every saved pref as last known. Writers send this whole object, since main replaces the prefs
@@ -278,6 +281,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   themeSource: initial.themeSource,
   availableUpdate: null,
   showLogs: window.lightning.initialState.prefs.showLogs,
+  listScrolled: false,
+  setListScrolled: (listScrolled) => set({ listScrolled }),
   showDebug: window.lightning.initialState.prefs.showDebug,
   setTitleBarButtons: (patch) => set(patch),
   prefsSnapshot: window.lightning.initialState.prefs,

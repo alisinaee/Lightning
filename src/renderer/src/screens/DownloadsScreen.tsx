@@ -63,6 +63,7 @@ import {
 } from '../utils/downloadList'
 import { FILE_KINDS, type FileKind } from '../utils/fileKind'
 import { describeError, linkExpired } from '../utils/format'
+import { useKeptOrder } from '../utils/keepOrder'
 import { isFinished, type Item } from '../utils/status'
 
 const EMPTY_MESSAGES: Partial<Record<DownloadFilter, string>> = {
@@ -158,7 +159,10 @@ export function DownloadsScreen({
     () => filterEntries(entries, filter, kindFilter, search),
     [entries, filter, kindFilter, search]
   )
-  const shown = useMemo(() => sortEntries(filtered.entries, sort), [filtered, sort])
+  const listScrolled = useAppStore((store) => store.listScrolled)
+  const sortedEntries = useMemo(() => sortEntries(filtered.entries, sort), [filtered, sort])
+  // Scrolled down, the list keeps its order: rows do not move as downloads change state.
+  const shown = useKeptOrder('list', sortedEntries, (entry) => entry.id, listScrolled)
   const [matchIndex, setMatchIndex] = useState(0)
   const matchCount = search.trim() === '' ? 0 : filtered.hits.size
   const stepMatch = (dir: 1 | -1): void => {
@@ -826,6 +830,7 @@ export function DownloadsScreen({
                       onToggle={toggle}
                       onSelect={selectRow}
                       onOpen={openRow}
+                      handlers={handlers}
                     />
                   )
                 )}

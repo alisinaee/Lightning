@@ -1,21 +1,7 @@
-import { describeItem, isFinished, statusKeyOf, type Item } from '../../utils/status'
+import { describeItem, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
 import { useAppStore } from '../../store/useAppStore'
-import {
-  Copy,
-  Download,
-  ExternalLink,
-  FileText,
-  FolderInput,
-  FolderOpen,
-  Info,
-  Link2,
-  Pause,
-  Play,
-  RotateCw,
-  Trash2,
-  X
-} from 'lucide-react'
+import { Download, FolderOpen, Link2 } from 'lucide-react'
 import { cn } from 'cn'
 import { memo } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
@@ -43,6 +29,7 @@ import {
   type RowHandlers
 } from './rowHelpers'
 import { RowActionsMenu, RowContextMenu, type RowAction } from './rowMenu'
+import { buildDownloadActions, fixLinkOf, primaryActionOf } from './rowActions'
 
 function IconAction({
   label,
@@ -104,123 +91,9 @@ export const DownloadRow = memo(function DownloadRow({
   const showSourceHost = useAppStore((store) => store.showSourceHost)
   // A torrent's label stays; only the website is left out when it is turned off.
   const host = item.kind === 'torrent' ? 'Torrent' : showSourceHost ? sourceOf(item.url) : ''
-  const reveal = (): void => void window.lightning.revealDownload(item.id)
-  const pause = (): void => void window.lightning.pauseDownload(item.id)
-  const resume = (): void => void window.lightning.resumeDownload(item.id)
-
-  const state = isFinished(item) ? null : item
-  let primary: { label: string; icon?: RowAction['icon']; run: () => void } | null = null
-  if (state) {
-    if (state.status === 'downloading' || state.status === 'queued') {
-      primary = { label: `Pause ${name}`, icon: Pause, run: pause }
-    } else if (state.status === 'paused') {
-      primary = { label: `Resume ${name}`, icon: Play, run: resume }
-    } else if (state.status === 'error') {
-      // Retry always tries the saved link first; Fix link is for when that link is refused.
-      if (state.resumable !== false) {
-        primary = { label: `Retry ${name}`, icon: RotateCw, run: resume }
-      } else primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
-    }
-  }
-  const fixLink = state && state.status === 'error' && info.status === 'attention'
-  if (finished && info.missing) {
-    primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
-  }
-
-  const menu: RowAction[] = []
-  if (finished) {
-    menu.push({
-      id: 'open-file',
-      label: 'Open file',
-      icon: ExternalLink,
-      disabled: info.missing,
-      run: () => void window.lightning.openDownloadedFile(item.id)
-    })
-  }
-  menu.push({
-    id: 'reveal',
-    label: REVEAL_LABEL,
-    icon: FolderOpen,
-    run: reveal,
-    disabled: info.missing
-  })
-  menu.push({ id: 'details', label: 'Details', icon: Info, run: () => handlers.open(item.id) })
-  if (primary && (state || info.missing)) {
-    menu.push({
-      id: 'primary',
-      label: primary.label.startsWith('Pause')
-        ? 'Pause'
-        : primary.label.startsWith('Resume')
-          ? 'Resume'
-          : primary.label.startsWith('Retry')
-            ? 'Retry'
-            : primary.label,
-      icon: primary.icon ?? Link2,
-      run: primary.run,
-      divider: true
-    })
-  }
-  if (fixLink) {
-    menu.push({ id: 'fix', label: 'Fix link', icon: Link2, run: () => handlers.fix(item) })
-  }
-  menu.push({
-    id: 'copy',
-    label: 'Copy link',
-    icon: Copy,
-    run: () => void navigator.clipboard.writeText(item.url).catch(() => {}),
-    divider: !primary
-  })
-  menu.push({
-    id: 'copy-name',
-    label: 'Copy file name',
-    icon: FileText,
-    run: () => void navigator.clipboard.writeText(name).catch(() => {})
-  })
-  if ('destinationPath' in item && item.destinationPath) {
-    const path = item.destinationPath
-    menu.push({
-      id: 'copy-path',
-      label: 'Copy file location',
-      icon: FolderInput,
-      run: () => void navigator.clipboard.writeText(path).catch(() => {})
-    })
-  }
-  if (primary?.label !== 'Download again') {
-    menu.push({
-      id: 'again',
-      label: 'Download again…',
-      icon: RotateCw,
-      run: () => handlers.again(item),
-      divider: true
-    })
-  }
-  if (finished) {
-    menu.push({
-      id: 'remove',
-      label: 'Remove from list…',
-      icon: X,
-      run: () => handlers.removeFromList(item),
-      divider: true
-    })
-    if (!info.missing) {
-      menu.push({
-        id: 'trash',
-        label: 'Delete file…',
-        icon: Trash2,
-        danger: true,
-        run: () => handlers.trash(item)
-      })
-    }
-  } else {
-    menu.push({
-      id: 'cancel',
-      label: 'Cancel and delete partial data…',
-      icon: Trash2,
-      danger: true,
-      run: () => handlers.cancel(item),
-      divider: true
-    })
-  }
+  const primary = primaryActionOf(item, info, handlers)
+  const fixLink = fixLinkOf(item, info)
+  const menu = buildDownloadActions({ item, info, handlers, primary, fixLink })
 
   const cells: Record<string, React.JSX.Element> = {
     name: (
@@ -329,7 +202,7 @@ export const DownloadRow = memo(function DownloadRow({
                 label={`${REVEAL_LABEL} ${name}`}
                 tip={REVEAL_LABEL}
                 icon={FolderOpen}
-                onClick={reveal}
+                onClick={() => void window.lightning.revealDownload(item.id)}
               />
             )}
             <RowActionsMenu label={name} actions={menu} />

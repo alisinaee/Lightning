@@ -1,6 +1,6 @@
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
-import { Download, Pause, Play, RotateCw, X } from 'lucide-react'
+import { Copy, Download, FileText, Pause, Play, RotateCw, X } from 'lucide-react'
 import { memo } from 'react'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
@@ -21,8 +21,10 @@ import {
   type ConnectionChip
 } from './downloads/cells'
 import { useColumns } from './downloads/columns'
-import { chipsOf, onControl, ROW_CLASS, stateEdge } from './downloads/rowHelpers'
+import { buildDownloadActions, fixLinkOf } from './downloads/rowActions'
+import { chipsOf, onControl, ROW_CLASS, stateEdge, type RowHandlers } from './downloads/rowHelpers'
 import { FormatBadge } from './downloads/FileKindIcon'
+import { RowContextMenu, type RowAction } from './downloads/rowMenu'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -46,7 +48,8 @@ export const GroupFileRow = memo(
     onOpen,
     onError,
     getVisual,
-    hit
+    hit,
+    handlers
   }: {
     group: GroupInfo
     entry: GroupFileEntry
@@ -54,6 +57,8 @@ export const GroupFileRow = memo(
     /** The search found this file. */
     hit?: boolean
     selecting?: boolean
+    /** The list's row actions, shared with the rows of the list. */
+    handlers: RowHandlers
     onSelect: (id: string, on: boolean) => void
     onOpen: (id: string) => void
     onError: (message: string) => void
@@ -238,7 +243,37 @@ export const GroupFileRow = memo(
       connections: <ConnectionsCell key="connections" chips={chips} />
     }
 
-    return (
+    // The same actions as the row's own list, except that leaving the group is the X button's
+    // remove. A file still waiting has few: it is not started yet.
+    const copyLink = (url: string): void => void navigator.clipboard.writeText(url).catch(() => {})
+    const menu: RowAction[] =
+      entry.kind === 'waiting'
+        ? [
+            ...(action ? [{ id: 'retry', label: 'Retry', icon: RotateCw, run: action.run }] : []),
+            { id: 'remove', label: 'Remove from group', icon: X, run: remove, divider: true },
+            {
+              id: 'copy',
+              label: 'Copy link',
+              icon: Copy,
+              run: () => copyLink(entry.item.request.url)
+            },
+            {
+              id: 'copy-name',
+              label: 'Copy file name',
+              icon: FileText,
+              run: () => void navigator.clipboard.writeText(name).catch(() => {})
+            }
+          ]
+        : buildDownloadActions({
+            item: entry.download,
+            info,
+            handlers,
+            primary: action ? { label: action.label, icon: action.icon, run: action.run } : null,
+            fixLink: fixLinkOf(entry.download, info),
+            remove: { label: 'Remove from list', run: remove }
+          })
+
+    const row = (
       <div
         role="row"
         data-file-id={id}
@@ -321,6 +356,7 @@ export const GroupFileRow = memo(
         </div>
       </div>
     )
+    return <RowContextMenu actions={menu} row={row} />
   },
   (a, b) =>
     a.entry.kind === b.entry.kind &&
@@ -329,6 +365,7 @@ export const GroupFileRow = memo(
     a.hit === b.hit &&
     a.group === b.group &&
     a.visualsKey === b.visualsKey &&
+    a.handlers === b.handlers &&
     a.onSelect === b.onSelect &&
     a.onOpen === b.onOpen &&
     a.onError === b.onError &&
