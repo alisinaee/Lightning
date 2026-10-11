@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.24',
+      items: [
+        {
+          kind: 'improved',
+          title: 'One download has the VPN switch too',
+          text: 'The New download dialog now has the same Use VPN for downloads switch as adding several links, shown while a VPN is detected.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.23',
       items: [
         {
