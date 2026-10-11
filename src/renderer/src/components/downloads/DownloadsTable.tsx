@@ -141,9 +141,37 @@ export function DownloadsTable({
       const move = (moveEvent: PointerEvent): void => {
         const dx = moveEvent.clientX - startX
         if (nameOnLeft) {
-          const grown = Math.min(right.max || Infinity, startRight + spare)
-          const width = Math.min(grown, Math.max(right.min, startRight - dx))
-          latest = { [next]: width }
+          // Name takes whatever the other columns leave, so its divider moves the columns to its
+          // right, one after another: dragging right takes room from the next column down to its
+          // minimum, then the one after it; dragging left gives room back the same way.
+          const after = layout.visible.slice(layout.visible.indexOf('name') + 1)
+          const out: Partial<Record<ColumnId, number>> = {}
+          if (dx >= 0) {
+            let need = dx
+            for (const other of after) {
+              const column = columnOf(other)
+              const current = layout.widthOf(other)
+              const take = Math.min(need, current - (column?.min ?? current))
+              if (take > 0) {
+                out[other] = current - take
+                need -= take
+              }
+              if (need <= 0) break
+            }
+          } else {
+            let give = Math.min(-dx, spare)
+            for (const other of after) {
+              const column = columnOf(other)
+              const current = layout.widthOf(other)
+              const add = Math.min(give, (column?.max || Infinity) - current)
+              if (add > 0) {
+                out[other] = current + add
+                give -= add
+              }
+              if (give <= 0) break
+            }
+          }
+          latest = out
         } else {
           // Both stay within their limits, and the pair keeps its total.
           const lowest = Math.max(left.min - startLeft, startRight - (right.max || Infinity))
