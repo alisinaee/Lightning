@@ -156,6 +156,8 @@ interface AppStore {
   /** Whether each file's website is shown under its name (Settings → Interface). */
   showSourceHost: boolean
   setShowSourceHost: (on: boolean) => void
+  /** Whether rows show a progress line along their bottom (Settings → Interface). */
+  progressLine: boolean
   /** The status bar's items and menu (Settings → Status bar). */
   statusBar: StatusBarPrefs
   setStatusBar: (statusBar: StatusBarPrefs) => void
@@ -290,7 +292,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({
       prefsSnapshot,
       sidebarHidden: prefsSnapshot.sidebarHidden,
-      showSourceHost: prefsSnapshot.showSourceHost
+      showSourceHost: prefsSnapshot.showSourceHost,
+      progressLine: prefsSnapshot.progressLine
     }),
   sidebarHidden: window.lightning.initialState.prefs.sidebarHidden,
   setSidebarHidden: (sidebarHidden) => {
@@ -300,6 +303,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   hideSidebar: () => get().setSidebarHidden(true),
   showSourceHost: window.lightning.initialState.prefs.showSourceHost,
+  progressLine: window.lightning.initialState.prefs.progressLine,
   setShowSourceHost: (showSourceHost) => {
     const prefsSnapshot = { ...get().prefsSnapshot, showSourceHost }
     set({ showSourceHost, prefsSnapshot })

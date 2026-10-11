@@ -410,6 +410,9 @@ export interface AppPrefs {
   sidebarHidden?: boolean
   /** The website each file came from, shown under its name in the list. */
   showSourceHost?: boolean
+  /** A thin line along the bottom of each row fills as the download goes (the Status cell then
+   * shows only the percentage). */
+  progressLine?: boolean
   /** The status bar's items and menu; a part left out is as in DEFAULT_STATUS_BAR. */
   statusBar?: Partial<StatusBarPrefs>
   /** Start Lightning when the user signs in, hidden in the tray. */
@@ -446,6 +449,7 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   hideDock: false,
   sidebarHidden: false,
   showSourceHost: false,
+  progressLine: true,
   statusBar: DEFAULT_STATUS_BAR,
   openAtLogin: false,
   watchClipboard: false,

@@ -632,6 +632,11 @@ export function SettingsDialog({
                   label="Show the side panel"
                 />
                 <Row
+                  checked={prefs.progressLine}
+                  onChange={(progressLine) => save({ progressLine })}
+                  label="Show a progress line along the bottom of each row"
+                />
+                <Row
                   checked={prefs.showSourceHost}
                   onChange={(showSourceHost) => save({ showSourceHost })}
                   label="Show the website under file names"

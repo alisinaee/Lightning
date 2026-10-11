@@ -155,6 +155,7 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'hideDock',
     'sidebarHidden',
     'showSourceHost',
+    'progressLine',
     'openAtLogin',
     'watchClipboard',
     'askWhenFinished',

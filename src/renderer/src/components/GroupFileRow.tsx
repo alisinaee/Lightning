@@ -1,3 +1,4 @@
+import { RowProgressLine } from './downloads/RowProgressLine'
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
 import { Copy, Download, FileText, Pause, Play, RotateCw, X } from 'lucide-react'
@@ -288,6 +289,7 @@ export const GroupFileRow = memo(
           entry.kind === 'waiting' ? undefined : stateEdge(statusKeyOf(entry.download), selected)
         }
       >
+        <RowProgressLine info={info} />
         <div role="cell" className="flex items-center justify-center">
           {entry.kind !== 'waiting' && (
             <Checkbox

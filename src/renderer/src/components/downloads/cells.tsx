@@ -1,3 +1,4 @@
+import { useAppStore } from '../../store/useAppStore'
 import { cn } from 'cn'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
@@ -112,6 +113,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
     /\s*\d+%$/,
     ''
   )
+  const progressLine = useAppStore((store) => store.progressLine)
   const showBar = !info.reason && info.bar
   const icon = (
     <Icon
@@ -142,35 +144,44 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
             {word}
           </span>
         )}
-        <div
-          role="progressbar"
-          aria-label="Progress"
-          title={moving ? info.label : undefined}
-          aria-valuenow={info.percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="h-[4px] min-w-4 flex-1 overflow-hidden rounded-full bg-muted"
-        >
+        {progressLine ? null : (
           <div
-            className={cn(
-              'h-full rounded-full transition-[width] duration-500',
-              !moving && 'opacity-55'
-            )}
-            style={{
-              width: `${Math.max(2, info.percent)}%`,
-              background: style.color,
-              ...(moving
-                ? {
-                    backgroundImage:
-                      'repeating-linear-gradient(115deg, rgba(255,255,255,0.28) 0 6px, transparent 6px 12px)',
-                    backgroundSize: '16px 100%',
-                    animation: 'lightning-stripes 0.9s linear infinite'
-                  }
-                : null)
-            }}
-          />
-        </div>
-        <span className="w-[34px] shrink-0 text-right font-mono text-[11.5px] leading-none text-[var(--text-secondary)] tabular-nums">
+            role="progressbar"
+            aria-label="Progress"
+            title={moving ? info.label : undefined}
+            aria-valuenow={info.percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-[4px] min-w-4 flex-1 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width] duration-500',
+                !moving && 'opacity-55'
+              )}
+              style={{
+                width: `${Math.max(2, info.percent)}%`,
+                background: style.color,
+                ...(moving
+                  ? {
+                      backgroundImage:
+                        'repeating-linear-gradient(115deg, rgba(255,255,255,0.28) 0 6px, transparent 6px 12px)',
+                      backgroundSize: '16px 100%',
+                      animation: 'lightning-stripes 0.9s linear infinite'
+                    }
+                  : null)
+              }}
+            />
+          </div>
+        )}
+        <span
+          className={cn(
+            'shrink-0 font-mono leading-none tabular-nums',
+            progressLine
+              ? 'text-[12.5px] font-medium text-foreground'
+              : 'w-[34px] text-right text-[11.5px] text-[var(--text-secondary)]'
+          )}
+        >
           {Math.round(info.percent)}%
         </span>
       </div>

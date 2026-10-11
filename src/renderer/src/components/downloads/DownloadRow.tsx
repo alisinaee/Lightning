@@ -1,3 +1,4 @@
+import { RowProgressLine } from './RowProgressLine'
 import { describeItem, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
 import { useAppStore } from '../../store/useAppStore'
@@ -170,6 +171,7 @@ export const DownloadRow = memo(function DownloadRow({
           )}
           style={stateEdge(statusKeyOf(item), selected)}
         >
+          <RowProgressLine info={info} />
           <div role="cell" className="flex items-center justify-center">
             <Checkbox
               aria-label={`Select ${name}`}

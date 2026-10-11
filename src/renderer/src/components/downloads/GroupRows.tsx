@@ -1,3 +1,4 @@
+import { RowProgressLine } from './RowProgressLine'
 import type { DownloadState } from '@shared/types'
 import { cn } from 'cn'
 import {
@@ -348,6 +349,7 @@ export function GroupTableRow({
       className={cn(ROW_CLASS, 'font-medium')}
       style={stateEdge(status)}
     >
+      <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center">
         <Checkbox
           aria-label={`Select all files in ${group.name}`}
