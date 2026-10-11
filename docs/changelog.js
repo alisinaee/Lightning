@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.30',
+      items: [
+        {
+          kind: 'improved',
+          title: 'Less dead space in Status',
+          text: 'The Status column is narrower now that it shows just the percentage; the room goes to the file name.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.29',
       items: [
         {
