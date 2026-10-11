@@ -18,7 +18,11 @@ test('a running row has a progress line and a percentage, and Settings can turn 
   expect(Math.abs(lineBox!.y + lineBox!.height - (rowBox!.y + rowBox!.height))).toBeLessThanOrEqual(
     1.5
   )
-  expect(lineBox!.width).toBeGreaterThan(rowBox!.width * 0.9)
+  // It starts where the Name column starts (after the checkbox column) and runs to the right edge.
+  expect(Math.abs(lineBox!.x + lineBox!.width - (rowBox!.x + rowBox!.width))).toBeLessThanOrEqual(2)
+  const inset = lineBox!.x - rowBox!.x
+  expect(inset).toBeGreaterThanOrEqual(24)
+  expect(inset).toBeLessThanOrEqual(40)
   expect(lineBox!.height).toBeLessThanOrEqual(4)
   // The cell itself is the percentage.
   await expect(row.getByText(/^\d+%$/)).toBeVisible()
