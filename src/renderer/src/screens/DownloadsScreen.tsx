@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronUp,
   Link2,
+  ListFilter,
   ListPlus,
   Pause,
   RotateCw,
@@ -21,6 +22,7 @@ import { TableBoundary } from '../components/downloads/TableBoundary'
 import { DownloadsTable } from '../components/downloads/DownloadsTable'
 import { GroupTableRow } from '../components/downloads/GroupRows'
 import { DownloadsSidebar } from '../components/downloads/Sidebar'
+import { STATUSES } from '../components/downloads/statusEntries'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
@@ -39,6 +41,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../components/ui/dropdown-menu'
 import { Input } from '../components/ui/input'
@@ -54,6 +60,7 @@ import {
   queuePositions,
   sortEntries
 } from '../utils/downloadList'
+import { FILE_KINDS, type FileKind } from '../utils/fileKind'
 import { describeError, linkExpired } from '../utils/format'
 import { isFinished, type Item } from '../utils/status'
 
@@ -106,6 +113,7 @@ export function DownloadsScreen({
   const setFilter = useAppStore((store) => store.setDownloadFilter)
   const kindFilter = useAppStore((store) => store.kindFilter)
   const setKindFilter = useAppStore((store) => store.setKindFilter)
+  const sidebarHidden = useAppStore((store) => store.sidebarHidden)
   const search = useAppStore((store) => store.search)
   const setSearch = useAppStore((store) => store.setSearch)
   const sort = useAppStore((store) => store.tableLayout.sort)
@@ -490,6 +498,68 @@ export function DownloadsScreen({
           {/* After the + button, so a VPN turning up doesn't move it. */}
           <VpnControl />
           <div className="flex-1" />
+          {/* Stands in for the side panel's filters while the panel is hidden. */}
+          {sidebarHidden && (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label="Filter"
+                          className={
+                            filter !== 'all' || kindFilter !== null ? 'text-primary' : undefined
+                          }
+                        />
+                      }
+                    >
+                      <ListFilter />
+                    </DropdownMenuTrigger>
+                  }
+                />
+                <TooltipContent>Filter</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={filter}
+                  onValueChange={(value) => chooseFilter(value as DownloadFilter)}
+                >
+                  {STATUSES.map((entry) => (
+                    <DropdownMenuRadioItem key={entry.value} value={entry.value}>
+                      {entry.label}
+                      <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+                        {counts.statuses[entry.value] ?? 0}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>File type</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={kindFilter ?? 'all'}
+                  onValueChange={(value) => {
+                    setKindFilter(value === 'all' ? null : (value as FileKind))
+                    setSelected(new Set())
+                  }}
+                >
+                  <DropdownMenuRadioItem value="all">All types</DropdownMenuRadioItem>
+                  {FILE_KINDS.map((entry) => (
+                    <DropdownMenuRadioItem key={entry.kind} value={entry.kind}>
+                      {entry.label}
+                      <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+                        {counts.kinds[entry.kind] ?? 0}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <div className="relative w-[260px] min-w-[140px] shrink">
             <Search
               aria-hidden
@@ -680,18 +750,20 @@ export function DownloadsScreen({
           </div>
         ) : (
           <>
-            <DownloadsSidebar
-              counts={counts}
-              filter={filter}
-              kind={kindFilter}
-              onFilter={chooseFilter}
-              onKind={(kind) => {
-                setKindFilter(kind)
-                setSelected(new Set())
-              }}
-              canClear={history.length > 0}
-              onClear={() => void window.lightning.clearHistory()}
-            />
+            {!sidebarHidden && (
+              <DownloadsSidebar
+                counts={counts}
+                filter={filter}
+                kind={kindFilter}
+                onFilter={chooseFilter}
+                onKind={(kind) => {
+                  setKindFilter(kind)
+                  setSelected(new Set())
+                }}
+                canClear={history.length > 0}
+                onClear={() => void window.lightning.clearHistory()}
+              />
+            )}
             <TableBoundary>
               <DownloadsTable
                 allSelected={items.length > 0 && chosen.length === items.length}

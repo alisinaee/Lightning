@@ -1,5 +1,6 @@
 import { describeItem, isFinished, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
+import { useAppStore } from '../../store/useAppStore'
 import {
   Copy,
   Download,
@@ -97,7 +98,9 @@ export const DownloadRow = memo(function DownloadRow({
   const info = describeItem(item, queuePosition)
   const finished = info.status === 'completed'
   const name = item.fileName
-  const host = item.kind === 'torrent' ? 'Torrent' : sourceOf(item.url)
+  const showSourceHost = useAppStore((store) => store.showSourceHost)
+  // A torrent's label stays; only the website is left out when it is turned off.
+  const host = item.kind === 'torrent' ? 'Torrent' : showSourceHost ? sourceOf(item.url) : ''
   const reveal = (): void => void window.lightning.revealDownload(item.id)
   const pause = (): void => void window.lightning.pauseDownload(item.id)
   const resume = (): void => void window.lightning.resumeDownload(item.id)
@@ -237,8 +240,10 @@ export const DownloadRow = memo(function DownloadRow({
               finished && 'text-[var(--text-secondary)]'
             )}
           />
+          {/* A non-breaking space when empty, so the row keeps its height without the host. */}
           <span className="truncate text-[11px] leading-none text-muted-foreground">
-            {info.missing ? `${host} · The file was moved or deleted` : host}
+            {[host, info.missing && 'The file was moved or deleted'].filter(Boolean).join(' · ') ||
+              ' '}
           </span>
         </button>
       </div>

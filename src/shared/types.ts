@@ -406,6 +406,10 @@ export interface AppPrefs {
   preventSleep?: boolean
   closeToBackground?: boolean
   hideDock?: boolean
+  /** The side panel of the downloads list, hidden completely until Settings brings it back. */
+  sidebarHidden?: boolean
+  /** The website each file came from, shown under its name in the list. */
+  showSourceHost?: boolean
   /** The status bar's items and menu; a part left out is as in DEFAULT_STATUS_BAR. */
   statusBar?: Partial<StatusBarPrefs>
   /** Start Lightning when the user signs in, hidden in the tray. */
@@ -440,6 +444,8 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   preventSleep: true,
   closeToBackground: true,
   hideDock: false,
+  sidebarHidden: false,
+  showSourceHost: false,
   statusBar: DEFAULT_STATUS_BAR,
   openAtLogin: false,
   watchClipboard: false,

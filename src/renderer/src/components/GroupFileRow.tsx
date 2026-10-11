@@ -60,6 +60,7 @@ export const GroupFileRow = memo(
     const columns = useColumns()
     const options = useNetworkOptions()
     const removeDownload = useAppStore((store) => store.removeDownload)
+    const showSourceHost = useAppStore((store) => store.showSourceHost)
     const auto = group.mode === 'auto'
     const id = entry.kind === 'waiting' ? entry.item.id : entry.download.id
     const name =
@@ -190,7 +191,7 @@ export const GroupFileRow = memo(
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <ClippedText text={name} className="text-[12.5px] leading-none font-medium" />
               <span className="truncate text-[11px] leading-none text-muted-foreground">
-                {[host, reason].filter(Boolean).join(' · ')}
+                {[showSourceHost && host, reason].filter(Boolean).join(' · ') || '\u00A0'}
               </span>
             </span>
           ) : (
@@ -208,7 +209,9 @@ export const GroupFileRow = memo(
                 )}
               />
               <span className="truncate text-[11px] leading-none text-muted-foreground">
-                {[host, pinned && 'pinned by you', !pinned && reason].filter(Boolean).join(' · ')}
+                {[showSourceHost && host, pinned && 'pinned by you', !pinned && reason]
+                  .filter(Boolean)
+                  .join(' · ') || '\u00A0'}
               </span>
             </button>
           )}

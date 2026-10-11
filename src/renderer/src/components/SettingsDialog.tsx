@@ -126,7 +126,9 @@ export function SettingsDialog({
 }): React.JSX.Element {
   const initial = window.lightning.initialState
   const [page, setPage] = useState<(typeof PAGES)[number]>('General')
-  const [prefs, setPrefs] = useState<ResolvedPrefs>(initial.prefs)
+  // The store holds the prefs, so a change made from the side panel shows here too.
+  const prefs = useAppStore((store) => store.prefsSnapshot)
+  const setPrefs = useAppStore((store) => store.setPrefsSnapshot)
   const [schedule, setSchedule] = useState(initial.schedule)
   const theme = useAppStore((store) => store.themeSource)
   const setTheme = useAppStore((store) => store.setThemeSource)
@@ -622,6 +624,17 @@ export function SettingsDialog({
                       ? 'Show the Debug button (the Test lab)'
                       : 'Show the Debug button (only in development builds)'
                   }
+                />
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Downloads</div>
+                <Row
+                  checked={!prefs.sidebarHidden}
+                  onChange={(show) => save({ sidebarHidden: !show })}
+                  label="Show the side panel"
+                />
+                <Row
+                  checked={prefs.showSourceHost}
+                  onChange={(showSourceHost) => save({ showSourceHost })}
+                  label="Show the website under file names"
                 />
               </>
             )}

@@ -11,6 +11,7 @@ import type {
   NetworkPreference,
   NetworkPreferences,
   RequestExtras,
+  ResolvedPrefs,
   SettingsPush,
   StatusBarPrefs,
   ThemeSource,
@@ -140,6 +141,18 @@ interface AppStore {
   showLogs: boolean
   showDebug: boolean
   setTitleBarButtons: (patch: { showLogs?: boolean; showDebug?: boolean }) => void
+  /** Every saved pref as last known. Writers send this whole object, since main replaces the prefs
+   * with what is sent: so a change from the side panel never undoes one made in Settings. */
+  prefsSnapshot: ResolvedPrefs
+  setPrefsSnapshot: (prefs: ResolvedPrefs) => void
+  /** The side panel of the list is hidden (Settings → Interface shows it again). */
+  sidebarHidden: boolean
+  setSidebarHidden: (on: boolean) => void
+  /** The Hide action of the side panel: hidden and saved. */
+  hideSidebar: () => void
+  /** Whether each file's website is shown under its name (Settings → Interface). */
+  showSourceHost: boolean
+  setShowSourceHost: (on: boolean) => void
   /** The status bar's items and menu (Settings → Status bar). */
   statusBar: StatusBarPrefs
   setStatusBar: (statusBar: StatusBarPrefs) => void
@@ -267,6 +280,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   showLogs: window.lightning.initialState.prefs.showLogs,
   showDebug: window.lightning.initialState.prefs.showDebug,
   setTitleBarButtons: (patch) => set(patch),
+  prefsSnapshot: window.lightning.initialState.prefs,
+  setPrefsSnapshot: (prefsSnapshot) =>
+    set({
+      prefsSnapshot,
+      sidebarHidden: prefsSnapshot.sidebarHidden,
+      showSourceHost: prefsSnapshot.showSourceHost
+    }),
+  sidebarHidden: window.lightning.initialState.prefs.sidebarHidden,
+  setSidebarHidden: (sidebarHidden) => {
+    const prefsSnapshot = { ...get().prefsSnapshot, sidebarHidden }
+    set({ sidebarHidden, prefsSnapshot })
+    persist({ prefs: prefsSnapshot })
+  },
+  hideSidebar: () => get().setSidebarHidden(true),
+  showSourceHost: window.lightning.initialState.prefs.showSourceHost,
+  setShowSourceHost: (showSourceHost) => {
+    const prefsSnapshot = { ...get().prefsSnapshot, showSourceHost }
+    set({ showSourceHost, prefsSnapshot })
+    persist({ prefs: prefsSnapshot })
+  },
   statusBar: window.lightning.initialState.prefs.statusBar,
   setStatusBar: (statusBar) => set({ statusBar }),
 

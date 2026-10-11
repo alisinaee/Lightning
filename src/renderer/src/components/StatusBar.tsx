@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { isVpn } from '@shared/networks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
@@ -143,13 +144,13 @@ function SlowModeControl(): React.JSX.Element {
       <Switch aria-label="Slow mode" checked={slowMode} onCheckedChange={setSlowMode} />
       <Popover>
         <PopoverTrigger
-          className="flex items-center gap-1.5 rounded-sm px-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-[18px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-1.5 outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Slow mode speed"
+          title="Edit the slow mode speed"
         >
           Slow mode
-          <span className={slowMode ? 'text-foreground' : undefined}>
-            {formatSpeed(slowModeSpeed)}
-          </span>
+          <span className="text-foreground">{formatSpeed(slowModeSpeed)}</span>
+          <Pencil aria-hidden className="size-3 shrink-0" />
         </PopoverTrigger>
         <PopoverContent side="top" align="end" className="w-[300px] gap-3 p-3 font-sans">
           <div className="flex items-center gap-3">

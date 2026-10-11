@@ -150,6 +150,8 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'preventSleep',
     'closeToBackground',
     'hideDock',
+    'sidebarHidden',
+    'showSourceHost',
     'openAtLogin',
     'watchClipboard',
     'askWhenFinished',
