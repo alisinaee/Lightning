@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.33',
+      items: [
+        {
+          kind: 'improved',
+          title: 'Progress line aligned with the title',
+          text: 'The line along the bottom of a row starts exactly where its title text starts, for files and for groups.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.32',
       items: [
         {
