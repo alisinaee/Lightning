@@ -15,7 +15,7 @@ import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
-import { loadThemeSource, migrateLegacyNetworkPreferences } from './settings'
+import { loadThemeSource, migrateLegacyNetworkPreferences, migrateVpnDefault } from './settings'
 import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
 import { migrateLegacyUserData } from './legacyData'
@@ -214,6 +214,11 @@ app.whenReady().then(async () => {
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.
   await migrateLegacyNetworkPreferences().catch((error) =>
     console.error('[lightning] failed to migrate network-preferences.json', error)
+  )
+
+  // "Use VPN" became on by default: installs with settings keep their off, once, before it is read.
+  await migrateVpnDefault().catch((error) =>
+    console.error('[lightning] failed to migrate the VPN default', error)
   )
 
   // Applied before the window is created so the initial background/icon already match —

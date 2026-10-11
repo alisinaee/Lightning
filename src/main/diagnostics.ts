@@ -45,7 +45,7 @@ export async function diagnosticReport(input: {
       (n) =>
         `${n.id}  ${n.kind}${isVpn(n) ? ' (VPN)' : ''}  ${n.displayName}  ${n.addresses.map((a) => a.address).join(', ')}`
     ),
-    `VPN detected: ${input.networks.some(isVpn)}   Use VPN setting: ${settings.useVpn ?? false}`,
+    `VPN detected: ${input.networks.some(isVpn)}   Use VPN setting: ${settings.useVpn ?? true}`,
     '',
     '== Settings ==',
     JSON.stringify(rest, null, 2),

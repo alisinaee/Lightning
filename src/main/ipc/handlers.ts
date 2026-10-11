@@ -136,7 +136,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.groupsChanged)
   })
   void loadSettings().then((saved) => {
-    networks.useVpn = saved.useVpn ?? false
+    networks.useVpn = saved.useVpn ?? true
   })
   const dns = new DnsService((config) => {
     const window = getWindow()
@@ -293,7 +293,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     await saveSettings(patch)
     // Read back rather than taken from the patch: what was saved is what passed the checks.
     const saved = await loadSettings()
-    networks.useVpn = saved.useVpn ?? false
+    networks.useVpn = saved.useVpn ?? true
     manager.applySettings(saved)
     scheduleController.apply(saved.schedule)
     await applyBehavior(saved)
@@ -304,7 +304,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         speedLimit: saved.speedLimit,
         slowMode: saved.slowMode ?? false,
         slowModeSpeed: saved.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
-        useVpn: saved.useVpn ?? false
+        useVpn: saved.useVpn ?? true
       } satisfies SettingsPush)
     }
   }
@@ -337,7 +337,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         speedLimit: settings.speedLimit,
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
-        useVpn: settings.useVpn ?? false,
+        useVpn: settings.useVpn ?? true,
         destinationDir: destinationExists ? destinationDir : undefined,
         version: app.getVersion(),
         prefs: prefsOf(settings),
@@ -356,7 +356,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
         slowMode: false,
         slowModeSpeed: DEFAULT_SLOW_MODE_SPEED,
-        useVpn: false,
+        useVpn: true,
         version: app.getVersion(),
         prefs: prefsOf({}),
         schedule: DEFAULT_SCHEDULE,

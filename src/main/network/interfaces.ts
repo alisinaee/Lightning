@@ -182,7 +182,7 @@ export class NetworkMonitor {
   }
 
   /** Whether VPN tunnels count as connections (the "Use VPN for downloads" setting). */
-  useVpn = false
+  useVpn = true
 
   /** The networks a new download or the Auto scheduler may use: VPN tunnels only when on. */
   selectable(): NetworkInterfaceInfo[] {

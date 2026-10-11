@@ -13,6 +13,7 @@ import {
   type NetworkPreferences,
   type ThemeSource
 } from '../shared/types'
+import { vpnMigration } from '../shared/vpnDefault'
 import { isProxyAddress } from '../shared/networks'
 import { sanitizeSchedule } from '../shared/schedule'
 import { readJson, updateJson } from './jsonFile'
@@ -92,7 +93,9 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   const slowModeSpeed = byteCount(parsed.slowModeSpeed)
   if (slowModeSpeed !== undefined) settings.slowModeSpeed = slowModeSpeed
   if (parsed.slowMode === true) settings.slowMode = true
-  if (parsed.useVpn === true) settings.useVpn = true
+  // Both ways: with VPN on by default, a saved false is a choice that must be kept.
+  if (typeof parsed.useVpn === 'boolean') settings.useVpn = parsed.useVpn
+  if (parsed.vpnDefaultMigrated === true) settings.vpnDefaultMigrated = true
   if (parsed.prefs !== undefined) settings.prefs = sanitizePrefs(parsed.prefs)
   if (
     typeof parsed.integrationToken === 'string' &&
@@ -199,6 +202,12 @@ export function saveSettings(patch: unknown): Promise<void> {
   return updateJson(settingsPath(), (current) =>
     sanitizeSettings({ ...sanitizeSettings(current), ...(isRecord(patch) ? patch : {}) })
   )
+}
+
+/** Run once at start, before anything reads the settings (see vpnMigration). */
+export async function migrateVpnDefault(): Promise<void> {
+  const patch = vpnMigration(await loadSettings())
+  if (patch) await saveSettings(patch)
 }
 
 export async function loadThemeSource(): Promise<ThemeSource> {

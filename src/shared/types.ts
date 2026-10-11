@@ -479,6 +479,8 @@ export interface AppSettings {
   slowModeSpeed?: number
   /** Whether downloads may use VPN tunnels as connections. Off: they use the real networks. */
   useVpn?: boolean
+  /** Set once `useVpn` became on by default (see vpnMigration). */
+  vpnDefaultMigrated?: boolean
   /** Weekly windows in which downloads run, are held, or are slowed. */
   schedule?: ScheduleSettings
   /** The key the browser extension pairs with (see main/integration.ts). */
