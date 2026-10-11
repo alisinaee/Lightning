@@ -10,6 +10,46 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.27',
+      items: [
+        {
+          kind: 'improved',
+          title: 'Hide the side panel',
+          text: 'A hide button with a confirmation; Settings → Interface brings it back, and a Filter menu keeps the filters reachable meanwhile.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Counts, filters and search',
+          text: 'The side panel counts files, groups included. A filter or search lists the matching files, opening their groups, and the up and down buttons mark the match you step to.'
+        },
+        {
+          kind: 'fixed',
+          title: 'The list stays put',
+          text: 'It no longer jumps while downloads run and files change state.'
+        },
+        {
+          kind: 'improved',
+          title: 'VPN switch',
+          text: 'A labelled switch with a hint in the top bar. It reaches downloads that are already running. On by default for new installs; existing installs keep their choice.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Resizing the Name column',
+          text: 'Its divider follows the mouse through the columns to its right instead of stopping early.'
+        },
+        {
+          kind: 'new',
+          title: 'Right-click menus',
+          text: 'On groups, files inside groups and files still waiting to start.'
+        },
+        {
+          kind: 'improved',
+          title: 'Smaller things',
+          text: 'Slow mode looks editable, and the website under file names is off by default (Settings → Interface).'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.26',
       items: [
         {
