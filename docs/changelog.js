@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.31',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'Resuming somewhere else',
+          text: 'A download started on a network that is not there any more (a USB cable left at work) used to wait for ever when resumed. After a few seconds it now carries on over the networks that are connected.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.30',
       items: [
         {
