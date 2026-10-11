@@ -1,6 +1,27 @@
-import { BLOCK, expect, test } from './fixtures'
+import type { StartDownloadRequest } from '../src/shared/types'
+import { BLOCK, expect, test, type LightningApp } from './fixtures'
+import type { Origin } from './origin'
 
 // A progress line along the bottom of a running row, and only the percentage in the Status cell.
+
+async function request(
+  lightning: LightningApp,
+  origin: Origin,
+  name: string
+): Promise<StartDownloadRequest> {
+  const probe = await lightning.api.probeUrl(origin.url())
+  return {
+    kind: 'http',
+    url: probe.finalUrl,
+    destinationDir: lightning.dirs.dest,
+    suggestedFileName: name,
+    totalBytes: probe.totalBytes ?? 0,
+    supportsRanges: probe.supportsRanges,
+    interfaceIds: ['a'],
+    etag: probe.etag,
+    lastModified: probe.lastModified
+  }
+}
 
 test('a running row has a progress line and a percentage, and Settings can turn the line off @smoke', async ({
   lightning,
@@ -18,11 +39,10 @@ test('a running row has a progress line and a percentage, and Settings can turn 
   expect(Math.abs(lineBox!.y + lineBox!.height - (rowBox!.y + rowBox!.height))).toBeLessThanOrEqual(
     1.5
   )
-  // It starts where the Name column starts (after the checkbox column) and runs to the right edge.
+  // It starts exactly where the title text starts, and runs to the right edge.
+  const titleBox = await row.locator('[data-title]').boundingBox()
+  expect(Math.abs(lineBox!.x - titleBox!.x)).toBeLessThanOrEqual(2)
   expect(Math.abs(lineBox!.x + lineBox!.width - (rowBox!.x + rowBox!.width))).toBeLessThanOrEqual(2)
-  const inset = lineBox!.x - rowBox!.x
-  expect(inset).toBeGreaterThanOrEqual(24)
-  expect(inset).toBeLessThanOrEqual(40)
   expect(lineBox!.height).toBeLessThanOrEqual(4)
   // The cell itself is the percentage.
   await expect(row.getByText(/^\d+%$/)).toBeVisible()
@@ -42,4 +62,42 @@ test('a running row has a progress line and a percentage, and Settings can turn 
   await expect(bar).toHaveCount(1)
   const barBox = await bar.boundingBox()
   expect(barBox!.width).toBeLessThan(rowBox!.width * 0.5)
+})
+
+test('a group header and a file in it each start their line at their own title', async ({
+  lightning,
+  serve
+}) => {
+  const origin = await serve({ size: 80 * BLOCK, bytesPerSecond: 40_000 })
+  const { group } = await lightning.api.createGroup({
+    name: 'Lines',
+    destinationDir: lightning.dirs.dest,
+    mode: 'manual',
+    interfaceIds: ['a'],
+    requests: [await request(lightning, origin, 'grouped.bin')]
+  })
+  const page = lightning.page
+  const header = page.locator(`[data-group="${group.id}"]`)
+  await page.getByRole('button', { name: 'Show files in Lines' }).click()
+  const file = page.locator('[data-file-id]').first()
+
+  const headerLine = header.getByRole('progressbar', { name: 'Progress' })
+  const fileLine = file.getByRole('progressbar', { name: 'Progress' })
+  await expect(headerLine).toBeVisible({ timeout: 15_000 })
+  await expect(fileLine).toBeVisible({ timeout: 15_000 })
+
+  // Each line starts at its own row's title, and the two titles are not at the same place.
+  const edges: number[] = []
+  for (const [row, line] of [
+    [header, headerLine],
+    [file, fileLine]
+  ] as const) {
+    const [titleBox, lineBox] = await Promise.all([
+      row.locator('[data-title]').boundingBox(),
+      line.boundingBox()
+    ])
+    expect(Math.abs(lineBox!.x - titleBox!.x)).toBeLessThanOrEqual(2)
+    edges.push(titleBox!.x)
+  }
+  expect(Math.abs(edges[0] - edges[1])).toBeGreaterThan(4)
 })

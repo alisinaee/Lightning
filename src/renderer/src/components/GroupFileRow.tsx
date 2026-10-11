@@ -197,7 +197,7 @@ export const GroupFileRow = memo(
             }
           />
           {entry.kind === 'waiting' ? (
-            <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span data-title className="flex min-w-0 flex-1 flex-col gap-1">
               <ClippedText text={name} className="text-[12.5px] leading-none font-medium" />
               <span className="truncate text-[11px] leading-none text-muted-foreground">
                 {[showSourceHost && host, reason].filter(Boolean).join(' · ') || '\u00A0'}
@@ -206,6 +206,7 @@ export const GroupFileRow = memo(
           ) : (
             <button
               type="button"
+              data-title
               aria-label={`Open ${name}`}
               onClick={() => onOpen(id)}
               className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"

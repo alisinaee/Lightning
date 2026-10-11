@@ -311,7 +311,7 @@ export function GroupTableRow({
             <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           )}
           <FileKindIcon kind="other" icon={Folder} />
-          <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span data-title className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex min-w-0 items-center gap-1.5">
               <ClippedText
                 text={group.name}

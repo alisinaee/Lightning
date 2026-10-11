@@ -102,6 +102,7 @@ export const DownloadRow = memo(function DownloadRow({
         <FormatBadge name={name} kind={item.kind === 'torrent' ? 'torrent' : undefined} />
         <button
           type="button"
+          data-title
           aria-label={`Open ${name}`}
           onClick={(event) => {
             if (event.shiftKey) handlers.click(item.id, 'range')
