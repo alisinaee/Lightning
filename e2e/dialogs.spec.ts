@@ -72,3 +72,26 @@ test.describe('dialogs @smoke', () => {
     await expect.poll(groupName).toBe('Renamed by Done')
   })
 })
+
+test.describe('one link and several links share their settings @smoke', () => {
+  test.use({
+    appEnv: {
+      LIGHTNING_E2E_INTERFACES: 'a=127.0.0.1,v=127.0.0.2=255.0.0.0=vpn=Fake VPN'
+    }
+  })
+
+  test('Use VPN for downloads is in the New download dialog as it is when adding several links', async ({
+    lightning
+  }) => {
+    const page = lightning.page
+    await page.getByRole('button', { name: 'New download' }).first().click()
+    await page.getByRole('menuitem', { name: 'One link' }).click()
+    const dialog = page.getByRole('dialog', { name: 'New download' })
+    const vpn = dialog.getByRole('switch', { name: 'Use VPN for downloads' })
+    await expect(vpn).toBeVisible()
+    await expect(dialog.getByText('Off: downloads skip VPN tunnels')).toBeVisible()
+    // It is the app's one setting: turning it on here is what the other dialog and Settings show.
+    await vpn.click()
+    await expect(vpn).toBeChecked()
+  })
+})

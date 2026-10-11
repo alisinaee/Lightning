@@ -1,5 +1,6 @@
 import type { ProbeResult } from '@shared/types'
 import { DnsPicker } from './DnsPicker'
+import { VpnSwitch } from './VpnSwitch'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
 import { AlertTriangle, FolderOpen, X } from 'lucide-react'
@@ -438,6 +439,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
               )
             })}
           </div>
+        </div>
+
+        {/* The same switch as when adding several links; shown only while a VPN is detected. */}
+        <div className="-mx-4 -my-2 shrink-0">
+          <VpnSwitch />
         </div>
 
         <div className="flex items-center gap-3">
