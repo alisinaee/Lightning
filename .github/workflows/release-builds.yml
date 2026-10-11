@@ -1,0 +1,96 @@
+name: Release builds
+
+# Builds the installers for a release on GitHub's own machines and attaches them to it, so a release
+# has macOS and Windows files whichever computer the maintainer has. Run it by hand with the
+# release's tag (for example v1.0.0-rc.23); the release itself must exist already.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build and attach to (for example v1.0.0-rc.23)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # Builds are unsigned: no certificate to look for.
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  mac:
+    name: macOS installers
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx electron-vite build && npx electron-builder --mac dmg --arm64 --x64 --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx electron-vite build && npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  attach:
+    name: Attach to the release
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach the installers
+        run: gh release upload "${{ inputs.tag }}" dist/*.dmg dist/*-setup.exe --clobber
+
+      # The release's text keeps what was written for it; its download table is made again from
+      # the files that are now attached (the same script that made it).
+      - name: Rewrite the download table
+        run: |
+          gh release view "${{ inputs.tag }}" --json body -q .body | sed '/^## Downloads/,$d' > notes.md
+          node scripts/release-notes.mjs "${{ inputs.tag }}" notes.md > body.md
+          gh release edit "${{ inputs.tag }}" --notes-file body.md
