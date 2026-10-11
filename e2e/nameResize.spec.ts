@@ -39,18 +39,18 @@ test('the Name divider follows the pointer through the other columns @smoke', as
   const before = await edges()
 
   // Right, past the point where the next column is as narrow as it goes: the one after gives way.
-  const right = await drag(100)
-  expect(Math.abs(right - 100)).toBeLessThanOrEqual(2)
+  const right = await drag(50)
+  expect(Math.abs(right - 50)).toBeLessThanOrEqual(2)
   // More than the next column had to give, so the ones after it give some too (all of them are
   // then at their minimum, which is the end of the road).
-  const moreRight = await drag(100)
-  expect(moreRight).toBeGreaterThan(40)
+  const moreRight = await drag(50)
+  expect(moreRight).toBeGreaterThan(20)
 
   // Left again: every drag moves it, and the columns on the right never leave the window.
-  const left = await drag(-120)
-  expect(Math.abs(left + 120)).toBeLessThanOrEqual(2)
-  const moreLeft = await drag(-100)
-  expect(moreLeft).toBeLessThan(-50)
+  const left = await drag(-80)
+  expect(Math.abs(left + 80)).toBeLessThanOrEqual(2)
+  const moreLeft = await drag(-60)
+  expect(moreLeft).toBeLessThan(-30)
   const after = await edges()
   expect(after.right).toBeCloseTo(before.right, 0)
 })

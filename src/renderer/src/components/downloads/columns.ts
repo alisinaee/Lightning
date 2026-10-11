@@ -26,7 +26,9 @@ export const COLUMNS: ColumnDef[] = [
     dropOrder: 3,
     canHide: true
   },
-  { id: 'status', label: 'Status', width: 176, min: 112, max: 320, dropOrder: 0, canHide: false },
+  // The running percentage is short now (the bar is a line along the row), and the words
+  // (Completed, Queued #1, Needs attention) fit in this.
+  { id: 'status', label: 'Status', width: 112, min: 92, max: 320, dropOrder: 0, canHide: false },
   {
     id: 'speed',
     label: 'Speed',
