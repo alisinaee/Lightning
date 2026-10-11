@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.28',
+      items: [
+        {
+          kind: 'new',
+          title: 'A progress line on every row',
+          text: 'A thin line along the bottom of each row fills as the download goes, and the Status cell shows just the percentage. Settings → Interface can bring the old bar back.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.27',
       items: [
         {
