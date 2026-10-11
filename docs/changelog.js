@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.32',
+      items: [
+        {
+          kind: 'improved',
+          title: 'Progress line starts at the name',
+          text: 'The line along the bottom of a row now starts where the file name starts and runs to the end of the row.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.31',
       items: [
         {
