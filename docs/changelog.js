@@ -10,6 +10,21 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.26',
+      items: [
+        {
+          kind: 'fixed',
+          title: 'Search marks the match',
+          text: 'Found files are tinted and the one you step to with the up and down buttons is marked.'
+        },
+        {
+          kind: 'fixed',
+          title: 'VPN switch reaches running downloads',
+          text: 'Switching Use VPN on now adds the tunnel to downloads that are running, queued or paused, not only new ones.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.25',
       items: [
         {
