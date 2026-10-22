@@ -160,6 +160,7 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'watchClipboard',
     'askWhenFinished',
     'removeMissingFiles',
+    'warnDuplicates',
     'browserIntegration',
     'browserCapture',
     'browserMenuDownload',

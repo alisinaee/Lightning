@@ -1,9 +1,10 @@
 import type { ProbeResult } from '@shared/types'
+import type { DuplicateMatch } from '@shared/duplicates'
 import { DnsPicker } from './DnsPicker'
 import { VpnSwitch } from './VpnSwitch'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen, X } from 'lucide-react'
+import { AlertTriangle, FolderOpen, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
@@ -27,6 +28,7 @@ import {
 } from '../utils/requestDraft'
 import { TorrentFileList } from './TorrentFiles'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { describeDuplicate } from '../utils/duplicateText'
 
 type ProbeState =
   | { status: 'idle' }
@@ -91,6 +93,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [fileNameOverride, setFileNameOverride] = useState<string | null>(null)
+  // Existing copies of the checked link, kept with the check result they were looked up for.
+  const [duplicates, setDuplicates] = useState<{
+    of: ProbeResult
+    matches: DuplicateMatch[]
+  } | null>(null)
+  const warnDuplicates = useAppStore((store) => store.prefsSnapshot.warnDuplicates)
   // A torrent's files left out, by index: every file is downloaded unless unticked.
   const [skippedFiles, setSkippedFiles] = useState<number[]>([])
   // For this download only: the next one starts on Auto again.
@@ -165,6 +173,33 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     : (ready?.totalBytes ?? null)
   const multiChunkAllowed = ready !== null && ready.supportsRanges && ready.totalBytes !== null
   const isSingleStreamOnly = ready !== null && !multiChunkAllowed
+
+  // Looked up once the link is checked, and again when the folder changes. Only a notice: the
+  // Download button stays as it is.
+  useEffect(() => {
+    if (!ready || !warnDuplicates || !destinationDir) return
+    const link = ready.finalUrl || url.trim()
+    let stale = false
+    window.lightning
+      .findDuplicates([link], destinationDir, {
+        probes: [
+          {
+            url: link,
+            fileName: ready.suggestedFileName,
+            totalBytes: ready.totalBytes
+          }
+        ]
+      })
+      .then((matches) => {
+        if (!stale) setDuplicates({ of: ready, matches })
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [ready, warnDuplicates, destinationDir, url])
+  const duplicate =
+    duplicates && ready && duplicates.of === ready ? (duplicates.matches[0] ?? null) : null
 
   const detectedIds = interfaces.map((iface) => iface.id)
   const defaultIds = defaultNetworkIds(interfaces, networkPreferences, false)
@@ -383,6 +418,12 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
                   .filter(Boolean)
                   .join(' · ')}
               </div>
+              {duplicate && (
+                <div className="flex items-center gap-1.5 text-[12px] text-amber-700 dark:text-amber-400">
+                  <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
+                  <span className="truncate">{describeDuplicate(duplicate)}</span>
+                </div>
+              )}
             </div>
           </div>
         )}

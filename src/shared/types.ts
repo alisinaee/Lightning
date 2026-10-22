@@ -423,6 +423,8 @@ export interface AppPrefs {
   askWhenFinished?: boolean
   /** Take a finished download out of the list when its file is deleted or moved away. */
   removeMissingFiles?: boolean
+  /** Warn in the New download and several links dialogs when a link is already downloaded, queued or in the folder. */
+  warnDuplicates?: boolean
   /** How many finished downloads the history keeps, newest first (50 to 5000). */
   historyLimit?: number
   /** Seconds a connection may go without data before it is treated as stalled (5 to 120). */
@@ -467,6 +469,7 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   watchClipboard: false,
   askWhenFinished: false,
   removeMissingFiles: false,
+  warnDuplicates: true,
   historyLimit: 500,
   stallTimeoutSec: 20,
   browserIntegration: true,

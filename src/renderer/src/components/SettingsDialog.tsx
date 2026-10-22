@@ -346,6 +346,11 @@ export function SettingsDialog({
                   onChange={(removeMissingFiles) => save({ removeMissingFiles })}
                   label="Remove a finished download from the list when its file is deleted or moved"
                 />
+                <Row
+                  checked={prefs.warnDuplicates}
+                  onChange={(warnDuplicates) => save({ warnDuplicates })}
+                  label="Warn before downloading something I already have"
+                />
               </>
             )}
             {page === 'History' && (

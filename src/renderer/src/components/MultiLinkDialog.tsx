@@ -1,6 +1,7 @@
 import type { ProbeResult } from '@shared/types'
+import type { DuplicateMatch } from '@shared/duplicates'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen, ListChecks, ListX } from 'lucide-react'
+import { AlertTriangle, FolderOpen, ListChecks, ListX, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { RequestOptions } from './RequestOptions'
 import {
@@ -21,6 +22,7 @@ import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { VpnSwitch } from './VpnSwitch'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { describeDuplicate } from '../utils/duplicateText'
 
 type Row =
   | { url: string; status: 'checking' }
@@ -64,6 +66,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [step, setStep] = useState<'files' | 'settings'>('files')
   const [skipped, setSkipped] = useState(0)
   const [unticked, setUnticked] = useState<string[]>([])
+  // Existing copies of the checked links, kept with the rows they were looked up for.
+  const [duplicates, setDuplicates] = useState<{ of: Row[]; matches: DuplicateMatch[] } | null>(
+    null
+  )
+  const warnDuplicates = useAppStore((store) => store.prefsSnapshot.warnDuplicates)
   const [folder, setFolder] = useState('')
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
@@ -148,6 +155,45 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const chosen = ready.filter((row) => !unticked.includes(row.url))
   const checking = (rows ?? []).some((row) => row.status === 'checking')
   const allTicked = ready.length > 0 && chosen.length === ready.length
+
+  // Once every link is checked: which of them are already here. Those start unticked.
+  useEffect(() => {
+    if (!rows || checking || !warnDuplicates) return
+    const readyRows = rows.filter(
+      (row): row is Extract<Row, { status: 'ready' }> => row.status === 'ready'
+    )
+    if (readyRows.length === 0) return
+    let stale = false
+    window.lightning
+      .findDuplicates(
+        readyRows.map((row) => row.url),
+        destinationDir || undefined,
+        {
+          probes: readyRows.map((row) => ({
+            url: row.url,
+            finalUrl: row.result.finalUrl,
+            fileName: row.result.suggestedFileName,
+            totalBytes: row.result.totalBytes
+          }))
+        }
+      )
+      .then((matches) => {
+        if (stale) return
+        setDuplicates({ of: rows, matches })
+        const again = matches.map((match) => match.url)
+        setUnticked((prev) => [...new Set([...prev, ...again])])
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [rows, checking, destinationDir, warnDuplicates])
+  const duplicateByUrl = new Map<string, DuplicateMatch>()
+  if (warnDuplicates && duplicates && duplicates.of === rows) {
+    for (const match of duplicates.matches) {
+      if (!duplicateByUrl.has(match.url)) duplicateByUrl.set(match.url, match)
+    }
+  }
   const folderName = folderNameOf(folder)
   const separator = destinationDir.includes('\\') && !destinationDir.includes('/') ? '\\' : '/'
   const target = folderName
@@ -336,6 +382,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 {skipped > 0 && (
                   <span className="ml-2 font-normal text-muted-foreground">{skipped} skipped</span>
                 )}
+                {duplicateByUrl.size > 0 && (
+                  <span className="ml-2 font-normal text-amber-700 dark:text-amber-400">
+                    {duplicateByUrl.size} already downloaded or downloading
+                  </span>
+                )}
               </span>
               {selectButton('Select all', ListChecks, ready.length === 0 || allTicked, () =>
                 setUnticked([])
@@ -389,6 +440,14 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                         <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-danger)]">
                           <AlertTriangle aria-hidden className="size-3 shrink-0" />
                           <span className="truncate">{row.message}</span>
+                        </div>
+                      )}
+                      {duplicateByUrl.has(row.url) && (
+                        <div className="flex items-center gap-1 text-[11.5px] text-amber-700 dark:text-amber-400">
+                          <TriangleAlert aria-hidden className="size-3 shrink-0" />
+                          <span className="truncate">
+                            {describeDuplicate(duplicateByUrl.get(row.url) as DuplicateMatch)}
+                          </span>
                         </div>
                       )}
                     </div>
