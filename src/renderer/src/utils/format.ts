@@ -13,7 +13,11 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  let exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1)
+  // Under 1 byte (a slow speed averaged over a few seconds) is still bytes, not a unit below them.
+  let exponent = Math.max(
+    0,
+    Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1)
+  )
   let value = bytes / 1024 ** exponent
   if (exponent < UNITS.length - 1 && Number(value.toFixed(exponent === 0 ? 0 : 1)) >= 1024) {
     exponent += 1
@@ -28,8 +32,9 @@ export function formatSpeed(bytesPerSec: number): string {
 
 export function formatEta(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return '—'
-  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))}s`
-  const totalSec = Math.round(seconds)
+  // Seconds round up, so anything past 59s is a minute: "1m 0s", never "60s".
+  if (Math.ceil(seconds) < 60) return `${Math.max(1, Math.ceil(seconds))}s`
+  const totalSec = Math.max(60, Math.round(seconds))
   const mins = Math.floor(totalSec / 60)
   const secs = totalSec % 60
   if (mins < 60) return `${mins}m ${secs}s`
@@ -56,7 +61,10 @@ export function wantedBytes(download: DownloadState | FinishedDownload): number 
 
 export function formatPercent(bytesDownloaded: number, totalBytes: number): number {
   if (totalBytes <= 0) return 0
-  return Math.min(100, Math.round((bytesDownloaded / totalBytes) * 100))
+  // 100% only once every byte is in: rounding 99.6% up would claim a 10 GB file was done with
+  // 40 MB still to go.
+  if (bytesDownloaded >= totalBytes) return 100
+  return Math.min(99, Math.round((bytesDownloaded / totalBytes) * 100))
 }
 
 export function fileNameFromPath(path: string): string {
@@ -198,9 +206,12 @@ export function toDisplayPath(path: string, homeDir: string): string {
 
 export { describeError } from '@shared/errors'
 
-const LINK_REFUSED = /status (401|403|404|410) for range request/
+const LINK_REFUSED = /status (401|403|404|410|416) for range request/
 
-/** A download whose link the server now refuses: a fresh link to the same file picks it up. */
+/** A download whose link the server now refuses: a fresh link to the same file picks it up.
+ * 416 (Range Not Satisfiable) belongs here too: the server is saying the byte range this
+ * download was resuming no longer exists, same as a 404/410 — retrying the same range would
+ * just repeat the same 416 forever. */
 export function linkExpired(download: DownloadState): boolean {
   return (
     download.kind === 'http' &&

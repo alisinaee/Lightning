@@ -1,5 +1,5 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
 import { createTrayPanel } from './trayPanel'
 import {
@@ -206,6 +206,23 @@ function createWindow(): void {
     // attacker- or server-influenced data.
     if (/^https?:/i.test(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Electron shows no right-click menu of its own: give every text field Cut/Copy/Paste, and any
+  // selected text Copy.
+  mainWindow.webContents.on('context-menu', (_, { isEditable, selectionText, editFlags }) => {
+    const template: Electron.MenuItemConstructorOptions[] = isEditable
+      ? [
+          { role: 'cut', enabled: editFlags.canCut },
+          { role: 'copy', enabled: editFlags.canCopy },
+          { role: 'paste', enabled: editFlags.canPaste },
+          { type: 'separator' },
+          { role: 'selectAll', enabled: editFlags.canSelectAll }
+        ]
+      : selectionText.trim()
+        ? [{ role: 'copy' }]
+        : []
+    if (template.length) Menu.buildFromTemplate(template).popup()
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

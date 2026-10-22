@@ -663,6 +663,7 @@ export class HttpTransfer implements Transfer {
         url: this.runtime.requestPayload.url,
         rangeStart: block.rangeStart + attempt.startOffset,
         rangeEnd: block.rangeEnd,
+        wholeFile: !this.runtime.requestPayload.supportsRanges,
         connection: self.connection,
         requestHeaders: buildHeaders(this.runtime.requestPayload),
         createDestination: () =>

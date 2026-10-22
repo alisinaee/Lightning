@@ -1,7 +1,7 @@
 /** Failures that a later try can fix: the network, a busy or failing server. The ones that
  * need the user (a refused link, a full disk, a missing partial file) are not. */
 const NEEDS_USER =
-  /status (401|403|404|410)|ENOSPC|EDQUOT|EACCES|EPERM|EROFS|partial download file|different file|changed on the server|Invalid|CERT|SSL|TLS/i
+  /status (401|403|404|410|416)|ENOSPC|EDQUOT|EACCES|EPERM|EROFS|partial download file|different file|changed on the server|Invalid|CERT|SSL|TLS/i
 const TRANSIENT =
   /status (408|425|429|5\d\d)|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ESOCKETTIMEDOUT|ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|socket hang up|No network could reach|stalled|timed out|interrupted/i
 

@@ -59,6 +59,8 @@ export function CombineDiagram({
         {networks.map((network, index) => {
           const y = (index + 0.5) * (height / networks.length)
           const color = muted ? 'var(--icon-muted)' : network.solid
+          // Flows only while the network carries bytes: a zero speed (or a paused download) stays still.
+          const flowing = !muted && !paused && (network.speedBytesPerSec ?? 0) > 0
           return (
             <path
               key={network.label + index}
@@ -67,9 +69,9 @@ export function CombineDiagram({
               strokeDasharray="6 8"
               opacity={paused ? 0.55 : 1}
               style={
-                muted || paused
-                  ? undefined
-                  : { animation: `lightning-dash ${1.1 + index * 0.2}s linear infinite` }
+                flowing
+                  ? { animation: `lightning-dash ${1.1 + index * 0.2}s linear infinite` }
+                  : undefined
               }
             />
           )

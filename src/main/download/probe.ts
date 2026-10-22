@@ -7,6 +7,7 @@ import type { NetworkInterfaceInfo, ProbeResult, RequestExtras } from '../../sha
 import { NoCompatibleRouteError, StreamConnection } from '../network/routes'
 import { stallTimeoutMs } from '../testKnobs'
 import { parseContentDispositionFilename } from './contentDisposition'
+import { normalizeEtag } from './fileVersion'
 import {
   describeTorrent,
   downloadTorrentFile,
@@ -44,7 +45,9 @@ async function requestFirstBytes(
   url: URL,
   deadline: number,
   sent: Record<string, string>,
-  networks?: ProbeNetworks
+  networks?: ProbeNetworks,
+  ranged = true,
+  range = 'bytes=0-1023'
 ): Promise<ProbeResponse> {
   const candidates = networks?.() ?? []
   // All networks are tried at once and the first to answer wins: a network with no internet (a
@@ -56,7 +59,7 @@ async function requestFirstBytes(
       timeoutMs: Math.max(1, deadline - Date.now())
     })
     connections.push(connection)
-    const { res } = await connection.request(url, { ...sent, Range: 'bytes=0-1023' })
+    const { res } = await connection.request(url, ranged ? { ...sent, Range: range } : sent)
     res.destroy()
     return { statusCode: res.statusCode ?? 0, headers: res.headers as Headers }
   })
@@ -83,13 +86,15 @@ async function requestFirstBytes(
     throw lastError
   }
   // No network to bind to (none connected, or a simulated one): the default route.
-  return requestFirstBytesDefaultRoute(url, deadline, sent)
+  return requestFirstBytesDefaultRoute(url, deadline, sent, ranged, range)
 }
 
 function requestFirstBytesDefaultRoute(
   url: URL,
   deadline: number,
-  sent: Record<string, string>
+  sent: Record<string, string>,
+  ranged = true,
+  range = 'bytes=0-1023'
 ): Promise<ProbeResponse> {
   return new Promise((resolve, reject) => {
     const requester = url.protocol === 'https:' ? httpsRequest : httpRequest
@@ -99,7 +104,7 @@ function requestFirstBytesDefaultRoute(
         hostname: url.hostname.replace(/^\[|\]$/g, ''),
         port: url.port || undefined,
         path: `${url.pathname}${url.search}`,
-        headers: { ...sent, Range: 'bytes=0-1023' }
+        headers: ranged ? { ...sent, Range: range } : sent
       },
       (res) => {
         clearTimeout(timer)
@@ -139,17 +144,28 @@ async function requestFollowingRedirects(
   rawUrl: string,
   extras?: RequestExtras,
   networks?: ProbeNetworks
-): Promise<{ current: URL; response: ProbeResponse | null }> {
+): Promise<{ current: URL; response: ProbeResponse | null; sent: Record<string, string> }> {
   let current = new URL(rawUrl)
   let sent = buildHeaders(extras)
   let response: ProbeResponse | null = null
+  let ranged = true
   const deadline = Date.now() + stallTimeoutMs()
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    response = await requestFirstBytes(current, deadline, sent, networks)
+    response = await requestFirstBytes(current, deadline, sent, networks, ranged)
+    // Some servers refuse any Range request with 403 while serving the same URL in full (upstream
+    // plexo#131). Ask once more without one: if that works, the file downloads as one stream from
+    // byte zero with no Range, the same as on a server without range support.
+    if (response.statusCode === 403 && ranged) {
+      ranged = false
+      response = await requestFirstBytes(current, deadline, sent, networks, ranged)
+    }
     if (response.statusCode >= 300 && response.statusCode < 400) {
       const location = headerValue(response.headers, 'location')
       if (!location) break
+      if (redirect === MAX_REDIRECTS) {
+        throw new Error('Too many redirects while checking the link')
+      }
       const next = new URL(location, current)
       sent = headersForRedirect(sent, current, next)
       current = next
@@ -158,7 +174,37 @@ async function requestFollowingRedirects(
     break
   }
 
-  return { current, response }
+  return { current, response, sent }
+}
+
+/** Whether the server labels each byte range with an ETag of its own (pCloud does, upstream
+ * plexo#156): then no chunk's ETag ever matches the probe's. The first range asked again keeps
+ * its ETag while the next range gets another. A load balancer alternating labels per request
+ * changes it on the repeat instead, and keeps its ETag checked. */
+async function etagIsPerRange(
+  url: URL,
+  sent: Record<string, string>,
+  networks: ProbeNetworks | undefined,
+  first: ProbeResponse
+): Promise<boolean> {
+  const etag = headerValue(first.headers, 'etag')
+  const total = /\/(\d+)$/.exec(headerValue(first.headers, 'content-range') ?? '')?.[1]
+  if (first.statusCode !== 206 || !etag || !total || Number(total) <= 2048) return false
+  const deadline = Date.now() + stallTimeoutMs()
+  try {
+    const again = await requestFirstBytes(url, deadline, sent, networks)
+    const next = await requestFirstBytes(url, deadline, sent, networks, true, 'bytes=1024-2047')
+    const etagOf = (r: ProbeResponse): string => normalizeEtag(headerValue(r.headers, 'etag') ?? '')
+    return (
+      again.statusCode === 206 &&
+      next.statusCode === 206 &&
+      etagOf(again) === normalizeEtag(etag) &&
+      etagOf(next) !== '' &&
+      etagOf(next) !== normalizeEtag(etag)
+    )
+  } catch {
+    return false
+  }
 }
 
 /** A link the server says is a torrent, or that is named like one. */
@@ -183,7 +229,7 @@ export async function probeUrl(
     return describeTorrent(await readTorrentFile(rawUrl), rawUrl)
   }
 
-  const { current, response } = await requestFollowingRedirects(rawUrl, sendWith, networks)
+  const { current, response, sent } = await requestFollowingRedirects(rawUrl, sendWith, networks)
 
   // An empty file can't satisfy a request for its first byte: the server answers 416 and gives
   // the size as `bytes */0`. That's a valid, empty download, not an error.
@@ -231,6 +277,8 @@ export async function probeUrl(
     if (contentLength) totalBytes = Number(contentLength)
   }
 
+  const perRange = await etagIsPerRange(current, sent, networks, response)
+
   return {
     kind: 'http',
     requestedUrl: rawUrl,
@@ -239,7 +287,7 @@ export async function probeUrl(
     totalBytes,
     suggestedFileName: fileNameFromHeaders(response.headers, current),
     contentType: headerValue(response.headers, 'content-type') ?? null,
-    etag: headerValue(response.headers, 'etag') ?? null,
+    etag: perRange ? null : (headerValue(response.headers, 'etag') ?? null),
     lastModified: headerValue(response.headers, 'last-modified') ?? null
   }
 }

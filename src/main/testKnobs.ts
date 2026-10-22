@@ -27,6 +27,9 @@ export const testKnobs = {
   hedgeAfterMs: positiveNumber('LIGHTNING_E2E_HEDGE_MS', 2_000),
   /** How long a magnet link may take to find peers that send its metadata. */
   magnetTimeoutMs: positiveNumber('LIGHTNING_E2E_MAGNET_MS', 3 * 60_000),
+  /** How long a magnet link only the DHT can help keeps looking once its first search finds no
+   * one (Deluge's magnet prefetch also waits 30 s). */
+  magnetGraceMs: positiveNumber('LIGHTNING_E2E_MAGNET_GRACE_MS', 30_000),
   /** A fixed time between a download's updates to the window, whatever the window shows (the
    * suite's windows are hidden, which would otherwise slow them). 0: by what is visible. */
   uiUpdateMs: positiveNumber('LIGHTNING_E2E_UI_UPDATE_MS', 0),

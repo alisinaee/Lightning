@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { lstat, mkdir, open, rm, stat } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { join } from 'node:path'
+import { fitFileName } from '../../shared/fileNames'
 
 export function getDefaultDownloadsDir(): string {
   return app.getPath('downloads')
@@ -60,12 +61,7 @@ async function claimName(
 ): Promise<string> {
   await ensureDirectory(directory)
   name = sanitizeFileName(name)
-  const ext = extension ? extname(name) : ''
-  const maxBaseBytes = 255 - Buffer.byteLength(` (9999)${suffix}`) - Buffer.byteLength(ext)
-  if (maxBaseBytes <= 0) throw new Error('The file extension is too long')
-  const baseCharacters = Array.from(ext ? basename(name, ext) : name)
-  while (Buffer.byteLength(baseCharacters.join('')) > maxBaseBytes) baseCharacters.pop()
-  const base = baseCharacters.join('')
+  const { base, ext } = fitFileName(name, { suffix, extension })
 
   for (let counter = 0; counter < MAX_NAME_ATTEMPTS; counter += 1) {
     const candidate =

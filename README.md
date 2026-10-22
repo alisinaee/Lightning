@@ -93,7 +93,7 @@ Builds are unsigned. On macOS, right-click the app and choose **Open** the first
 
 - **Windows 10 or 11** (x64 and ARM64).
 - **macOS** (Apple silicon and Intel).
-- **Linux** (x86_64 and ARM64), as an AppImage or a `.deb`. Using several networks at once needs **kernel 5.7 or later**, which is when unprivileged interface binding arrived. **Open at login** does nothing on Linux yet.
+- **Linux** (x86_64 and ARM64), as an AppImage, a `.deb`, an `.rpm` or a `.tar.gz`. Using several networks at once needs **kernel 5.7 or later**, which is when unprivileged interface binding arrived. **Open at login** does nothing on Linux yet.
 
 ## Getting the most from several networks
 

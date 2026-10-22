@@ -136,7 +136,7 @@ test.describe('getting a torrent in', () => {
     test('a magnet link nobody answers gives up', async ({ lightning }) => {
       const magnet = `magnet:?xt=urn:btih:${'ab'.repeat(20)}&dn=nothing`
       await expect(lightning.api.probeUrl(magnet)).rejects.toThrow(
-        /No peers responded to this magnet link/
+        /find anyone sharing this magnet link/
       )
     })
   })

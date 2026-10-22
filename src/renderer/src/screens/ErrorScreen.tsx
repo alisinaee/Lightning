@@ -6,7 +6,14 @@ import { DetailHeader } from '../components/DetailHeader'
 import { FormatBadge } from '../components/downloads/FileKindIcon'
 import { TruncatedText } from '../components/TruncatedText'
 import { Button } from '../components/ui/button'
-import { describeError, formatBytes, isFolder, linkExpired, wantedBytes } from '../utils/format'
+import {
+  describeError,
+  formatBytes,
+  formatPercent,
+  isFolder,
+  linkExpired,
+  wantedBytes
+} from '../utils/format'
 import { useAppStore } from '../store/useAppStore'
 
 export function ErrorScreen({ download }: { download: DownloadState }): React.JSX.Element {
@@ -28,9 +35,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
   // What it downloaded is still there to pick up from.
   const resumable = !cancelled && download.resumable !== false && download.bytesDownloaded > 0
   const knownSize = download.totalBytes > 0
-  const percent = knownSize
-    ? Math.min(100, Math.round((download.bytesDownloaded / wantedBytes(download)) * 100))
-    : 0
+  const percent = knownSize ? formatPercent(download.bytesDownloaded, wantedBytes(download)) : 0
   const heading = cancelled ? 'Download cancelled' : 'Download failed'
   const description = cancelled
     ? 'The download was stopped before finishing.'

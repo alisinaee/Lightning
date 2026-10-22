@@ -92,6 +92,30 @@ test.describe('happy paths @smoke', () => {
     expect(Math.max(...sent.slice(1).map((update) => update.blocks.length))).toBeLessThan(16)
   })
 
+  test('server that refuses range requests with 403: one stream, whole file', async ({
+    lightning,
+    serve
+  }) => {
+    const origin = await serve({ size: 10 * BLOCK })
+    origin.setRule(({ range }) => (range ? { status: 403 } : 'ok'))
+    const probe = await lightning.api.probeUrl(origin.url())
+    expect(probe).toMatchObject({ kind: 'http', supportsRanges: false, totalBytes: 10 * BLOCK })
+    await lightning.start(origin.url(), origin.sha256)
+    const state = await lightning.waitForHttpStatus('completed')
+    expect(state.streams).toHaveLength(1)
+    // After the probe's ranged GET, nothing else asks for a range the server would refuse.
+    expect(origin.chunkRequests().filter((request) => request.range !== null)).toEqual([])
+  })
+
+  test('a link that answers 403 with or without a range is still an error', async ({
+    lightning,
+    serve
+  }) => {
+    const origin = await serve({ size: 3 * BLOCK })
+    origin.setRule(() => ({ status: 403 }))
+    await expect(lightning.api.probeUrl(origin.url())).rejects.toThrow(/status 403/)
+  })
+
   test('server without range support: one stream, whole file', async ({ lightning, serve }) => {
     const origin = await serve({ size: 10 * BLOCK, ranges: false })
     await lightning.start(origin.url(), origin.sha256)
@@ -129,6 +153,36 @@ test.describe('happy paths @smoke', () => {
 
 test.describe('file names @smoke', () => {
   const cases: [string, string, RegExp][] = [
+    [
+      'a quoted filename keeps priority over an earlier duplicate token',
+      'attachment; filename=preview.csv; filename="quarterly report.csv"',
+      /^quarterly report\.csv$/
+    ],
+    [
+      'malformed earlier extended values do not hide a usable filename star',
+      "attachment; filename*=not-extended; filename*=\"UTF-8''preview.csv\"; filename*=UTF-8''; filename*=UTF-8''report.csv",
+      /^report\.csv$/
+    ],
+    [
+      'a filename parameter accepts optional whitespace',
+      'attachment; filename = "quarterly report.csv"',
+      /^quarterly report\.csv$/
+    ],
+    [
+      'an unrelated parameter does not shadow filename',
+      'attachment; x-filename="preview.csv"; filename="quarterly report.csv"',
+      /^quarterly report\.csv$/
+    ],
+    [
+      'a quoted extension value does not shadow filename star',
+      'attachment; note="filename*=UTF-8\'\'preview.csv"; filename="quarterly report.csv"',
+      /^quarterly report\.csv$/
+    ],
+    [
+      'a UTF-8 filename star is decoded',
+      "attachment; filename*=UTF-8''caf%C3%A9.csv",
+      /^café\.csv$/
+    ],
     ['path traversal is flattened', 'attachment; filename="../../evil.sh"', /^\.\._\.\._evil\.sh$/],
     ['control characters are replaced', 'attachment; filename="a%0Ab.txt"', /^a_b\.txt$/],
     [

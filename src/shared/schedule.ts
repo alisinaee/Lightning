@@ -55,6 +55,26 @@ export function activeRules(rules: ScheduleRule[], at: Date): ScheduleRule[] {
   return rules.filter((rule) => covers(rule, at.getDay(), minute))
 }
 
+const MINUTE_MS = 60_000
+
+/** `date` at `minute` past local midnight. On the day clocks spring forward, a time in the skipped
+ * hour doesn't exist, and Date moves it on by the size of the gap (2:30 becomes 3:30); the clock
+ * passes 2:30 the moment it jumps to 3:00, so that's the time used instead. */
+function atLocalMinute(date: Date, minute: number): Date {
+  const at = new Date(date)
+  at.setHours(Math.floor(minute / 60), minute % 60, 0, 0)
+  const wallMinute = (time: Date): number => time.getHours() * 60 + time.getMinutes()
+  if (wallMinute(at) === minute) return at
+  // Back up to the first minute after the jump: the one before it reads earlier than `minute`, or
+  // is the day before (where clocks jump at midnight).
+  for (;;) {
+    const before = new Date(at.getTime() - MINUTE_MS)
+    if (before.getDate() !== date.getDate() || wallMinute(before) <= minute) break
+    at.setTime(before.getTime())
+  }
+  return at
+}
+
 /** When the set of active rules next changes after `at`: the nearest start or end of a window. */
 export function nextBoundary(rules: ScheduleRule[], at: Date): number | null {
   let best: number | null = null
@@ -63,9 +83,9 @@ export function nextBoundary(rules: ScheduleRule[], at: Date): number | null {
       for (const time of [rule.start, rule.end]) {
         const minutes = minutesOf(time)
         if (minutes === null) continue
-        const when = new Date(at)
-        when.setDate(when.getDate() + offset)
-        when.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0)
+        const day = new Date(at)
+        day.setDate(day.getDate() + offset)
+        const when = atLocalMinute(day, minutes)
         if (when.getTime() > at.getTime() && (best === null || when.getTime() < best)) {
           best = when.getTime()
         }

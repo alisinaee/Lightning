@@ -88,6 +88,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const linkInput = useRef<HTMLInputElement>(null)
 
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' })
+  // Bumped by "Search again" to check the same link once more.
+  const [searchCount, setSearchCount] = useState(0)
   // What this download changes from the default networks (those on in the networks menu).
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
   const [starting, setStarting] = useState(false)
@@ -160,7 +162,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     }
     // extrasKey stands for `extras`: the check runs again when what it sends changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, extrasKey])
+  }, [url, extrasKey, searchCount])
 
   const ready = probe.status === 'ready' ? probe.result : null
   const torrent = ready?.kind === 'torrent' ? ready.torrent : null
@@ -379,6 +381,16 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           <div className="flex items-center gap-2 text-[12.5px] text-[var(--color-danger)]">
             <AlertTriangle className="size-4 shrink-0" />
             {probe.message}
+            {/^magnet:/i.test(url.trim()) && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSearchCount((count) => count + 1)}
+              >
+                Search again
+              </Button>
+            )}
           </div>
         )}
 

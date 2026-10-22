@@ -50,7 +50,7 @@ Tests build the app first; set `LIGHTNING_E2E_SKIP_BUILD=1` when `out/` is alrea
 
 ## Releasing
 
-A release ships seven files: `Lightning` for macOS (Apple silicon and Intel `.dmg`), Windows (one installer for x64 and ARM64) and Linux (`AppImage` and `.deb`, x86_64 and ARM64). The download page (`docs/`, served by GitHub Pages) reads them from the latest GitHub Release and labels each one from its file name (`docs/downloads.js`), so keep the naming in `electron-builder.yml` intact.
+A release ships seven files: `Lightning` for macOS (Apple silicon and Intel `.dmg`), Windows (one installer for x64 and ARM64) and Linux (`AppImage`, `.deb`, `.rpm` and `.tar.gz`, x86_64 and ARM64). The download page (`docs/`, served by GitHub Pages) reads them from the latest GitHub Release and labels each one from its file name (`docs/downloads.js`), so keep the naming in `electron-builder.yml` intact.
 
 ```bash
 npm version <version> --no-git-tag-version     # e.g. 1.0.0-rc.8
