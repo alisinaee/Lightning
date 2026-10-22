@@ -44,6 +44,7 @@
     linux: [
       'AppImage: `chmod +x lightning-*.AppImage`, then run it. Recent Ubuntu needs FUSE 2 first: `sudo apt install libfuse2t64` (older releases call it `libfuse2`) — or use the .deb, which needs nothing extra.',
       '.deb: `sudo apt install ./lightning_*.deb`.',
+      '.tar.gz (Arch, or anywhere without FUSE): `tar xzf lightning-*.tar.gz`, then run `./lightning` inside the extracted folder.',
       'Using more than one network needs Linux kernel 5.7 or newer (any current distro); on older kernels Lightning can only use the default network.'
     ]
   }
@@ -96,6 +97,16 @@
         'Fedora / RHEL' + archSuffix(arch),
         '.rpm package · Fedora, RHEL, openSUSE',
         arch === 'arm64' ? 5 : 4
+      )
+    }
+    if (/\.tar\.gz$/.test(n)) {
+      return mk(
+        'linux',
+        arch,
+        'tarball',
+        'Archive' + archSuffix(arch),
+        '.tar.gz · extract and run, no FUSE',
+        arch === 'arm64' ? 7 : 6
       )
     }
     return null
