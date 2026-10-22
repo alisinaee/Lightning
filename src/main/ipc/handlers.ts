@@ -31,6 +31,7 @@ import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
 import { findInHistory, listHistory } from '../download/history'
 import { probeUrl } from '../download/probe'
+import { onMagnetCheckStatus } from '../download/torrent/metadata'
 import { scanPage } from '../download/pageScan'
 import { askWhatNext, runFinishedAction } from '../postActions'
 import { ScheduleController } from '../scheduleController'
@@ -123,6 +124,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.networksChanged, list)
   })
   const manager = new DownloadManager(getWindow, networks)
+  // How a magnet link's check is going, for the window to show while it waits.
+  onMagnetCheckStatus((status) => {
+    const window = getWindow()
+    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.magnetStatus, status)
+  })
   // Waking from sleep, the networks may have changed without a poll in between to see it.
   powerMonitor.on('resume', () => {
     manager.systemResumed()

@@ -176,6 +176,18 @@ const lightningApi = {
       callback(networks)
     ipcRenderer.on(IpcChannels.networksChanged, listener)
     return () => ipcRenderer.removeListener(IpcChannels.networksChanged, listener)
+  },
+
+  /** How a magnet link's check is going, while it waits: noPeersYet once its first search came back empty. */
+  onMagnetStatus: (
+    callback: (status: { link: string; noPeersYet: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      status: { link: string; noPeersYet: boolean }
+    ): void => callback(status)
+    ipcRenderer.on(IpcChannels.magnetStatus, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.magnetStatus, listener)
   }
 }
 

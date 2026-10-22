@@ -90,6 +90,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' })
   // Bumped by "Search again" to check the same link once more.
   const [searchCount, setSearchCount] = useState(0)
+  // How the magnet link being checked is going, as the main process reports it.
+  const [magnetWait, setMagnetWait] = useState<{ link: string; noPeersYet: boolean } | null>(null)
   // What this download changes from the default networks (those on in the networks menu).
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
   const [starting, setStarting] = useState(false)
@@ -128,6 +130,8 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       .catch(() => {})
   }, [setUrl])
 
+  useEffect(() => window.lightning.onMagnetStatus(setMagnetWait), [])
+
   useEffect(() => {
     const trimmed = url.trim()
     if (!trimmed) {
@@ -143,6 +147,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     // answer is no longer wanted then.
     let stale = false
     setProbe({ status: 'probing' })
+    setMagnetWait(null)
     setFileNameOverride(null)
     setSkippedFiles([])
     const timer = setTimeout(async () => {
@@ -376,6 +381,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
 
         {probe.status === 'probing' && (
           <div className="font-mono text-[11.5px] text-muted-foreground">Checking the link…</div>
+        )}
+        {probe.status === 'probing' && magnetWait?.noPeersYet && magnetWait.link === url.trim() && (
+          <div className="text-[12px] text-muted-foreground">
+            No peers found yet, still looking…
+          </div>
         )}
         {probe.status === 'error' && (
           <div className="flex items-center gap-2 text-[12.5px] text-[var(--color-danger)]">
