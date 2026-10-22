@@ -10,6 +10,51 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.34',
+      items: [
+        {
+          kind: 'new',
+          title: 'Usage page in Settings',
+          text: 'Shows data used per connection and per file, with 1h to All filters and charts.'
+        },
+        {
+          kind: 'new',
+          title: 'Scan a web page for downloads',
+          text: 'Add several links can read a page address, and the browser extension has Scan this page, which downloads all selected links. Each has an on/off switch in Settings → Browser.'
+        },
+        {
+          kind: 'new',
+          title: 'Warning for duplicates',
+          text: 'Warns before downloading something already downloading, queued, finished or on disk. Turn it off with the switch in Settings.'
+        },
+        {
+          kind: 'new',
+          title: 'More options in Settings',
+          text: 'Default download folder, history size, stall timeout, a button for speed and data limits, and removing finished items whose file was deleted.'
+        },
+        {
+          kind: 'improved',
+          title: 'Auto groups use every connection',
+          text: 'Idle connections join at once and dead ones are replaced, and each connection shows its downloaded total.'
+        },
+        {
+          kind: 'improved',
+          title: 'Windows and Settings remember their size',
+          text: 'The main window remembers its size, position, monitor and full screen. Settings remembers its size as a share of the window.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Download fixes from upstream',
+          text: 'Links answering 416 stop retrying, servers refusing ranges with 403 are handled, per-range ETags such as pCloud work, exhausted redirects are handled, long names are shortened, 1m 0s shows correctly, daylight-saving schedules are right, and magnet links stop after 30 seconds.'
+        },
+        {
+          kind: 'new',
+          title: 'Linux .tar.gz package',
+          text: 'A plain archive for distros without FUSE or a native package: extract it and run ./lightning. It does not update itself.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.33',
       items: [
         {

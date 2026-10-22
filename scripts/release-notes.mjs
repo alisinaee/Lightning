@@ -25,9 +25,11 @@ if (!tag || !/^v\d/.test(tag)) {
 }
 
 const version = tag.slice(1)
-// RPM names use a dot before the architecture; other builds use a hyphen or underscore.
+// RPM names use a dot before the architecture; other builds use a hyphen or underscore. The Linux
+// .tar.gz archive (electron-builder.yml, linux.artifactName) is named like the others, with two
+// extensions.
 const artifactName =
-  /^lightning[-_](.+)(?:[-_](?:setup|x64|x86_64|amd64|arm64)\.[^.]+|\.(?:x86_64|aarch64)\.rpm)$/
+  /^lightning[-_](.+)(?:[-_](?:setup|x64|x86_64|amd64|arm64)\.[^.]+|[-_](?:x64|arm64)\.tar\.gz|\.(?:x86_64|aarch64)\.rpm)$/
 const dist = fileURLToPath(new URL('../dist/', import.meta.url))
 const files = readdirSync(dist)
   .filter((name) => name.match(artifactName)?.[1] === version && downloads.describe(name))
