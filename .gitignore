@@ -7,3 +7,19 @@ out
 test-results
 playwright-report
 *.tsbuildinfo
+
+# Helm board data (local)
+.claude/
+docs/activity.jsonl
+docs/agents-map.json
+docs/autonomy.json
+docs/budget.json
+docs/head-gate.json
+docs/head-text.jsonl
+docs/head.jsonl
+docs/jobs.json
+docs/questions.json
+docs/roadmap.config.json
+docs/tasks.json
+docs/undo.jsonl
+docs/work.json

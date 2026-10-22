@@ -1,6 +1,0 @@
-{"v":1,"t":"e","ts":"2026-10-22T11:39:53Z","src":"cli","sid":null,"acct":null,"kind":"ask?","sum":"run helm dashboard, setup helm for Lightning, add leftover tasks, finish them all, watch tokens…","len":105,"h":"sha1:95119c4fa7dc","prio":2,"id":"H1"}
-{"v":1,"t":"s","ts":"2026-10-22T11:58:08Z","sid":"7c6ec532","model":"Sonnet 5.5","ev":"claim"}
-{"v":1,"t":"e","ts":"2026-10-22T11:58:08Z","src":"hook","sid":"7c6ec532","acct":null,"kind":"rule?","sum":"Why I stopped: the helm rule is to stop launching Claude workers at 85% weekly usage, and you’re…","len":333,"h":"sha1:e1d7a0fcdbe2","prio":0,"id":"H2"}
-{"v":1,"t":"u","id":"H1","ts":"2026-10-22T12:01:18Z","by":"head","set":{"kind":"ask","sum":"Set up helm for Lightning, add tasks, finish them all"}}
-{"v":1,"t":"u","id":"H1","ts":"2026-10-22T12:01:24Z","by":"head","link":["+task:L1.1","+task:L1.2","+task:L1.3","+task:L1.4","+task:L1.6","+task:L1.7"]}
-{"v":1,"t":"u","id":"H1","ts":"2026-10-22T12:06:26Z","by":"auto","set":{"status":"done"},"note":"auto: L1.1, L1.2, L1.3, L1.4, L1.6, L1.7"}
