@@ -1,5 +1,7 @@
 import { DEFAULT_STATUS_BAR } from '@shared/types'
+import { toDisplayPath } from '../utils/format'
 import type { AccentId, AppPrefs, ResolvedPrefs, StatusBarPrefs } from '@shared/types'
+import { useCallback, useRef } from 'react'
 import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
 import { isProxyAddress } from '@shared/networks'
@@ -12,6 +14,7 @@ import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { Switch } from './ui/switch'
 import { HistorySettings } from './HistorySettings'
+import { UsageSettings } from './UsageSettings'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
 const SCALES = [
@@ -21,9 +24,63 @@ const SCALES = [
   { value: '1.3', label: 'Larger' }
 ]
 
+const SIZE_KEY = 'lightning.settingsSize'
+type SizeShare = { w: number; h: number }
+
+/** The size the person gave the window, as a share of the app window (so it follows when the app
+ * window is resized); null until they have changed it. */
+function savedSize(): SizeShare | null {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(SIZE_KEY) ?? 'null')
+    const { w, h } = (parsed ?? {}) as Partial<SizeShare>
+    return typeof w === 'number' && typeof h === 'number' && w >= 30 && h >= 30 ? { w, h } : null
+  } catch {
+    return null
+  }
+}
+
+/** A ref for the window that remembers its size, in percent of the app window, once the person
+ * drags its corner. */
+function useRememberedSize(): (element: HTMLElement | null) => void {
+  const observer = useRef<ResizeObserver | null>(null)
+  const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  return useCallback((element: HTMLElement | null) => {
+    observer.current?.disconnect()
+    observer.current = null
+    clearTimeout(pending.current)
+    if (!element) return
+    let first = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    observer.current = new ResizeObserver(() => {
+      // The first report is the window opening, not the person resizing it.
+      if (first) {
+        first = false
+        return
+      }
+      clearTimeout(timer)
+      timer = pending.current = setTimeout(() => {
+        // Closing the window shrinks it to nothing: that is not a size the person chose.
+        if (!element.isConnected || element.offsetWidth < 200 || element.offsetHeight < 200) return
+        const clamp = (value: number): number => Math.min(96, Math.max(30, Math.round(value)))
+        const share = {
+          w: clamp((element.offsetWidth / window.innerWidth) * 100),
+          h: clamp((element.offsetHeight / window.innerHeight) * 100)
+        }
+        try {
+          localStorage.setItem(SIZE_KEY, JSON.stringify(share))
+        } catch {
+          // Not remembered; the window still works.
+        }
+      }, 300)
+    })
+    observer.current.observe(element)
+  }, [])
+}
+
 const PAGES = [
   'General',
   'History',
+  'Usage',
   'Appearance',
   'Network',
   'Notifications',
@@ -138,6 +195,10 @@ export function SettingsDialog({
   const availableUpdate = useAppStore((store) => store.availableUpdate)
   const setTitleBarButtons = useAppStore((store) => store.setTitleBarButtons)
   const setStatusBar = useAppStore((store) => store.setStatusBar)
+  const destinationDir = useAppStore((store) => store.destinationDir)
+  const setDestinationDir = useAppStore((store) => store.setDestinationDir)
+  const homeDir = useAppStore((store) => store.homeDir)
+  const openLimitsDialog = useAppStore((store) => store.openLimitsDialog)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<'available' | 'current' | 'failed' | null>(null)
 
@@ -160,9 +221,16 @@ export function SettingsDialog({
   const bar = prefs.statusBar
   const setBar = (patch: Partial<StatusBarPrefs>): void => save({ statusBar: patch })
 
+  const rememberSize = useRememberedSize()
+  const size = savedSize()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[560px] w-[720px] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+      <DialogContent
+        ref={rememberSize}
+        style={size ? { width: `${size.w}vw`, height: `${size.h}vh` } : undefined}
+        className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[720px] max-w-[calc(100%-2rem)] min-w-[520px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]"
+      >
         <div className="border-b-[0.5px] border-border px-5 py-4">
           <DialogTitle className="text-[16px] font-semibold">Settings</DialogTitle>
         </div>
@@ -245,9 +313,48 @@ export function SettingsDialog({
                     className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center outline-none"
                   />
                 </label>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12.5px] text-muted-foreground">
+                    Default download folder
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      aria-label="Default download folder"
+                      value={toDisplayPath(destinationDir, homeDir)}
+                      title={destinationDir}
+                      className="h-8 min-w-0 flex-1 rounded-md border border-input bg-[var(--input-bg)] px-2 font-mono text-[12px] outline-none"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        void window.lightning
+                          .chooseDestinationFolder(destinationDir)
+                          .then((picked) => {
+                            if (picked) setDestinationDir(picked)
+                          })
+                      }
+                    >
+                      Change…
+                    </Button>
+                  </div>
+                </div>
+                <Row
+                  checked={prefs.removeMissingFiles}
+                  onChange={(removeMissingFiles) => save({ removeMissingFiles })}
+                  label="Remove a finished download from the list when its file is deleted or moved"
+                />
               </>
             )}
-            {page === 'History' && <HistorySettings />}
+            {page === 'History' && (
+              <HistorySettings
+                historyLimit={prefs.historyLimit}
+                onHistoryLimitChange={(historyLimit) => save({ historyLimit })}
+              />
+            )}
+            {page === 'Usage' && <UsageSettings />}
             {page === 'Appearance' && (
               <>
                 <div className="text-[12px] font-medium text-muted-foreground">Text size</div>
@@ -303,6 +410,17 @@ export function SettingsDialog({
             {page === 'Network' && (
               <>
                 <VpnSetting />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="self-start"
+                  onClick={() => {
+                    openLimitsDialog()
+                    onOpenChange(false)
+                  }}
+                >
+                  Speed and data limits…
+                </Button>
                 <div className="mt-2 text-[12px] font-medium text-muted-foreground">Proxy</div>
                 <div className="text-[12px] text-muted-foreground">
                   For the app&rsquo;s own requests, such as checking for updates. Downloads connect
@@ -349,6 +467,25 @@ export function SettingsDialog({
                     />
                   </div>
                 )}
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Advanced</div>
+                <label className="flex items-center gap-3">
+                  Stall timeout (seconds)
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    step={1}
+                    value={prefs.stallTimeoutSec}
+                    onChange={(event) => {
+                      const seconds = Math.floor(Number(event.target.value))
+                      if (seconds >= 5 && seconds <= 120) save({ stallTimeoutSec: seconds })
+                    }}
+                    className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center outline-none"
+                  />
+                </label>
+                <div className="text-[12px] text-muted-foreground">
+                  How long a connection may go without data before it is retried.
+                </div>
               </>
             )}
             {page === 'Notifications' && (
@@ -402,6 +539,12 @@ export function SettingsDialog({
               <BrowserPage
                 enabled={prefs.browserIntegration}
                 onEnabledChange={(browserIntegration) => save({ browserIntegration })}
+                features={{
+                  capture: prefs.browserCapture,
+                  menuDownload: prefs.browserMenuDownload,
+                  menuScan: prefs.browserMenuScan
+                }}
+                onFeatureChange={(patch) => save(patch)}
               />
             )}
             {page === 'Status bar' && (

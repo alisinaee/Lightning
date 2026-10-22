@@ -291,3 +291,48 @@ test("a burst in a network's first seconds is not taken as its speed", () => {
   expect(seen.slice(2)).toEqual([1e6, 1e6, 1e6, 1e6, 1e6])
   expect(track.baseline).toBeLessThan(4e6)
 })
+
+test('a network that stays dead moves its nearly finished files once another network is there', () => {
+  // Wi-Fi dies at 20 s; the other network only shows up after a minute, with both files 90% done.
+  const sim = new Sim(['wifi', 'eth'], (id, t) => (id === 'wifi' ? (t < 20 ? 10 * MB : 0) : 8 * MB))
+  sim.nets[1].present = false
+  sim.addFile('a', 3000 * MB, ['wifi'])
+  sim.addFile('b', 3000 * MB, ['wifi'])
+  sim.run(60)
+  for (const file of sim.files) file.remaining = file.total * 0.1
+  expect(sim.files[0].networks).toEqual(['wifi'])
+  sim.nets[1].present = true
+  sim.run(25)
+  expect(sim.files.some((file) => file.networks.includes('eth'))).toBe(true)
+  expect(sim.files.every((file) => !file.networks.includes('wifi'))).toBe(true)
+})
+
+test('a network that never delivered, with no baseline, is dead after 20 s and its files move', () => {
+  // Just after a restart: nothing is known of the networks, and Wi-Fi reaches nothing.
+  const sim = new Sim(['wifi', 'eth'], (id) => (id === 'wifi' ? 0 : 8 * MB))
+  sim.addFile('a', 3000 * MB, ['wifi'])
+  sim.addFile('b', 3000 * MB, ['wifi'])
+  for (const file of sim.files) file.remaining = file.total * 0.1
+  sim.run(45)
+  expect(sim.files.some((file) => file.networks.includes('eth'))).toBe(true)
+  expect(sim.files.every((file) => !file.networks.includes('wifi'))).toBe(true)
+})
+
+test('an idle network helps a file that is mostly done while a good chunk is left', () => {
+  const sim = new Sim(['wifi', 'eth'], () => 6 * MB)
+  sim.addFile('a', 4000 * MB, ['wifi'])
+  sim.addFile('b', 4000 * MB, ['wifi'])
+  for (const file of sim.files) file.remaining = 500 * MB
+  sim.run(2)
+  expect(sim.files.some((file) => file.networks.includes('eth'))).toBe(true)
+})
+
+test('every idle network joins the running files at once, spread over them', () => {
+  const sim = new Sim(['a', 'b', 'c'], () => 6 * MB)
+  sim.addFile('one', 4000 * MB, ['a'])
+  sim.addFile('two', 4000 * MB, ['a'])
+  for (const file of sim.files) file.lastChangeAt = sim.now
+  sim.run(1)
+  expect(sim.files.flatMap((file) => file.networks).sort()).toEqual(['a', 'a', 'b', 'c'])
+  expect(sim.files.every((file) => file.networks.length >= 2)).toBe(true)
+})

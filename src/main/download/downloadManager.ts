@@ -41,12 +41,14 @@ import {
   addToHistory,
   findInHistory,
   listHistory,
+  removeMissingFromHistory,
   removeFromHistory,
+  setHistoryLimit,
   updateHistoryEntry
 } from './history'
-import { testKnobs } from '../testKnobs'
+import { setStallTimeoutSec, testKnobs, stallTimeoutMs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
-import { HttpTransfer, splittable } from './httpTransfer'
+import { HttpTransfer, pickedStreams, splittable } from './httpTransfer'
 import { ensureDirectory, pathExists, reserveDestinationPath } from './paths'
 import { planBlocks, planDownload, planPieces } from './plan'
 import { restoreBlocks, restorePieces, saveBlocks, type SavedBlocks } from './savedProgress'
@@ -339,10 +341,38 @@ export class DownloadManager {
   applySettings(settings: AppSettings): void {
     this.downloadsAtOnce = settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default
     this.prefs = prefsOf(settings)
+    setHistoryLimit(this.prefs.historyLimit)
+    setStallTimeoutSec(this.prefs.stallTimeoutSec)
+    this.watchMissingFiles()
     this.limits.configure(settings)
     this.limitsChanged()
     this.keepAwake()
     this.pump()
+  }
+
+  private missingTimer: NodeJS.Timeout | null = null
+
+  /** While "Remove from the list when the file is deleted" is on, checks now and then, and
+   * takes out of the list what has gone from the disk. */
+  private watchMissingFiles(): void {
+    if (!this.prefs.removeMissingFiles) {
+      if (this.missingTimer) clearInterval(this.missingTimer)
+      this.missingTimer = null
+      return
+    }
+    if (this.missingTimer) return
+    const check = (): void => {
+      void removeMissingFromHistory()
+        .then((count) => {
+          if (count === 0) return
+          log.info('download', `removed ${count} finished from the list: their files are gone`)
+          this.historyChanged()
+        })
+        .catch(() => {})
+    }
+    check()
+    this.missingTimer = setInterval(check, 15_000)
+    this.missingTimer.unref()
   }
 
   /** "Use VPN for downloads" was switched on: every unfinished download gets the VPN tunnels
@@ -396,6 +426,26 @@ export class DownloadManager {
   /** Starts queued downloads that now have room, e.g. after a group's limit was raised. */
   rebalance(): void {
     this.pump()
+  }
+
+  /** Running downloads on Auto with `networkId` on: how many share its streams (see
+   * concurrency.ts). One that can't split runs a single stream, and a picked count is kept, so
+   * neither takes a share. */
+  private httpDownloadsOn(networkId: string): number {
+    let count = 0
+    for (const runtime of this.runtimes.values()) {
+      if (
+        runtime.kind === 'http' &&
+        runtime.state.status === 'downloading' &&
+        splittable(runtime.requestPayload) &&
+        pickedStreams(runtime.requestPayload) === undefined &&
+        runtime.state.networks.some(
+          (network) => network.id === networkId && network.status === 'on'
+        )
+      )
+        count++
+    }
+    return count
   }
 
   private runningCount(): number {
@@ -575,6 +625,7 @@ export class DownloadManager {
       meters: new Meters()
     }
     const host: TransferHost = {
+      downloadsOn: (networkId) => this.httpDownloadsOn(networkId),
       networks: this.networks,
       limits: this.limits,
       reconcile: () => this.reconcile(runtime),
@@ -607,6 +658,7 @@ export class DownloadManager {
       uploadMeters: new Meters()
     }
     const host: TransferHost = {
+      downloadsOn: (networkId) => this.httpDownloadsOn(networkId),
       networks: this.networks,
       limits: this.limits,
       reconcile: () => this.reconcile(runtime),
@@ -975,7 +1027,7 @@ export class DownloadManager {
         selected,
         await resolveTargetWithin(
           targetHost(target),
-          testKnobs.stallTimeoutMs,
+          stallTimeoutMs(),
           undefined,
           this.resolverFor(requestPayload)
         )

@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Requires Windows 10/11 or macOS and Node.js 22.12+. See [requirements](README.md#requirements).
+Requires Windows 10/11, macOS or Linux and Node.js 22.12+. See [requirements](README.md#requirements).
 
 ## Before opening a PR
 

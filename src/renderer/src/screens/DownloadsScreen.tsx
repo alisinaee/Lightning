@@ -141,6 +141,8 @@ export function DownloadsScreen({
   const [actionError, setActionError] = useState<string | null>(null)
   const [limitsOpen, setLimitsOpen] = useState(false)
   const [limitsPage, setLimitsPage] = useState<string | null>(null)
+  const limitsDialogOpen = useAppStore((store) => store.limitsDialogOpen)
+  const closeLimitsDialog = useAppStore((store) => store.closeLimitsDialog)
   const searchInput = useRef<HTMLInputElement>(null)
   const downloads = useMemo(
     () =>
@@ -170,6 +172,12 @@ export function DownloadsScreen({
     setMatchIndex((index) => (index + dir + matchCount) % matchCount)
   }
   useEffect(() => setMatchIndex(0), [search])
+  // Settings → Network asks for the limits dialog through the store; it is opened here.
+  useEffect(() => {
+    if (!limitsDialogOpen) return
+    setLimitsOpen(true)
+    closeLimitsDialog()
+  }, [limitsDialogOpen, closeLimitsDialog])
   // Only a move through the results or a new search scrolls: a progress push does not.
   useEffect(() => {
     const hit = document.querySelectorAll<HTMLElement>('[data-hit="true"]')[matchIndex]

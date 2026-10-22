@@ -421,8 +421,20 @@ export interface AppPrefs {
   watchClipboard?: boolean
   /** Ask what to do (quit, sleep, shut down) when the last download finishes. */
   askWhenFinished?: boolean
+  /** Take a finished download out of the list when its file is deleted or moved away. */
+  removeMissingFiles?: boolean
+  /** How many finished downloads the history keeps, newest first (50 to 5000). */
+  historyLimit?: number
+  /** Seconds a connection may go without data before it is treated as stalled (5 to 120). */
+  stallTimeoutSec?: number
   /** Let the browser extension send links to Lightning (a server on this computer only). */
   browserIntegration?: boolean
+  /** The extension takes over the browser's own downloads. */
+  browserCapture?: boolean
+  /** Right-click a link → Download with Lightning (also several selected links). */
+  browserMenuDownload?: boolean
+  /** Right-click a page → Scan this page with Lightning. */
+  browserMenuScan?: boolean
   /** The Logs and Debug (Test lab) buttons in the title bar; both off until switched on. */
   showLogs?: boolean
   showDebug?: boolean
@@ -454,7 +466,13 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   openAtLogin: false,
   watchClipboard: false,
   askWhenFinished: false,
+  removeMissingFiles: false,
+  historyLimit: 500,
+  stallTimeoutSec: 20,
   browserIntegration: true,
+  browserCapture: true,
+  browserMenuDownload: true,
+  browserMenuScan: true,
   showLogs: false,
   showDebug: false,
   proxyMode: 'system',
@@ -749,4 +767,28 @@ export interface DnsBest {
   /** Empty: the system's own DNS is as good as any. */
   servers: string[]
   at: number
+}
+
+export interface UsageHistoryQuery {
+  /** How far back to look, in ms; null for everything recorded. */
+  rangeMs: number | null
+  /** The width of each slice of the chart's series, in ms. */
+  bucketMs: number
+  /** Only what came in on this network. */
+  network?: string
+}
+
+export interface UsageHistoryResult {
+  total: number
+  byNetwork: Record<string, number>
+  files: { id: string; name: string; bytes: number; byNetwork: Record<string, number> }[]
+  series: { time: number; byNetwork: Record<string, number> }[]
+  bucketMs: number
+}
+
+export interface ScanPageResult {
+  /** Absolute links to files (every link when asked for all), in page order. */
+  links: string[]
+  /** Links on the page that were left out as not being files. */
+  otherCount: number
 }

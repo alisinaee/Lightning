@@ -1,0 +1,11 @@
+{"activity":"A1","sum":"H1 ask? logged","op":"head.restore","args":{"steps":[{"id":"H1","set":{"status":"declined"}}]},"at":"2026-10-22T15:09:53+03:30"}
+{"activity":"A3","sum":"H1 triaged as ask","op":"head.restore","args":{"steps":[{"id":"H1","set":{"kind":"ask","sum":"run helm dashboard, setup helm for Lightning, add leftover tasks, finish them all, watch tokens…"}}]},"at":"2026-10-22T15:31:18+03:30"}
+{"activity":"A4","sum":"H1 bound task:L1.1, task:L1.2, task:L1.3, task:L1.4, task:L1.6, task:L1.7","op":"head.restore","args":{"steps":[{"id":"H1","link":["-task:L1.1","-task:L1.2","-task:L1.3","-task:L1.4","-task:L1.6","-task:L1.7"]}]},"at":"2026-10-22T15:31:24+03:30"}
+{"activity":"A5","sum":"L1.6 todo->done","op":"task.status","args":{"id":"L1.6","status":"todo"},"at":"2026-10-22T15:34:39+03:30"}
+{"activity":"A6","sum":"L1.7 partial->done","op":"task.status","args":{"id":"L1.7","status":"partial"},"at":"2026-10-22T15:34:39+03:30"}
+{"activity":"A7","sum":"L1.8 todo->done","op":"task.status","args":{"id":"L1.8","status":"todo"},"at":"2026-10-22T15:34:39+03:30"}
+{"activity":"A8","sum":"L1.9 todo->done","op":"task.status","args":{"id":"L1.9","status":"todo"},"at":"2026-10-22T15:34:39+03:30"}
+{"activity":"A9","sum":"L1.1 partial->done","op":"task.status","args":{"id":"L1.1","status":"partial"},"at":"2026-10-22T15:36:13+03:30"}
+{"activity":"A10","sum":"L1.2 todo->done","op":"task.status","args":{"id":"L1.2","status":"todo"},"at":"2026-10-22T15:36:13+03:30"}
+{"activity":"A11","sum":"L1.3 todo->done","op":"task.status","args":{"id":"L1.3","status":"todo"},"at":"2026-10-22T15:36:13+03:30"}
+{"activity":"A12","sum":"L1.4 todo->done","op":"task.status","args":{"id":"L1.4","status":"todo"},"at":"2026-10-22T15:36:13+03:30"}

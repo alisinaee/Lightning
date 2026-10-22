@@ -1,22 +1,34 @@
 import { connect, Socket, type SocketConstructorOpts } from 'node:net'
 import type { NetworkRoute } from './routes'
 
-// Linux picks a socket's outgoing interface from the routing table alone: binding to an
-// interface's IP (Node's `localAddress`) still sends the packets out the default route, where the
-// network that doesn't own that IP drops them. SO_BINDTODEVICE pins the socket to the interface
-// itself. Node has no setsockopt, so the socket is made through libc and handed to Node as an fd.
-// Unprivileged since Linux 5.7. macOS and Windows already route by source address.
+// A socket's outgoing interface is chosen by the routing table, not by the source address it is
+// bound to (Node's `localAddress`). On Linux that sends the packets out the default route, where
+// the network that doesn't own that IP drops them; on macOS a full-tunnel VPN (FortiClient, V2Box)
+// puts its default route first and swallows the traffic of every network, so downloads crawl.
+// SO_BINDTODEVICE (Linux, unprivileged since 5.7) and IP_BOUND_IF / IPV6_BOUND_IF (macOS) pin the
+// socket to the interface itself. Node has no setsockopt, so the socket is made through libc and
+// handed to Node as an fd. Windows still routes by source address.
 
 const AF_INET = 2
-const AF_INET6 = 10
 const SOCK_STREAM = 1
-const SOCK_CLOEXEC = 0o2000000
-const SOL_SOCKET = 1
-const SO_BINDTODEVICE = 25
+const LINUX = {
+  AF_INET6: 10,
+  SOCK_CLOEXEC: 0o2000000,
+  SOL_SOCKET: 1,
+  SO_BINDTODEVICE: 25
+}
+const DARWIN = {
+  AF_INET6: 30,
+  IPPROTO_IP: 0,
+  IP_BOUND_IF: 25,
+  IPPROTO_IPV6: 41,
+  IPV6_BOUND_IF: 125
+}
 
 interface Libc {
   socket: (domain: number, type: number, protocol: number) => number
-  setsockopt: (fd: number, level: number, name: number, value: string, length: number) => number
+  /** Pins the socket to the named device, returning 0 or a nonzero errno-bearing failure. */
+  bind: (fd: number, device: string, family: 4 | 6) => number
   close: (fd: number) => number
   errno: () => number
 }
@@ -26,11 +38,11 @@ let libc: Libc | null = null
 let support: Promise<boolean> | null = null
 
 function openOnDevice(lib: Libc, device: string, family: 4 | 6): number {
-  const fd = lib.socket(family === 6 ? AF_INET6 : AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)
+  const platform = process.platform === 'darwin' ? DARWIN : LINUX
+  const type = process.platform === 'darwin' ? SOCK_STREAM : SOCK_STREAM | LINUX.SOCK_CLOEXEC
+  const fd = lib.socket(family === 6 ? platform.AF_INET6 : AF_INET, type, 0)
   if (fd < 0) throw new Error(`socket() failed (errno ${lib.errno()})`)
-  if (
-    lib.setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, device, Buffer.byteLength(device) + 1) !== 0
-  ) {
+  if (lib.bind(fd, device, family) !== 0) {
     const errno = lib.errno()
     lib.close(fd)
     throw new Error(`Couldn't bind a socket to ${device} (errno ${errno})`)
@@ -38,21 +50,50 @@ function openOnDevice(lib: Libc, device: string, family: 4 | 6): number {
   return fd
 }
 
-/** Whether each network can carry its own connections. Always true off Linux. */
+async function loadLibc(): Promise<Libc> {
+  const { default: koffi } = await import('koffi')
+  if (process.platform === 'darwin') {
+    const lib = koffi.load('/usr/lib/libSystem.B.dylib')
+    const setsockopt = lib.func('int setsockopt(int, int, int, uint32_t *, uint32_t)')
+    const ifIndex = lib.func('uint32_t if_nametoindex(const char *)')
+    return {
+      socket: lib.func('int socket(int, int, int)'),
+      bind: (fd, device, family) => {
+        const index = ifIndex(device)
+        if (!index) return -1
+        return family === 6
+          ? setsockopt(fd, DARWIN.IPPROTO_IPV6, DARWIN.IPV6_BOUND_IF, [index], 4)
+          : setsockopt(fd, DARWIN.IPPROTO_IP, DARWIN.IP_BOUND_IF, [index], 4)
+      },
+      close: lib.func('int close(int)'),
+      errno: () => koffi.errno()
+    }
+  }
+  const lib = koffi.load('libc.so.6')
+  const setsockopt = lib.func('int setsockopt(int, int, int, const char *, uint32_t)')
+  return {
+    socket: lib.func('int socket(int, int, int)'),
+    bind: (fd, device) =>
+      setsockopt(
+        fd,
+        LINUX.SOL_SOCKET,
+        LINUX.SO_BINDTODEVICE,
+        device,
+        Buffer.byteLength(device) + 1
+      ),
+    close: lib.func('int close(int)'),
+    errno: () => koffi.errno()
+  }
+}
+
+/** Whether each network can carry its own connections. Always true off Linux and macOS. */
 export function deviceBindingSupported(): Promise<boolean> {
   support ??= (async () => {
-    if (process.platform !== 'linux') return true
+    if (process.platform !== 'linux' && process.platform !== 'darwin') return true
     try {
-      const { default: koffi } = await import('koffi')
-      const lib = koffi.load('libc.so.6')
-      const candidate: Libc = {
-        socket: lib.func('int socket(int, int, int)'),
-        setsockopt: lib.func('int setsockopt(int, int, int, const char *, uint32_t)'),
-        close: lib.func('int close(int)'),
-        errno: () => koffi.errno()
-      }
+      const candidate = await loadLibc()
       // Loopback always exists, so this only fails when the kernel refuses (EPERM before 5.7).
-      candidate.close(openOnDevice(candidate, 'lo', 4))
+      candidate.close(openOnDevice(candidate, process.platform === 'darwin' ? 'lo0' : 'lo', 4))
       libc = candidate
       return true
     } catch (error) {

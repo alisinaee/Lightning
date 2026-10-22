@@ -196,6 +196,8 @@ interface AppStore {
   newDownloadOpen: boolean
   /** The Add several links dialog. */
   multiLinksOpen: boolean
+  /** Links (and the cookies and page they came with) the browser extension collected, for the several-links dialog to start from. */
+  multiLinksSeed: { links: string[]; extras?: RequestExtras } | null
   /** Persisted — how many downloads run at once; the rest wait in the queue. */
   downloadsAtOnce: number
   /** Persisted — the speed limits (see AppSettings). */
@@ -251,7 +253,7 @@ interface AppStore {
   /** A finished download whose file is gone, which the download now being set up replaces. */
   replacesId: string | null
   closeNewDownload: () => void
-  openMultiLinks: () => void
+  openMultiLinks: (seed?: { links: string[]; extras?: RequestExtras }) => void
   closeMultiLinks: () => void
   setDownloadsAtOnce: (count: number) => void
   /** Each one applies at once, to every download (see main/network/limits.ts). */
@@ -260,6 +262,12 @@ interface AppStore {
   setSlowModeSpeed: (bytesPerSec: number) => void
   setDraftUrl: (url: string) => void
   setDestinationDir: (dir: string) => void
+
+  /** The Speed and data limits dialog, opened from outside its screen (Settings → Network). The
+   * screen clears the flag when it opens the dialog. */
+  limitsDialogOpen: boolean
+  openLimitsDialog: () => void
+  closeLimitsDialog: () => void
 }
 
 // Settings saved by the main process, read once before the first paint (see InitialState).
@@ -381,6 +389,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   newDownloadOpen: false,
   multiLinksOpen: false,
+  multiLinksSeed: null,
   downloadsAtOnce: initial.downloadsAtOnce,
   speedLimit: initial.speedLimit,
   slowMode: initial.slowMode,
@@ -539,8 +548,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     ),
 
   closeNewDownload: () => set({ newDownloadOpen: false, replacesId: null, draftExtras: null }),
-  openMultiLinks: () => set({ multiLinksOpen: true }),
-  closeMultiLinks: () => set({ multiLinksOpen: false }),
+  openMultiLinks: (seed) => set({ multiLinksOpen: true, multiLinksSeed: seed ?? null }),
+  closeMultiLinks: () => set({ multiLinksOpen: false, multiLinksSeed: null }),
 
   setDownloadsAtOnce: (downloadsAtOnce) => {
     set({ downloadsAtOnce })
@@ -563,6 +572,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),
+  limitsDialogOpen: false,
+  openLimitsDialog: () => set({ limitsDialogOpen: true }),
+  closeLimitsDialog: () => set({ limitsDialogOpen: false }),
   setDestinationDir: (destinationDir) => {
     set({ destinationDir })
     persist({ destinationDir })

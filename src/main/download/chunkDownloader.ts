@@ -2,7 +2,7 @@ import type { Writable } from 'node:stream'
 import type { ClientRequest, IncomingMessage } from 'node:http'
 import { URL } from 'node:url'
 import { asConnectionError, type StreamConnection } from '../network/routes'
-import { testKnobs } from '../testKnobs'
+import { stallTimeoutMs } from '../testKnobs'
 import { headersForRedirect } from '../../shared/requestHeaders'
 import { compareVersion, type FileVersion, type VersionCheck } from './fileVersion'
 
@@ -74,7 +74,6 @@ export function retryAfterMs(value: string | undefined, now = Date.now()): numbe
 // A server that accepts the connection and then goes silent (no data, no
 // error, no close) would otherwise hang the chunk forever with no way to
 // detect or retry it.
-const STALL_TIMEOUT_MS = testKnobs.stallTimeoutMs
 
 // Only the initial probe resolves redirects today — if a CDN reissues a
 // redirect mid-download (e.g. a signed URL rotates), a chunk needs to be
@@ -166,7 +165,7 @@ export function downloadChunk(options: ChunkDownloadOptions): Promise<void> {
       clearWatchdog()
       stallWatchdog = setTimeout(() => {
         fail(asConnectionError(new Error('Connection stalled: no response from server')))
-      }, STALL_TIMEOUT_MS)
+      }, stallTimeoutMs())
     }
 
     const finish = (fn: () => void): void => {
@@ -415,7 +414,7 @@ export function fetchRange(
             return
           }
           const chunks: Buffer[] = []
-          res.setTimeout(STALL_TIMEOUT_MS, () => req.destroy(new Error('Sample request stalled')))
+          res.setTimeout(stallTimeoutMs(), () => req.destroy(new Error('Sample request stalled')))
           res.on('data', (chunk: Buffer) => chunks.push(chunk))
           res.on('error', reject)
           res.on('end', () =>

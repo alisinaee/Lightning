@@ -1,0 +1,22 @@
+{
+  "questions": [
+    {
+      "id": "Q1",
+      "task": "",
+      "text": "Weekly Claude usage is 89% (stop limit 85%). Wait for reset tomorrow 08:00 UTC, allow small Haiku jobs now, or use agy for edits?",
+      "opts": [
+        "Wait for reset",
+        "Haiku now",
+        "Use agy"
+      ],
+      "def": null,
+      "block": false,
+      "timeoutS": null,
+      "status": "open",
+      "answer": null,
+      "asked": "2026-10-22T15:10:07+03:30",
+      "answered": null
+    }
+  ],
+  "schemaVersion": 1
+}

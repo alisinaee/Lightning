@@ -1,7 +1,8 @@
 # Lightning browser extension
 
 Sends the browser's downloads (and a right-click → **Download with Lightning**) to the Lightning
-desktop app, with the page they came from and the browser's cookies for the link.
+desktop app; right-click a page → **Scan this page with Lightning** lists every file link on it in
+Lightning's Add several links window, with the page they came from and the browser's cookies for the link.
 
 It talks to Lightning over `127.0.0.1` only. Lightning must be running.
 

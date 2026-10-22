@@ -31,6 +31,7 @@ import { DownloadManager } from '../download/downloadManager'
 import { getDefaultDownloadsDir, getHomeDir } from '../download/paths'
 import { findInHistory, listHistory } from '../download/history'
 import { probeUrl } from '../download/probe'
+import { scanPage } from '../download/pageScan'
 import { askWhatNext, runFinishedAction } from '../postActions'
 import { ScheduleController } from '../scheduleController'
 import { extensionFolder, integrationToken, regenerateToken } from '../integration'
@@ -383,6 +384,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     const failure = await shell.openPath(extensionFolder())
     if (failure) throw new Error(failure)
   })
+  handle('scanPage', async (_event, url, all, extras) =>
+    scanPage(url, sanitizeExtras(extras), all === true)
+  )
   handle('probeUrl', async (_event, url, extras) =>
     probeUrl(url, sanitizeExtras(extras), () => networks.selectable())
   )
@@ -614,6 +618,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('clearHistory', async () => manager.clearHistory())
 
   handle('networkUsage', async () => manager.limits.usedByPeriod())
+  handle('usageHistory', async (_event, query) => manager.limits.history.query(query))
   handle('resetNetworkUsage', async (_event, id) => manager.resetNetworkUsage(id))
 
   handle('freeSpace', async (_event, dir) =>

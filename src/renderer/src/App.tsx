@@ -1,4 +1,4 @@
-import type { DownloadState, FinishedDownload } from '@shared/types'
+import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
 import { useEffect, useState } from 'react'
 import { SimBanner } from './components/lab/SimBanner'
 import { TestLab } from './components/lab/TestLab'
@@ -69,8 +69,23 @@ function App(): React.JSX.Element {
     return window.lightning.onAppCommand((command, argument) => {
       const store = useAppStore.getState()
       if (command === 'new-download') store.openNewDownload()
-      else if (command === 'several-links') store.openMultiLinks()
-      else if (command === 'settings') setSettingsOpen(true)
+      else if (command === 'several-links') {
+        // From the browser extension: the links it found on the page, with its cookies.
+        let seed: { links: string[]; extras?: RequestExtras } | undefined
+        try {
+          const parsed: unknown = argument ? JSON.parse(argument) : null
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            Array.isArray((parsed as { links?: unknown }).links)
+          ) {
+            seed = parsed as { links: string[]; extras?: RequestExtras }
+          }
+        } catch {
+          seed = undefined
+        }
+        store.openMultiLinks(seed)
+      } else if (command === 'settings') setSettingsOpen(true)
       else if (command === 'open-download' && argument)
         store.setView({ name: 'download', id: argument })
       else if (command === 'check-update') {

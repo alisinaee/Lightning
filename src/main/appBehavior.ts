@@ -4,8 +4,10 @@ import type { AppSettings } from '../shared/types'
 import { isProxyAddress } from '../shared/networks'
 import { ClipboardWatcher } from './clipboardWatcher'
 import { integrationToken } from './integration'
-import { LocalApi } from './localApi'
+import { LocalApi, type BrowserFeatures } from './localApi'
 import { offerLink } from './openLinks'
+import { fileLinksOf } from './download/pageScan'
+import { IpcChannels } from '../shared/ipc-channels'
 import { prefsOf } from './settings'
 
 /** What Settings asked of the process itself: hiding on close, the Dock, and the proxy. */
@@ -15,6 +17,7 @@ export const behavior = {
 
 let clipboardWatcher: ClipboardWatcher | null = null
 let localApi: LocalApi | null = null
+let browserFeatures: BrowserFeatures = { capture: true, menuDownload: true, menuScan: true }
 
 /** The port the browser extension's server listens on, or null while it is off. */
 export const integrationPort = (): number | null => localApi?.port ?? null
@@ -25,7 +28,23 @@ export function installLocalApi(getWindow: () => BrowserWindow | null): void {
   localApi = new LocalApi({
     version: app.getVersion(),
     token: integrationToken,
-    onAdd: (url, extras) => offerLink(url, getWindow(), extras)
+    onAdd: (url, extras) => offerLink(url, getWindow(), extras),
+    features: () => browserFeatures,
+    onLinks: (urls, extras) => {
+      const window = getWindow()
+      if (!window || window.isDestroyed()) return
+      const { links, otherCount } = fileLinksOf(urls, false)
+      // Nothing that looks like a file: every link is offered, so the person can pick.
+      const found = links.length > 0 ? { links, otherCount } : fileLinksOf(urls, true)
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+      window.webContents.send(
+        IpcChannels.appCommand,
+        'several-links',
+        JSON.stringify({ links: found.links, extras })
+      )
+    }
   })
 }
 
@@ -66,6 +85,11 @@ export async function applyBehavior(settings: AppSettings): Promise<void> {
   setTrayConfig(prefs.statusBar, settings.networkPreferences, prefs.accent)
   applyLoginItem(prefs.openAtLogin)
   clipboardWatcher?.setEnabled(prefs.watchClipboard)
+  browserFeatures = {
+    capture: prefs.browserCapture,
+    menuDownload: prefs.browserMenuDownload,
+    menuScan: prefs.browserMenuScan
+  }
   await localApi?.setEnabled(prefs.browserIntegration)
   if (process.platform === 'darwin' && app.dock) {
     if (prefs.hideDock) app.dock.hide()

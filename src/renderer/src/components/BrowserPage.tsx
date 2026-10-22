@@ -7,10 +7,20 @@ import { Checkbox } from './ui/checkbox'
 /** The Browser page of Settings: the extension's switch, its pairing key, and where its files are. */
 export function BrowserPage({
   enabled,
-  onEnabledChange
+  onEnabledChange,
+  features,
+  onFeatureChange
 }: {
   enabled: boolean
   onEnabledChange: (on: boolean) => void
+  features: { capture: boolean; menuDownload: boolean; menuScan: boolean }
+  onFeatureChange: (
+    patch: Partial<{
+      browserCapture: boolean
+      browserMenuDownload: boolean
+      browserMenuScan: boolean
+    }>
+  ) => void
 }): React.JSX.Element {
   const [info, setInfo] = useState<IntegrationInfo | null>(null)
   const [copied, setCopied] = useState(false)
@@ -46,6 +56,37 @@ export function BrowserPage({
         Lightning listens on this computer only (127.0.0.1) and answers only the extension, and only
         with the key below. Install the extension from the folder, then paste the key into it once.
       </p>
+      <div className="mt-1 text-[12px] font-medium text-muted-foreground">
+        What the extension may do
+      </div>
+      {(
+        [
+          [
+            'browserCapture',
+            features.capture,
+            'Take over the browser’s own downloads (the browser downloads normally when off)'
+          ],
+          [
+            'browserMenuDownload',
+            features.menuDownload,
+            'Right-click a link → Download with Lightning (also several selected links)'
+          ],
+          [
+            'browserMenuScan',
+            features.menuScan,
+            'Right-click a page → Scan this page with Lightning'
+          ]
+        ] as const
+      ).map(([key, on, label]) => (
+        <label key={key} className="flex items-start gap-3 py-1 leading-5">
+          <Checkbox
+            checked={on}
+            disabled={!enabled}
+            onCheckedChange={(next) => onFeatureChange({ [key]: next === true })}
+          />
+          <span className={enabled ? undefined : 'text-muted-foreground'}>{label}</span>
+        </label>
+      ))}
       <div className="text-[12.5px]">
         {info?.port ? (
           <span>

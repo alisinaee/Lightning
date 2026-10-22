@@ -7,7 +7,7 @@ import type {
   StartHttpDownloadRequest
 } from '../../shared/types'
 import { buildHeaders } from '../../shared/requestHeaders'
-import { testKnobs, testStreamsPerNetwork } from '../testKnobs'
+import { stallTimeoutMs, testKnobs, testStreamsPerNetwork } from '../testKnobs'
 import { advanceBlock, retractBlock } from './blockProgress'
 import {
   ConcurrencyController,
@@ -166,11 +166,16 @@ export function splittable(request: StartHttpDownloadRequest): boolean {
 
 /** How many streams a download runs is only for it to work out when there can be more than one,
  * and unless a test fixes it. */
-function concurrencyFor(request: StartHttpDownloadRequest): ConcurrencyController | null {
+function concurrencyFor(
+  request: StartHttpDownloadRequest,
+  host: TransferHost
+): ConcurrencyController | null {
   if (!splittable(request) || testStreamsPerNetwork() !== null) return null
   const picked = pickedStreams(request)
   return picked === undefined
-    ? new ConcurrencyController(MAX_STREAMS_PER_NETWORK)
+    ? new ConcurrencyController(MAX_STREAMS_PER_NETWORK, true, (networkId) =>
+        Math.floor(MAX_STREAMS_PER_NETWORK / Math.max(1, host.downloadsOn(networkId)))
+      )
     : new ConcurrencyController(picked, false)
 }
 
@@ -258,7 +263,7 @@ export class HttpTransfer implements Transfer {
     private readonly host: TransferHost
   ) {
     this.acceptedVersions = [requestedVersion(runtime.requestPayload)]
-    this.concurrency = concurrencyFor(runtime.requestPayload)
+    this.concurrency = concurrencyFor(runtime.requestPayload, host)
   }
 
   /**
@@ -665,7 +670,11 @@ export class HttpTransfer implements Transfer {
         signal: AbortSignal.any([self.controller.signal, attempt.abort.signal]),
         acceptedVersions: this.acceptedVersions,
         onResponse: (info) => (attempt.response = info),
-        throttle: (bytes) => this.host.limits.take(attempt.networkId, bytes),
+        throttle: (bytes) =>
+          this.host.limits.take(attempt.networkId, bytes, {
+            id: this.runtime.state.id,
+            name: this.runtime.state.fileName
+          }),
         onWriteWait: (waiting) => (attempt.writeWaiting = waiting),
         onNetworkProgress: (bytesThisRun) => {
           const delta = bytesThisRun - attempt.networkReceived
@@ -1043,7 +1052,7 @@ export class HttpTransfer implements Transfer {
       wait: AbortSignal.any([controller.signal, this.runtime.stop.signal]),
       nudge: new AbortController(),
       connection: new StreamConnection(() => this.host.networks.find(chunk.interfaceId), {
-        timeoutMs: testKnobs.stallTimeoutMs,
+        timeoutMs: stallTimeoutMs(),
         connectTimeoutMs: testKnobs.connectTimeoutMs,
         resolveHost: (name) => this.host.resolveHost(name)
       }),

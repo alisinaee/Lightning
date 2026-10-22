@@ -2,6 +2,7 @@ import { rename, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { FinishedDownload } from '../../shared/types'
+import { volumeRootOf } from '../../shared/volumes'
 import { readJson, updateJson } from '../jsonFile'
 import { sanitizeFileName } from './paths'
 
@@ -9,8 +10,13 @@ import { sanitizeFileName } from './paths'
 // once it completes, leaving its work units behind (tens of thousands of them for a large file,
 // none of any use once it's done), so a long history costs launch nothing.
 
-// ponytail: a fixed cap, oldest dropped; a setting if anyone wants more than this kept.
-const MAX_ENTRIES = 500
+// How many are kept, oldest dropped: set from Settings → History (see applySettings).
+let historyLimit = 500
+
+/** Sets how many finished downloads the history keeps. */
+export function setHistoryLimit(limit: number): void {
+  historyLimit = limit
+}
 
 function historyPath(): string {
   return join(app.getPath('userData'), 'history.json')
@@ -70,11 +76,27 @@ export async function findInHistory(id: string): Promise<FinishedDownload | unde
   return { ...entry, missing }
 }
 
+/** Forgets the finished downloads whose file has been deleted or moved away, and says how many.
+ * An entry on a disk that is not connected stays: its files are only out of reach. */
+export async function removeMissingFromHistory(): Promise<number> {
+  const gone: string[] = []
+  for (const entry of await listHistory()) {
+    if (!entry.missing) continue
+    const volume = await stat(volumeRootOf(entry.destinationPath)).then(
+      () => true,
+      () => false
+    )
+    if (volume) gone.push(entry.id)
+  }
+  if (gone.length > 0) await removeFromHistory(gone)
+  return gone.length
+}
+
 export function addToHistory(entry: FinishedDownload): Promise<void> {
   const { missing: omitted, ...kept } = entry
   void omitted
   return updateJson(historyPath(), (current) =>
-    [kept, ...entriesOf(current).filter((other) => other.id !== entry.id)].slice(0, MAX_ENTRIES)
+    [kept, ...entriesOf(current).filter((other) => other.id !== entry.id)].slice(0, historyLimit)
   )
 }
 

@@ -3,7 +3,8 @@ import { cn } from 'cn'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
-import { formatSpeed } from '../utils/format'
+import { formatBytes, formatSpeed } from '../utils/format'
+import { bytesByNetwork, type WithNetworks } from '../utils/groupBytes'
 
 const ago = (at: number, now: number): string => {
   const seconds = Math.max(0, Math.round((now - at) / 1000))
@@ -13,17 +14,56 @@ const ago = (at: number, now: number): string => {
   return minutes < 60 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`
 }
 
+/** Each connection's share of the data downloaded, for a manual group, whose plan panel isn't
+ * shown. */
+export function GroupConnectionTotals({
+  items
+}: {
+  items: WithNetworks[]
+}): React.JSX.Element | null {
+  const options = useNetworkOptions()
+  const totals = [...bytesByNetwork(items)].filter(([, bytes]) => bytes > 0)
+  if (totals.length === 0) return null
+  const sum = totals.reduce((total, [, bytes]) => total + bytes, 0)
+  return (
+    <div className="mt-2 flex flex-col gap-1 text-[12px]" aria-label="Downloaded by connection">
+      {totals
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, bytes]) => (
+          <div key={id} className="flex items-center gap-2">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{
+                background: options.find((o) => o.id === id)?.solid ?? 'var(--muted-foreground)'
+              }}
+            />
+            <span className="w-32 shrink-0 truncate">
+              {options.find((o) => o.id === id)?.name ?? id}
+            </span>
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {formatBytes(bytes)} · {Math.round((bytes / sum) * 100)}%
+            </span>
+          </div>
+        ))}
+    </div>
+  )
+}
+
 /** "How Lightning is downloading this group": what the plan is, each network's part in it, and the
  * recent decisions. */
 export function GroupPlanPanel({
   group,
   live,
+  items,
   now
 }: {
   group: GroupInfo
   live: DownloadState[]
+  /** Every file of the group, finished ones too: what each connection has delivered. */
+  items: WithNetworks[]
   now: number
 }): React.JSX.Element {
+  const downloaded = bytesByNetwork(items)
   const options = useNetworkOptions()
   const showLog = useAppStore((store) => store.groupUi[group.id]?.decisions ?? false)
   const toggle = useAppStore((store) => store.toggleGroupUi)
@@ -99,6 +139,12 @@ export function GroupPlanPanel({
                 </div>
                 <span className="w-20 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
                   {speed > 0 ? formatSpeed(speed) : '—'}
+                </span>
+                <span
+                  className="w-20 shrink-0 text-right font-mono text-[11px]"
+                  title="Downloaded over this connection"
+                >
+                  {formatBytes(downloaded.get(network.id) ?? 0)}
                 </span>
                 <span
                   className={cn(

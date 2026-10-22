@@ -159,12 +159,22 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'openAtLogin',
     'watchClipboard',
     'askWhenFinished',
+    'removeMissingFiles',
     'browserIntegration',
+    'browserCapture',
+    'browserMenuDownload',
+    'browserMenuScan',
     'showLogs',
     'showDebug'
   ] as const) {
     const value = flag(parsed[key])
     if (value !== undefined) prefs[key] = value
+  }
+  if (typeof parsed.historyLimit === 'number' && Number.isFinite(parsed.historyLimit)) {
+    prefs.historyLimit = Math.min(5000, Math.max(50, Math.round(parsed.historyLimit)))
+  }
+  if (typeof parsed.stallTimeoutSec === 'number' && Number.isFinite(parsed.stallTimeoutSec)) {
+    prefs.stallTimeoutSec = Math.min(120, Math.max(5, Math.round(parsed.stallTimeoutSec)))
   }
   if (parsed.statusBar !== undefined) prefs.statusBar = sanitizeStatusBar(parsed.statusBar)
   if ((PROXY_MODES as readonly string[]).includes(parsed.proxyMode as string)) {

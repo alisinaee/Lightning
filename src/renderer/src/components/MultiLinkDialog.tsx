@@ -3,7 +3,12 @@ import { cn } from 'cn'
 import { AlertTriangle, FolderOpen, ListChecks, ListX } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { RequestOptions } from './RequestOptions'
-import { EMPTY_DRAFT, extrasFromDraft, type RequestDraft } from '../utils/requestDraft'
+import {
+  EMPTY_DRAFT,
+  draftFromExtras,
+  extrasFromDraft,
+  type RequestDraft
+} from '../utils/requestDraft'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes, toDisplayPath } from '../utils/format'
@@ -43,9 +48,17 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const homeDir = useAppStore((store) => store.homeDir)
   const networkOptions = useNetworkOptions()
 
-  const [text, setText] = useState('')
+  const seed = useAppStore.getState().multiLinksSeed
+  const [text, setText] = useState(() => seed?.links.join('\n') ?? '')
+  // Scan a web page for the links to files on it.
+  const [pageUrl, setPageUrl] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanAll, setScanAll] = useState(false)
+  const [scanNote, setScanNote] = useState<string | null>(null)
   // Sign-in, cookies and headers, for every link in the box.
-  const [draft, setDraft] = useState<RequestDraft>(EMPTY_DRAFT)
+  const [draft, setDraft] = useState<RequestDraft>(() =>
+    seed?.extras ? draftFromExtras(seed.extras) : EMPTY_DRAFT
+  )
   const [rows, setRows] = useState<Row[] | null>(null)
   // With links found: first the list is confirmed, then the group's settings are chosen.
   const [step, setStep] = useState<'files' | 'settings'>('files')
@@ -78,6 +91,39 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   }, [])
 
   const found = linksIn(text)
+
+  const handleScan = async (): Promise<void> => {
+    const address = pageUrl.trim()
+    if (!address || scanning) return
+    setScanning(true)
+    setScanNote(null)
+    try {
+      const result = await window.lightning.scanPage(
+        /^[a-z][a-z0-9+.-]*:/i.test(address) ? address : `https://${address}`,
+        scanAll,
+        extrasFromDraft(draft, address)
+      )
+      if (result.links.length === 0) {
+        setScanNote(
+          result.otherCount > 0
+            ? `No file links found (${result.otherCount} other links). Tick “Every link” to list them.`
+            : 'No links found. A page that builds its links with JavaScript can’t be read here.'
+        )
+      } else {
+        setText(
+          (current) => `${current.trim()}${current.trim() ? '\n' : ''}${result.links.join('\n')}`
+        )
+        setScanNote(
+          `${result.links.length} ${result.links.length === 1 ? 'link' : 'links'} added to the box` +
+            (result.otherCount > 0 ? `, ${result.otherCount} other links left out` : '')
+        )
+      }
+    } catch (error) {
+      setScanNote(describeError(error))
+    } finally {
+      setScanning(false)
+    }
+  }
 
   const handleCheck = (): void => {
     const { links, skipped: dropped } = linksIn(text)
@@ -219,6 +265,46 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
         {!rows ? (
           <>
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={pageUrl}
+                  onChange={(event) => setPageUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void handleScan()
+                    }
+                  }}
+                  placeholder="Or scan a web page: paste its address to list the files on it"
+                  spellCheck={false}
+                  aria-label="Page address"
+                  className="h-9 min-w-0 flex-1 rounded-[9px] border border-input bg-[var(--input-bg)] px-3 text-[12.5px] outline-none"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={scanning || pageUrl.trim() === ''}
+                  onClick={() => void handleScan()}
+                >
+                  {scanning ? 'Scanning…' : 'Scan page'}
+                </Button>
+              </div>
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={scanAll}
+                  onChange={(event) => setScanAll(event.target.checked)}
+                />
+                Every link, not only files
+              </label>
+              {scanNote && (
+                <div role="status" className="text-[12px] text-[var(--text-secondary)]">
+                  {scanNote}
+                </div>
+              )}
+            </div>
             <textarea
               autoFocus
               value={text}
@@ -227,7 +313,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               spellCheck={false}
               aria-label="Links"
               rows={9}
-              className="w-full resize-none rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12.5px] text-foreground outline-none"
+              className="h-[190px] min-h-[190px] w-full shrink-0 resize-none rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12.5px] text-foreground outline-none"
             />
             <RequestOptions value={draft} onChange={setDraft} link={found.links[0] ?? ''} />
             <div className="text-[12.5px] text-[var(--text-secondary)]">

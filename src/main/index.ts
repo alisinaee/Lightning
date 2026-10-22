@@ -10,6 +10,7 @@ import {
   startedAtLogin
 } from './appBehavior'
 import { loadSettings } from './settings'
+import { loadWindowState, trackWindowState } from './windowState'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
@@ -82,9 +83,11 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
 }
 
 function createWindow(): void {
+  const saved = testKnobs.hideWindow ? null : loadWindowState()
   mainWindow = new BrowserWindow({
     width: 760,
     height: 640,
+    ...(saved ? saved.bounds : {}),
     minWidth: 720,
     // Room under the download screen's pinned block grid for a network row and a few of its rows.
     minHeight: 620,
@@ -114,9 +117,22 @@ function createWindow(): void {
     }
   })
 
+  if (saved?.maximized) mainWindow.maximize()
+  trackWindowState(mainWindow)
   mainWindow.on('ready-to-show', () => {
     // Started at sign-in: stay in the tray (the tray is what makes a hidden window reachable).
-    if (!testKnobs.hideWindow && !startedAtLogin()) mainWindow?.show()
+    if (!testKnobs.hideWindow && !startedAtLogin()) {
+      mainWindow?.show()
+      // Full screen only once the window is on screen: asked before, macOS moves a hidden window
+      // to its own Space and leaves the person looking at an empty desktop.
+      if (saved?.fullScreen) {
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+            mainWindow.setFullScreen(true)
+          }
+        }, 400)
+      }
+    }
   })
   // Close hides the window and leaves downloads running, unless the user is actually quitting
   // or Settings turned that off.

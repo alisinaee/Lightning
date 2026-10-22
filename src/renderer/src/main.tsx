@@ -18,6 +18,7 @@ import App from './App'
 import { AppBoundary } from './components/AppBoundary'
 import { LogsDialog } from './components/LogsDialog'
 import './utils/errorLog'
+import './utils/clickGuard'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

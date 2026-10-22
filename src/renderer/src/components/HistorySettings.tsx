@@ -38,7 +38,13 @@ function liveTotals(
 }
 
 /** Finished downloads: rename a file, drop it from the list, and the download and upload totals. */
-export function HistorySettings(): React.JSX.Element {
+export function HistorySettings({
+  historyLimit,
+  onHistoryLimitChange
+}: {
+  historyLimit: number
+  onHistoryLimitChange: (limit: number) => void
+}): React.JSX.Element {
   const history = useAppStore((store) => store.history)
   const downloads = useAppStore((store) => store.downloads)
   const removeDownload = useAppStore((store) => store.removeDownload)
@@ -104,6 +110,21 @@ export function HistorySettings(): React.JSX.Element {
           Finished files. Renaming also renames the file on disk when it is still there.
         </div>
       </div>
+      <label className="flex items-center gap-3 text-[13px]">
+        Keep this many finished downloads
+        <input
+          type="number"
+          min={50}
+          max={5000}
+          step={1}
+          value={historyLimit}
+          onChange={(event) => {
+            const limit = Math.floor(Number(event.target.value))
+            if (limit >= 50 && limit <= 5000) onHistoryLimitChange(limit)
+          }}
+          className="h-8 w-20 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center outline-none"
+        />
+      </label>
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Downloaded" value={formatBytes(finishedDown + live.downloaded)} />
         <Stat label="Uploaded" value={formatBytes(finishedUp + live.uploaded)} />

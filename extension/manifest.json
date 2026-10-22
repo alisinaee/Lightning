@@ -13,7 +13,7 @@
     "service_worker": "background.js",
     "scripts": ["background.js"]
   },
-  "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications"],
+  "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "browser_specific_settings": {
     "gecko": { "id": "lightning-extension@lightning.app", "strict_min_version": "121.0" }

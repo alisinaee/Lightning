@@ -21,7 +21,7 @@ import { sortItems, sortPending, statusOfGroup, type GroupEntry } from '../../ut
 import { describeError, formatPercent, toDisplayPath, wantedBytes } from '../../utils/format'
 import { isFinished, statusStyle, type Item, type RowInfo } from '../../utils/status'
 import { GroupFileRow } from '../GroupFileRow'
-import { GroupPlanPanel } from '../GroupPlanPanel'
+import { GroupConnectionTotals, GroupPlanPanel } from '../GroupPlanPanel'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -389,11 +389,12 @@ export function GroupTableRow({
         <>
           <div className="border-b-[0.5px] border-border/70 bg-card/40 py-2 pr-4 pl-12">
             {group.mode === 'auto' ? (
-              <GroupPlanPanel group={group} live={live} now={now} />
+              <GroupPlanPanel group={group} live={live} items={items} now={now} />
             ) : (
               <div className="text-[12px] text-muted-foreground">
                 Manual: each file uses the connections you chose. Use the network button on a file
                 to change them.
+                <GroupConnectionTotals items={items} />
               </div>
             )}
             {allDone && (

@@ -1,0 +1,17 @@
+{
+  "a1c8faf803d904419": {
+    "task": null,
+    "title": "haiku: Settings options for Lightning",
+    "model": "haiku"
+  },
+  "afbe6d0a33ae7bb47": {
+    "task": null,
+    "title": "haiku: Small fixes and docs for Lightning",
+    "model": "haiku"
+  },
+  "a7c240370e05dc8db": {
+    "task": null,
+    "title": "haiku: Fix lint finding in GroupPlanPanel",
+    "model": "haiku"
+  }
+}

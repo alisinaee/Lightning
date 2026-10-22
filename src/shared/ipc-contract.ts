@@ -3,6 +3,9 @@ import type { DnsTestResult } from './dnsRecommend'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
+  ScanPageResult,
+  UsageHistoryQuery,
+  UsageHistoryResult,
   CreateGroupInput,
   DnsConfig,
   DnsProfile,
@@ -85,6 +88,8 @@ export interface IpcContract {
   updateHistory: { args: [id: string, fileName: string]; result: void }
   /** Bytes each network has received in its selected calendar period, by id (see NetworkPreference.dataLimit). */
   networkUsage: { args: []; result: Record<string, number> }
+  usageHistory: { args: [query: UsageHistoryQuery]; result: UsageHistoryResult }
+  scanPage: { args: [url: string, all: boolean, extras?: RequestExtras]; result: ScanPageResult }
   resetNetworkUsage: { args: [id: string]; result: void }
   /** Bytes free on the drive holding `dir`; null when it can't be told. */
   freeSpace: { args: [dir: string]; result: number | null }

@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { dataPeriodKey } from '../../shared/dataLimits'
 import { DEFAULT_SLOW_MODE_SPEED, type AppSettings, type DataLimitPeriod } from '../../shared/types'
 import { readJson, updateJson } from '../jsonFile'
+import { UsageHistory } from './usageHistory'
 
 // Speed and data limits, for every download together: what the user sets in Speed & data limits.
 // Every byte Lightning receives passes through take(), on the network it came in on — an HTTP
@@ -46,6 +47,8 @@ export class Limits {
   private dataLimits = new Map<string, number>()
   private periods = new Map<string, DataLimitPeriod>()
   private usage = freshUsage(Date.now())
+  /** Who received what, and when: the Usage page's charts. */
+  readonly history = new UsageHistory()
   private saveTimer: NodeJS.Timeout | null = null
   readonly loaded: Promise<void>
 
@@ -126,8 +129,9 @@ export class Limits {
   }
 
   /** Counts `bytes` just received on `networkId`, and says how many ms to stop reading for. */
-  take(networkId: string, bytes: number): number {
+  take(networkId: string, bytes: number, source?: { id: string; name: string }): number {
     const now = Date.now()
+    if (source) this.history.record(networkId, source.id, source.name, bytes)
     this.rollPeriods(now)
     const period = this.periods.get(networkId) ?? 'month'
     const before = this.usage[period].bytes[networkId] ?? 0
@@ -184,6 +188,7 @@ export class Limits {
 
   /** Writes every period’s usage now (on quit; otherwise it's saved every USAGE_SAVE_MS). */
   async save(): Promise<void> {
+    void this.history.save()
     if (this.saveTimer) clearTimeout(this.saveTimer)
     this.saveTimer = null
     this.rollPeriods(Date.now(), false)

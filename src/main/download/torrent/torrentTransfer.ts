@@ -288,7 +288,12 @@ export class TorrentTransfer implements Transfer {
   private limit(socket: Socket, networkId: string): void {
     const push = socket.push.bind(socket)
     socket.push = (chunk: Buffer | null, encoding?: BufferEncoding): boolean => {
-      const wait = chunk ? this.host.limits.take(networkId, chunk.length) : 0
+      const wait = chunk
+        ? this.host.limits.take(networkId, chunk.length, {
+            id: this.runtime.state.id,
+            name: this.runtime.state.fileName
+          })
+        : 0
       if (wait > 0) {
         // ponytail: webtorrent's pipe resumes the socket when its wire drains, which can cut a
         // wait short; the debt it leaves only lengthens the next one, so the rate still holds.

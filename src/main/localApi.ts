@@ -14,12 +14,22 @@ const WINDOW_MS = 10_000
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i
 const EXTENSION_ORIGIN = /^(chrome-extension|moz-extension|safari-web-extension):\/\/[^/]+$/i
 
+export interface BrowserFeatures {
+  capture: boolean
+  menuDownload: boolean
+  menuScan: boolean
+}
+
 export interface LocalApiDeps {
   version: string
   /** The pairing key every call but ping must carry. */
   token: () => Promise<string>
   /** A link (and what its requests need) the browser sent: for the New download dialog. */
   onAdd: (url: string, extras: RequestExtras) => void
+  /** Which of the extension's features Settings has on. */
+  features: () => BrowserFeatures
+  /** The links the extension collected from the page the person is on: for the several-links dialog. */
+  onLinks: (urls: string[], extras: RequestExtras) => void
 }
 
 function digest(text: string): Buffer {
@@ -109,6 +119,7 @@ export class LocalApi {
     // Host, if a name was made to point here, is not ours.
     if (!LOOPBACK_HOST.test(req.headers.host ?? '')) return this.send(res, 403, { error: 'host' })
     if (origin !== undefined && !EXTENSION_ORIGIN.test(origin)) {
+      log.warn('action', 'browser call refused: not an extension', { origin })
       return this.send(res, 403, { error: 'origin' })
     }
     if (req.method === 'OPTIONS') {
@@ -127,11 +138,17 @@ export class LocalApi {
     if (req.method === 'GET' && path === '/v1/ping') {
       return this.send(res, 200, { app: 'Lightning', version: this.deps.version, api: 1 }, origin)
     }
-    if (!(await this.authorized(req))) return this.send(res, 401, { error: 'key' }, origin)
+    if (!(await this.authorized(req))) {
+      log.warn('action', 'browser call refused: the pairing key is missing or wrong', { path })
+      return this.send(res, 401, { error: 'key' }, origin)
+    }
 
     // A harmless call that says whether the key is right: the extension's popup uses it.
     if (req.method === 'GET' && path === '/v1/auth')
       return this.send(res, 200, { ok: true }, origin)
+    // Which features Settings has on: the extension shows and hides its menus by it.
+    if (req.method === 'GET' && path === '/v1/config')
+      return this.send(res, 200, this.deps.features(), origin)
 
     if (req.method === 'POST' && path === '/v1/add') {
       const now = Date.now()
@@ -148,12 +165,37 @@ export class LocalApi {
       } catch {
         body = null
       }
+      const features = this.deps.features()
+      // A link from the browser's own downloads, or from the right-click menu.
+      const allowed = body?.source === 'download' ? features.capture : features.menuDownload
+      if (!allowed) return this.send(res, 403, { error: 'off' }, origin)
       const url = typeof body?.url === 'string' ? body.url.trim() : ''
       if (!body || !/^(https?:\/\/[^\s]+|magnet:\?[^\s]+)$/i.test(url) || url.length > 8192) {
         return this.send(res, 400, { error: 'url' }, origin)
       }
       log.info('action', 'link from the browser', { url: redactUrl(url) })
       this.deps.onAdd(url, sanitizeExtras(body))
+      return this.send(res, 200, { ok: true }, origin)
+    }
+    if (req.method === 'POST' && path === '/v1/links') {
+      if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)
+      const text = await this.readBody(req)
+      let body: Record<string, unknown> | null = null
+      try {
+        const parsed: unknown = text === null ? null : JSON.parse(text)
+        body =
+          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
+      } catch {
+        body = null
+      }
+      const urls = Array.isArray(body?.links)
+        ? body.links.filter(
+            (entry): entry is string => typeof entry === 'string' && entry.length <= 8192
+          )
+        : null
+      if (!body || !urls) return this.send(res, 400, { error: 'links' }, origin)
+      log.info('action', 'page links from the browser', { count: urls.length })
+      this.deps.onLinks(urls.slice(0, 5000), sanitizeExtras(body))
       return this.send(res, 200, { ok: true }, origin)
     }
     return this.send(res, 404, { error: 'not found' }, origin)

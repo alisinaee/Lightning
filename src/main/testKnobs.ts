@@ -17,7 +17,6 @@ export const testKnobs = {
   hideWindow: env['LIGHTNING_E2E_HIDE_WINDOW'] === '1',
   blockBytes: positiveNumber('LIGHTNING_E2E_BLOCK_BYTES', 8 * 1024 * 1024),
   retryBaseDelayMs: positiveNumber('LIGHTNING_E2E_RETRY_BASE_MS', 1000),
-  stallTimeoutMs: positiveNumber('LIGHTNING_E2E_STALL_MS', 20_000),
   connectTimeoutMs: positiveNumber('LIGHTNING_E2E_CONNECT_MS', 10_000),
   /** How long a server that keeps answering busy (429, 503, …) is waited out; see
    * downloadManager.ts. */
@@ -41,6 +40,20 @@ export const testKnobs = {
   forceUpdateVersion: env['LIGHTNING_FORCE_UPDATE_VERSION'],
   /** Answers the "downloads finished" question without a dialog (nothing, quit, sleep, shutdown). */
   finishedAction: env['LIGHTNING_E2E_FINISHED_ACTION']
+}
+
+let stallTimeoutSec = 20
+
+/** Sets the stall timeout the user chose (Settings → Network → Advanced). */
+export function setStallTimeoutSec(seconds: number): void {
+  stallTimeoutSec = seconds
+}
+
+/** How long a connection may go without data before it counts as stalled. The suite's override
+ * wins; otherwise the user's setting. Read on every call, so a change applies to new work. */
+export function stallTimeoutMs(): number {
+  const fromEnv = Number(env['LIGHTNING_E2E_STALL_MS'])
+  return fromEnv > 0 ? fromEnv : stallTimeoutSec * 1000
 }
 
 /** How long a network must have stayed up before an Auto group starts a file on it. A network

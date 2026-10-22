@@ -19,10 +19,19 @@ export const COOLDOWN_MS = 15_000
 export const USELESS_SHARE = 0.1
 /** Another busy network must be this many times faster than the slow one to be added. */
 export const MUCH_FASTER = 3
-/** Idle networks help a file with more than this share and this many bytes left. */
-export const STEAL_SHARE = 0.25
+/** Idle networks help any file with at least this many bytes left (and more than this share of it: none, so a file that is mostly done is helped too). */
+export const STEAL_SHARE = 0
 export const STEAL_MIN_BYTES = 50 * 1024 * 1024
 const BASELINE_WEIGHT = 0.3
+/** A network that gives a file under this many bytes a second, all the way, is dead rather than
+ * slow: it stays slow, so its files move to a network that works, instead of settling for it. */
+export const DEAD_BPS = 32 * 1024
+/** A network no file of the group has run on yet (no baseline) that gives nothing for this many
+ * seconds in a row, with a file on it, is dead: the app may have been restarted since it was
+ * measured, or it is new to this place. */
+export const DEAD_SECONDS = 20
+/** A slow network, left idle this long, is tried again on a file, to see whether it has recovered. */
+export const PROBE_AFTER_SECONDS = 30
 /** Samples needed before a median is taken as the speed a network holds (and the baseline). */
 const SUSTAIN_SAMPLES = 5
 
@@ -35,13 +44,16 @@ export interface Track {
   baseline: number
   state: TrackState
   lastFasterAt: number
+  /** Seconds in a row no file of the group ran on it. */
+  idle: number
 }
 
 export const newTrack = (baseline = 0): Track => ({
   samples: [],
   baseline,
   state: 'fast',
-  lastFasterAt: 0
+  lastFasterAt: 0,
+  idle: 0
 })
 
 const median = (values: number[]): number => {
@@ -72,7 +84,7 @@ export function trackNetwork(
   sample: number | null,
   now: number
 ): { track: Track; change?: TrackChange } {
-  if (sample === null) return { track: { ...track, samples: [] } }
+  if (sample === null) return { track: { ...track, samples: [], idle: track.idle + 1 } }
   const samples = [...track.samples, sample].slice(-HISTORY_SECONDS)
   let { baseline, state, lastFasterAt } = track
   let change: TrackChange | undefined
@@ -85,28 +97,37 @@ export function trackNetwork(
     baseline = baseline === 0 ? now5 : baseline * (1 - BASELINE_WEIGHT) + now5 * BASELINE_WEIGHT
   }
   const recent = samples.slice(-SLOW_SECONDS)
+  const dead =
+    baseline === 0 &&
+    samples.length >= DEAD_SECONDS &&
+    samples.slice(-DEAD_SECONDS).every((value) => value < DEAD_BPS)
   if (
     state === 'fast' &&
-    baseline > 0 &&
-    recent.length >= SLOW_SECONDS &&
-    recent.every((value) => value < baseline * SLOW_RATIO)
+    (dead ||
+      (baseline > 0 &&
+        recent.length >= SLOW_SECONDS &&
+        recent.every((value) => value < baseline * SLOW_RATIO)))
   ) {
     state = 'slow'
     change = { kind: 'slow', from: baseline, to: median(recent) }
   } else if (state === 'slow') {
-    if (samples.length >= 3 && median(samples.slice(-3)) >= baseline * RECOVER_RATIO) {
+    if (
+      samples.length >= 3 &&
+      median(samples.slice(-3)) >= Math.max(baseline * RECOVER_RATIO, DEAD_BPS)
+    ) {
       state = 'fast'
       change = { kind: 'recover', from: median(samples.slice(-SLOW_SECONDS - 2, -3)), to: now5 }
     } else if (
       samples.length >= HISTORY_SECONDS &&
-      samples.every((value) => value < baseline * SLOW_RATIO)
+      samples.every((value) => value < baseline * SLOW_RATIO) &&
+      median(samples) >= DEAD_BPS
     ) {
       // Slow for the whole history: that is what the network is now, not a dip.
       baseline = median(samples)
       state = 'fast'
     }
   }
-  return { track: { samples, baseline, state, lastFasterAt }, change }
+  return { track: { samples, baseline, state, lastFasterAt, idle: 0 }, change }
 }
 
 export interface PlanNetworkInput {
@@ -339,7 +360,24 @@ export function planGroup(state: PlanState): PlanResult {
         (network) => !taken.has(network.id) || speed.get(network.id)! >= slowSpeed * MUCH_FASTER
       )
       .sort((a, b) => speed.get(b.id)! - speed.get(a.id)!)[0]
-    if (!helper) continue
+    if (!helper) {
+      // Nothing to add, but a network that gives the file next to nothing beside others that do
+      // (a dead Wi-Fi) is let go of.
+      const others = ids
+        .filter((id) => id !== slow)
+        .reduce((sum, id) => sum + (speed.get(id) ?? 0), 0)
+      if (ids.length > 1 && slowSpeed < others * USELESS_SHARE) {
+        act({
+          kind: 'drop',
+          fileId: file.id,
+          networkId: slow,
+          why: 'drop',
+          reason: `${nameOf(slow)} gives under 10% of ${file.name}, so it was dropped from it.`
+        })
+        changed.add(file.id)
+      }
+      continue
+    }
     act({
       kind: 'add',
       fileId: file.id,
@@ -363,19 +401,28 @@ export function planGroup(state: PlanState): PlanResult {
     changed.add(file.id)
   }
 
-  // c. An idle network, nothing left to give it: it helps the file with the most left.
+  // c. An idle network, nothing left to give it: it helps the file with the most left for each
+  // connection already on it. Joining costs nothing, so there is no cooldown and every idle
+  // network joins at once, the fastest known first.
   const taken = usedBy()
-  for (const network of present) {
+  for (const network of [...present].sort((a, b) => speed.get(b.id)! - speed.get(a.id)!)) {
     if (taken.has(network.id) || wanted.has(network.id)) continue
+    // One that is slow or dead is not asked to help at once, only tried again after a while.
+    if (network.track.state === 'slow' && network.track.idle < PROBE_AFTER_SECONDS) continue
     const target = state.running
       .filter(
-        (file) => file.splittable && free(file) && !(using.get(file.id) ?? []).includes(network.id)
+        (file) =>
+          file.splittable && !file.pinned && !(using.get(file.id) ?? []).includes(network.id)
       )
       .filter((file) => {
         if (file.remaining <= 0 || file.total <= 0) return false
         return file.remaining / file.total > STEAL_SHARE && file.remaining > STEAL_MIN_BYTES
       })
-      .sort((a, b) => b.remaining - a.remaining)[0]
+      .sort(
+        (a, b) =>
+          b.remaining / ((using.get(b.id) ?? []).length + 1) -
+          a.remaining / ((using.get(a.id) ?? []).length + 1)
+      )[0]
     if (!target) continue
     act({
       kind: 'add',

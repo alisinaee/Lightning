@@ -26,6 +26,8 @@ export const IpcChannels = {
   clearHistory: 'history:clear',
   updateHistory: 'history:update',
   networkUsage: 'network:usage',
+  usageHistory: 'network:usage-history',
+  scanPage: 'download:scan-page',
   resetNetworkUsage: 'network:reset-usage',
   freeSpace: 'disk:free-space',
   historyChanged: 'history:changed',

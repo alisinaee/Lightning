@@ -5,7 +5,7 @@ import { URL } from 'node:url'
 import { buildHeaders, headersForRedirect, splitUrlCredentials } from '../../shared/requestHeaders'
 import type { NetworkInterfaceInfo, ProbeResult, RequestExtras } from '../../shared/types'
 import { NoCompatibleRouteError, StreamConnection } from '../network/routes'
-import { testKnobs } from '../testKnobs'
+import { stallTimeoutMs } from '../testKnobs'
 import { parseContentDispositionFilename } from './contentDisposition'
 import {
   describeTorrent,
@@ -18,7 +18,6 @@ const MAX_REDIRECTS = 5
 // A server that accepts the connection and never answers would otherwise hang the probe — and
 // the link field's "Checking…" — forever. Same budget as a stalled chunk, for the whole probe:
 // redirects included, so a chain of slow hops can't stretch it.
-const PROBE_TIMEOUT_MS = testKnobs.stallTimeoutMs
 const NO_RESPONSE = 'The server did not respond — check the link and try again'
 
 type Headers = Record<string, string | string[] | undefined>
@@ -38,32 +37,44 @@ interface ProbeResponse {
   headers: Headers
 }
 
-/** GET with a 1-byte range: cheaper than fetching the body, and unlike HEAD it
+/** GET with a small range (not 1 byte: some hosts answer a range ending at byte 0 or 1 with the
+ * whole file yet serve real chunks fine, upstream plexo#101): cheaper than the body, and unlike HEAD it
  * also tells us (via the 206 status) whether range requests actually work. */
-async function requestOneByte(
+async function requestFirstBytes(
   url: URL,
   deadline: number,
   sent: Record<string, string>,
   networks?: ProbeNetworks
 ): Promise<ProbeResponse> {
   const candidates = networks?.() ?? []
-  let lastError: unknown = null
-  for (const network of candidates) {
+  // All networks are tried at once and the first to answer wins: a network with no internet (a
+  // Wi-Fi that only reaches the local network) would otherwise spend the whole deadline before
+  // the one that works was ever tried.
+  const connections: StreamConnection[] = []
+  const attempts = candidates.map(async (network): Promise<ProbeResponse> => {
     const connection = new StreamConnection(() => network, {
       timeoutMs: Math.max(1, deadline - Date.now())
     })
-    try {
-      const { res } = await connection.request(url, { ...sent, Range: 'bytes=0-0' })
-      res.destroy()
-      return { statusCode: res.statusCode ?? 0, headers: res.headers as Headers }
-    } catch (error) {
-      // A network with no way to this host (say IPv4 only for an IPv6 address) is skipped, not
-      // fatal; any other failure is kept in case no network gets through.
-      if (!(error instanceof NoCompatibleRouteError)) lastError = error
-    } finally {
-      connection.close()
+    connections.push(connection)
+    const { res } = await connection.request(url, { ...sent, Range: 'bytes=0-1023' })
+    res.destroy()
+    return { statusCode: res.statusCode ?? 0, headers: res.headers as Headers }
+  })
+  const failures: unknown[] = []
+  try {
+    if (attempts.length > 0) {
+      return await Promise.any(attempts)
     }
+  } catch (error) {
+    // A network with no way to this host (say IPv4 only for an IPv6 address) is skipped, not
+    // fatal; any other failure is kept in case no network gets through.
+    for (const reason of (error as AggregateError).errors) {
+      if (!(reason instanceof NoCompatibleRouteError)) failures.push(reason)
+    }
+  } finally {
+    for (const connection of connections) connection.close()
   }
+  const lastError = failures[failures.length - 1] ?? null
   if (lastError) {
     // A network that connects but never gets an answer: the same words as the default route's.
     if (lastError instanceof Error && /^Connection stalled/.test(lastError.message)) {
@@ -72,10 +83,10 @@ async function requestOneByte(
     throw lastError
   }
   // No network to bind to (none connected, or a simulated one): the default route.
-  return requestOneByteDefaultRoute(url, deadline, sent)
+  return requestFirstBytesDefaultRoute(url, deadline, sent)
 }
 
-function requestOneByteDefaultRoute(
+function requestFirstBytesDefaultRoute(
   url: URL,
   deadline: number,
   sent: Record<string, string>
@@ -88,7 +99,7 @@ function requestOneByteDefaultRoute(
         hostname: url.hostname.replace(/^\[|\]$/g, ''),
         port: url.port || undefined,
         path: `${url.pathname}${url.search}`,
-        headers: { ...sent, Range: 'bytes=0-0' }
+        headers: { ...sent, Range: 'bytes=0-1023' }
       },
       (res) => {
         clearTimeout(timer)
@@ -132,10 +143,10 @@ async function requestFollowingRedirects(
   let current = new URL(rawUrl)
   let sent = buildHeaders(extras)
   let response: ProbeResponse | null = null
-  const deadline = Date.now() + PROBE_TIMEOUT_MS
+  const deadline = Date.now() + stallTimeoutMs()
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    response = await requestOneByte(current, deadline, sent, networks)
+    response = await requestFirstBytes(current, deadline, sent, networks)
     if (response.statusCode >= 300 && response.statusCode < 400) {
       const location = headerValue(response.headers, 'location')
       if (!location) break
@@ -199,11 +210,11 @@ export async function probeUrl(
 
   if (isTorrentLink(response.headers, current)) {
     const finalUrl = current.toString()
-    return describeTorrent(await downloadTorrentFile(finalUrl, PROBE_TIMEOUT_MS), finalUrl)
+    return describeTorrent(await downloadTorrentFile(finalUrl, stallTimeoutMs()), finalUrl)
   }
 
   const contentRange = headerValue(response.headers, 'content-range')
-  // A server that supports range requests must answer our 1-byte range GET with 206 Partial Content.
+  // A server that supports range requests must answer our range GET with 206 Partial Content.
   // If it returned 200 OK, it ignored the Range header and sent the whole file — even if its headers
   // statically claim `Accept-Ranges: bytes`.
   const supportsRanges = response.statusCode === 206
@@ -215,7 +226,7 @@ export async function probeUrl(
   }
   if (totalBytes === null && response.statusCode === 200) {
     // Only trust Content-Length on a full (200) response — on a 206 it
-    // describes the single byte we asked for, not the whole file.
+    // describes the bytes we asked for, not the whole file.
     const contentLength = headerValue(response.headers, 'content-length')
     if (contentLength) totalBytes = Number(contentLength)
   }
