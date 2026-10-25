@@ -10,6 +10,16 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.35',
+      items: [
+        {
+          kind: 'improved',
+          title: 'No peers found yet',
+          text: 'A magnet link that is still being checked shows "No peers found yet" instead of looking stuck.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.34',
       items: [
         {
