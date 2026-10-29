@@ -23,6 +23,7 @@ import {
   type HttpDownloadNetwork,
   type HttpDownloadState,
   type NetworkInterfaceInfo,
+  type NetworkPreferences,
   type NetworkStatus,
   type StartDownloadRequest,
   type StartHttpDownloadRequest,
@@ -314,6 +315,7 @@ export class DownloadManager {
   private suspending = false
   /** Each network's addresses as last seen, by id: what tells a network that has changed. */
   private seenAddresses = new Map<string, string[]>()
+  private networkPreferences: NetworkPreferences = {}
   /** The powerSaveBlocker keeping the computer awake while a download runs (see keepAwake). */
   private awakeBlocker: number | null = null
   /** From Settings: which notices to show, and whether a running download keeps the Mac awake. */
@@ -339,6 +341,8 @@ export class DownloadManager {
   /** Takes up what the user set: how many run at once, and the limits. One running past a
    * lowered count is left to finish; a raised one starts the next ones in the queue. */
   applySettings(settings: AppSettings): void {
+    const previousPreferences = this.networkPreferences
+    this.networkPreferences = settings.networkPreferences ?? {}
     this.downloadsAtOnce = settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default
     this.prefs = prefsOf(settings)
     setHistoryLimit(this.prefs.historyLimit)
@@ -347,7 +351,27 @@ export class DownloadManager {
     this.limits.configure(settings)
     this.limitsChanged()
     this.keepAwake()
+    this.wakeChangedProxies(previousPreferences)
     this.pump()
+  }
+
+  /** A network's proxy was changed or removed: its streams reconnect through the new setting. */
+  private wakeChangedProxies(previous: NetworkPreferences): void {
+    const changed = new Set<string>()
+    for (const [id, preference] of Object.entries(this.networkPreferences)) {
+      if (JSON.stringify(previous[id]?.proxy) !== JSON.stringify(preference.proxy)) changed.add(id)
+    }
+    for (const [id, preference] of Object.entries(previous)) {
+      if (!this.networkPreferences[id] && preference.proxy) changed.add(id)
+    }
+    if (changed.size === 0) return
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.state.status !== 'downloading') continue
+      runtime.transfer.wake(
+        (id) => changed.has(id),
+        (id) => changed.has(id)
+      )
+    }
   }
 
   private missingTimer: NodeJS.Timeout | null = null
@@ -632,7 +656,8 @@ export class DownloadManager {
       failDownload: (message, discard) => this.failDownload(runtime, message, discard),
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
       scheduleUpdate: () => this.scheduleUpdate(runtime),
-      resolveHost: (name) => this.resolverFor(runtime.state)(name)
+      resolveHost: (name) => this.resolverFor(runtime.state)(name),
+      getProxyForInterface: (networkId) => this.networkPreferences[networkId]?.proxy
     }
     const runtime: HttpDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'http' as const,

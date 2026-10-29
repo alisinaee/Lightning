@@ -299,6 +299,17 @@ export type DownloadUpdate = HttpDownloadUpdate | TorrentDownloadUpdate
 /** User customization for one physical network, keyed by NetworkInterfaceInfo.id — lets a
  * cryptic OS device name (e.g. "feth0") get a real label, and a color distinct from its
  * kind's default. Persisted in the main process, independent of any single download. */
+export type ProxyType = 'http' | 'https' | 'socks4' | 'socks5'
+
+export interface ProxyConfig {
+  enabled: boolean
+  type: ProxyType
+  host: string
+  port: number
+  username?: string
+  password?: string
+}
+
 export type DataLimitPeriod = 'day' | 'week' | 'month'
 
 export interface NetworkPreference {
@@ -306,6 +317,8 @@ export interface NetworkPreference {
   /** One of the app's curated swatch ids (see NETWORK_COLOR_SWATCHES) — not a raw hex, so every
    * swatch is guaranteed to have a legible on-solid text color already picked out for it. */
   colorId?: string
+  /** Optional per-interface proxy configuration. */
+  proxy?: ProxyConfig
   /** Left out of new downloads by default (see the title bar's networks). A download can still
    * be started on it. */
   off?: boolean

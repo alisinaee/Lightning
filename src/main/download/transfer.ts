@@ -5,6 +5,7 @@ import type {
   DownloadUnitState,
   HttpBlockState,
   HttpDownloadState,
+  ProxyConfig,
   StartHttpDownloadRequest,
   StartTorrentDownloadRequest,
   TorrentDownloadState,
@@ -84,6 +85,7 @@ export interface TransferHost {
   /** How this download looks names up: its own DNS, its group's, or the app's. Asked for at each
    * new connection, so a change applies from the next one. */
   resolveHost: ResolveHost
+  getProxyForInterface?(networkId: string): ProxyConfig | undefined
 }
 
 // Raw per-event deltas are too noisy to display (socket buffers flush in

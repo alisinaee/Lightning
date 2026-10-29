@@ -1055,7 +1055,8 @@ export class HttpTransfer implements Transfer {
       connection: new StreamConnection(() => this.host.networks.find(chunk.interfaceId), {
         timeoutMs: stallTimeoutMs(),
         connectTimeoutMs: testKnobs.connectTimeoutMs,
-        resolveHost: (name) => this.host.resolveHost(name)
+        resolveHost: (name) => this.host.resolveHost(name),
+        proxy: () => this.host.getProxyForInterface?.(chunk.interfaceId)
       }),
       attempt: null,
       warmSince: Date.now(),
