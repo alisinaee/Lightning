@@ -94,6 +94,9 @@ export interface HttpStreamState {
   /** True while this stream is racing another stream for `currentBlockIndex`, because that one
    * was too slow — see main/download/scheduler.ts. Whichever finishes first wins. */
   hedge?: boolean
+  /** True while this stream is fetching the back part of `currentBlockIndex`, split off from what
+   * another stream had left of it — see main/download/scheduler.ts. Each fetches its own part. */
+  split?: boolean
 }
 
 /** A live BitTorrent peer connection. A peer does not own a piece: it may contribute blocks to

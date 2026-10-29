@@ -126,7 +126,7 @@ function HttpStreamRows({
                 </span>
               )}
               {/* A lit dot and a speed say it's fetching; only what isn't the usual gets a word. */}
-              {active && stream.hedge ? (
+              {active && (stream.hedge || stream.split) ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -137,12 +137,14 @@ function HttpStreamRows({
                         tabIndex={0}
                         className="h-[13px] rounded-[3px] px-[5px] py-px text-[9px] font-semibold tracking-[0.04em] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
-                        BACKUP
+                        {stream.hedge ? 'BACKUP' : 'SPLIT'}
                       </ColorBadge>
                     }
                   />
                   <TooltipContent>
-                    Racing another stream for this chunk, which was running slowly
+                    {stream.hedge
+                      ? 'Racing another stream for this chunk, which was running slowly'
+                      : 'Fetching the far part of this chunk, so another stream doesn’t have to'}
                   </TooltipContent>
                 </Tooltip>
               ) : (
