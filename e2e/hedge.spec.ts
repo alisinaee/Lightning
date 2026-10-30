@@ -126,7 +126,7 @@ test.describe('splitting a block at the end', () => {
   // whichever stream frees first, about 8 s in, and alone would take 8 s more.
   const SIZE = 5 * MIB
   const LAST = 4 * MIB
-  test.use({ appEnv: { PLEXO_E2E_BLOCK_BYTES: String(MIB), PLEXO_E2E_SILENT_MS: '1000' } })
+  test.use({ appEnv: { LIGHTNING_E2E_BLOCK_BYTES: String(MIB), LIGHTNING_E2E_SILENT_MS: '1000' } })
 
   const lastBlock = (origin: Origin): LoggedRequest[] =>
     origin.chunkRequests().filter((r) => r.range && r.range.start >= LAST)

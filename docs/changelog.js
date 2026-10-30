@@ -10,6 +10,31 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.36',
+      items: [
+        {
+          kind: 'new',
+          title: 'Proxy for each network',
+          text: 'Send one network through an HTTP, HTTPS, SOCKS5 or SOCKS4 proxy (with a user name and password if it needs one). Set it from the pencil next to the network; a PROXY badge shows which networks use one.'
+        },
+        {
+          kind: 'faster',
+          title: 'Torrents use every network on each peer',
+          text: 'A peer is now reached over each network that is on, so a swarm with one or two fast seeders fills all your networks, not just one.'
+        },
+        {
+          kind: 'faster',
+          title: 'The last blocks are shared',
+          text: 'When no block is left waiting, a free stream takes the back half of the slowest one, so the end of a download no longer waits on a single slow stream. Nothing is fetched twice.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Linux network list',
+          text: 'Docker, virtual machine and other virtual bridges are left out of the networks on Linux.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.35',
       items: [
         {

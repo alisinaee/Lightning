@@ -124,7 +124,7 @@ export function NetworkEditPopover({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Edit ${visual.name}`}
+                    aria-label="Edit network"
                     className={cn('shrink-0 text-muted-foreground', className)}
                   >
                     <Pencil className="size-3" />
@@ -138,7 +138,7 @@ export function NetworkEditPopover({
           {tooltip ??
             (preference?.proxy?.enabled && preference?.proxy?.host
               ? `Proxy active (${preference!.proxy!.type.toUpperCase()}) — click to configure`
-              : `Configure proxy or edit ${visual.name}`)}
+              : `Edit network or set a proxy`)}
         </TooltipContent>
       </Tooltip>
       <PopoverContent aria-label={`Edit ${visual.name}`} className="w-[320px] gap-3 p-3">
