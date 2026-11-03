@@ -9,6 +9,7 @@ const BLOCKS: Record<string, [boolean, boolean]> = {
 }
 
 const QUIET_ZONE = 4
+const MODULE_PX = 7
 
 function qrModules(ascii: string): boolean[][] {
   const lines = ascii.split('\n').filter((line) => line.length > 0)
@@ -59,7 +60,10 @@ export function TelegramQr({ ascii }: { ascii: string }): React.JSX.Element | nu
       aria-label="Login QR code"
       viewBox={`0 0 ${width} ${size}`}
       shapeRendering="crispEdges"
-      className="size-60 self-center rounded-[9px] bg-white"
+      // A whole number of pixels per module keeps every square the same width for a phone camera.
+      width={width * MODULE_PX}
+      height={size * MODULE_PX}
+      className="max-w-full self-center rounded-[9px] bg-white"
     >
       <rect width={width} height={size} fill="#fff" />
       <path d={path} fill="#000" />
