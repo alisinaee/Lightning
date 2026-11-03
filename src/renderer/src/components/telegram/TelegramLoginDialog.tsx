@@ -25,16 +25,99 @@ export function TelegramLoginDialog(): React.JSX.Element {
 
 const MODE_HELP: Record<TdlLoginMode, string> = {
   qr: 'Scan the code with Telegram on your phone: Settings → Devices → Link Desktop Device.',
-  code: 'Enter your phone number, then the code Telegram sends you.',
+  code: 'Two steps: your phone number first, then the code Telegram sends to your Telegram app.',
   desktop:
     'Reuse the account of Telegram Desktop (the telegram.org app). The Mac App Store version of Telegram cannot be imported: use the QR code instead.'
 }
 
 const PROMPTS = {
-  phone: { label: 'Phone number', hint: 'With the country code, like +1 555 0100', type: 'tel' },
-  code: { label: 'Login code', hint: 'The code Telegram sent you', type: 'text' },
-  password: { label: 'Two-step password', hint: 'Your Telegram cloud password', type: 'password' }
+  phone: {
+    label: 'Your phone number',
+    hint: '+98 912 000 0000',
+    type: 'tel',
+    help: 'Start with + and the country code. Telegram will send a code to your Telegram app.',
+    submit: 'Send code'
+  },
+  code: {
+    label: 'The code Telegram sent you',
+    hint: '12345',
+    type: 'text',
+    help: 'Open the Telegram app on your phone: the code is in the chat named "Telegram" (or comes by SMS).',
+    submit: 'Verify'
+  },
+  password: {
+    label: 'Your two-step password',
+    hint: 'Telegram cloud password',
+    type: 'password',
+    help: 'This is the extra password you set in Telegram, not the login code.',
+    submit: 'Sign in'
+  }
 } as const
+
+type PromptField = keyof typeof PROMPTS
+
+/** Persian and Arabic-Indic digits to 0-9. */
+function asciiDigits(text: string): string {
+  return text
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+}
+
+/** A reason this answer is probably a mistake, or null when it looks right. */
+function answerProblem(field: PromptField, value: string): string | null {
+  const text = asciiDigits(value.trim())
+  if (field === 'phone') {
+    if (!text.startsWith('+')) return 'Start with + and the country code, like +98.'
+    if (text.replace(/\D/g, '').length < 8) return 'That number looks too short.'
+  }
+  if (field === 'code') {
+    if (text.startsWith('+') || text.replace(/\D/g, '').length > 8) {
+      return 'That looks like a phone number. Enter the short code Telegram just sent you.'
+    }
+    if (/\D/.test(text.replace(/\s/g, ''))) return 'The code is digits only.'
+  }
+  return null
+}
+
+const STEPS: { field: PromptField; label: string }[] = [
+  { field: 'phone', label: 'Phone number' },
+  { field: 'code', label: 'Code' },
+  { field: 'password', label: 'Password' }
+]
+
+function Steps({
+  current,
+  sawPassword
+}: {
+  current: PromptField
+  sawPassword: boolean
+}): React.JSX.Element {
+  const steps = STEPS.filter((step) => step.field !== 'password' || sawPassword)
+  const index = steps.findIndex((step) => step.field === current)
+  return (
+    <ol className="flex items-center gap-2 text-[12px]" aria-label="Sign-in steps">
+      {steps.map((step, position) => {
+        const done = position < index
+        const active = position === index
+        return (
+          <li key={step.field} className="flex items-center gap-2">
+            <span
+              className={`flex size-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                done || active
+                  ? 'bg-[var(--accent,#8b7cf6)] text-white'
+                  : 'bg-[var(--surface-2,rgba(255,255,255,0.08))] text-muted-foreground'
+              }`}
+            >
+              {done ? <CircleCheck className="size-3.5" /> : position + 1}
+            </span>
+            <span className={active ? 'font-medium' : 'text-muted-foreground'}>{step.label}</span>
+            {position < steps.length - 1 && <span className="h-px w-5 bg-border" />}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
 
 function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const status = useTelegramStore((store) => store.status)
@@ -44,7 +127,10 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [mode, setMode] = useState<TdlLoginMode>(initialMode)
   const [running, setRunning] = useState(false)
   const [qr, setQr] = useState<string | null>(null)
-  const [prompt, setPrompt] = useState<keyof typeof PROMPTS | null>(null)
+  const [prompt, setPrompt] = useState<PromptField | null>(null)
+  const [submitted, setSubmitted] = useState<PromptField | null>(null)
+  const [sentTo, setSentTo] = useState('')
+  const [sawPassword, setSawPassword] = useState(false)
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [account, setAccount] = useState<string | null>(null)
@@ -63,6 +149,7 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         if (event.type === 'qr') setQr(event.ascii)
         else if (event.type === 'prompt') {
           setPrompt(event.field)
+          if (event.field === 'password') setSawPassword(true)
           setAnswer('')
         } else if (event.type === 'done') {
           setRunning(false)
@@ -95,6 +182,9 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     }
     setError(null)
     setQr(null)
+    setSubmitted(null)
+    setSentTo('')
+    setSawPassword(false)
     setPrompt(null)
     setRunning(true)
     starting.current = true
@@ -125,6 +215,9 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const submitAnswer = async (): Promise<void> => {
     if (!session.current || !answer) return
     const value = answer
+    if (prompt && answerProblem(prompt, value)) return
+    if (prompt === 'phone') setSentTo(asciiDigits(value).replace(/\D/g, '').slice(-4))
+    setSubmitted(prompt)
     setAnswer('')
     setPrompt(null)
     try {
@@ -261,36 +354,71 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 </div>,
                 document.body
               )}
+            {mode === 'code' && running && !qr && (prompt || submitted) && (
+              <Steps current={prompt ?? submitted ?? 'phone'} sawPassword={sawPassword} />
+            )}
             {prompt && (
               <form
-                className="flex flex-col gap-1.5"
+                className="flex flex-col gap-2 rounded-[10px] border-[0.5px] border-border bg-[var(--surface-2,rgba(255,255,255,0.04))] p-3"
                 onSubmit={(event) => {
                   event.preventDefault()
                   void submitAnswer()
                 }}
               >
-                <label className="text-[12.5px] font-medium" htmlFor="tdl-answer">
+                <label className="text-[13px] font-medium" htmlFor="tdl-answer">
                   {PROMPTS[prompt].label}
                 </label>
+                {prompt === 'code' && sentTo && (
+                  <div className="text-[12px] text-muted-foreground">
+                    Sent for the number ending in {sentTo}.
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Input
                     id="tdl-answer"
+                    key={prompt}
                     autoFocus
                     type={PROMPTS[prompt].type}
+                    inputMode={
+                      prompt === 'password' ? undefined : prompt === 'phone' ? 'tel' : 'numeric'
+                    }
                     value={answer}
                     onChange={(event) => setAnswer(event.target.value)}
                     placeholder={PROMPTS[prompt].hint}
-                    autoComplete="off"
-                    className="h-9 min-w-0 flex-1 rounded-[9px] text-[13px]"
+                    autoComplete={prompt === 'code' ? 'one-time-code' : 'off'}
+                    spellCheck={false}
+                    className={`h-10 min-w-0 flex-1 rounded-[9px] ${
+                      prompt === 'code'
+                        ? 'text-center font-mono text-[18px] tracking-[0.3em]'
+                        : 'text-[13px]'
+                    }`}
                   />
-                  <Button type="submit" disabled={!answer}>
-                    Next
+                  <Button type="submit" disabled={!answer || !!answerProblem(prompt, answer)}>
+                    {PROMPTS[prompt].submit}
                   </Button>
                 </div>
+                {answer && answerProblem(prompt, answer) ? (
+                  <div className="flex items-start gap-1.5 text-[12px] text-[var(--color-danger)]">
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    {answerProblem(prompt, answer)}
+                  </div>
+                ) : (
+                  <div className="text-[12px] leading-[1.5] text-muted-foreground">
+                    {PROMPTS[prompt].help}
+                  </div>
+                )}
               </form>
             )}
             {running && !qr && !prompt && (
-              <div className="text-[12.5px] text-muted-foreground">Waiting for Telegram…</div>
+              <div className="text-[12.5px] text-muted-foreground">
+                {submitted === 'phone'
+                  ? 'Asking Telegram to send you a code…'
+                  : submitted === 'code'
+                    ? 'Checking the code with Telegram…'
+                    : submitted === 'password'
+                      ? 'Signing in…'
+                      : 'Waiting for Telegram…'}
+              </div>
             )}
           </>
         )}
