@@ -10,7 +10,7 @@ const BLOCKS: Record<string, [boolean, boolean]> = {
 
 const QUIET_ZONE = 4
 
-export function qrModules(ascii: string): boolean[][] {
+function qrModules(ascii: string): boolean[][] {
   const lines = ascii.split('\n').filter((line) => line.length > 0)
   // The last line is a half-height padding row that is not part of the code.
   if (lines.length > 1 && /^▀+$/.test(lines[lines.length - 1])) lines.pop()
