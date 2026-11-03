@@ -1,6 +1,7 @@
 import type { TdlLoginEvent, TdlLoginMode } from '@shared/telegram'
 import { AlertTriangle, CircleCheck, FolderOpen } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store/useAppStore'
 import { useTelegramStore } from '../../store/useTelegramStore'
 import { describeError } from '../../utils/format'
@@ -248,15 +249,18 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 </div>
               </>
             )}
-            {qr && enlarged && (
-              <div
-                role="presentation"
-                className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-white"
-                onClick={() => setEnlarged(false)}
-              >
-                <TelegramQr ascii={qr} fit />
-              </div>
-            )}
+            {qr &&
+              enlarged &&
+              createPortal(
+                <div
+                  role="presentation"
+                  className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-white"
+                  onClick={() => setEnlarged(false)}
+                >
+                  <TelegramQr ascii={qr} fit />
+                </div>,
+                document.body
+              )}
             {prompt && (
               <form
                 className="flex flex-col gap-1.5"
