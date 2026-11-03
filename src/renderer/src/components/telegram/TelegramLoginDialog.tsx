@@ -50,6 +50,7 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const [desktopDir, setDesktopDir] = useState('')
   const [passcode, setPasscode] = useState('')
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [enlarged, setEnlarged] = useState(false)
   const session = useRef<string | null>(null)
   const starting = useRef(false)
 
@@ -233,7 +234,29 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 />
               </div>
             )}
-            {qr && <TelegramQr ascii={qr} />}
+            {qr && (
+              <>
+                <TelegramQr ascii={qr} />
+                <div className="flex flex-col items-center gap-1.5">
+                  <Button type="button" variant="secondary" onClick={() => setEnlarged(true)}>
+                    Enlarge for scanning
+                  </Button>
+                  <div className="text-center text-[12px] leading-[1.5] text-[var(--text-secondary)]">
+                    Telegram cannot read it? Press Stop, choose Phone number, and enter the code
+                    Telegram sends to your app.
+                  </div>
+                </div>
+              </>
+            )}
+            {qr && enlarged && (
+              <div
+                role="presentation"
+                className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-white"
+                onClick={() => setEnlarged(false)}
+              >
+                <TelegramQr ascii={qr} fit />
+              </div>
+            )}
             {prompt && (
               <form
                 className="flex flex-col gap-1.5"

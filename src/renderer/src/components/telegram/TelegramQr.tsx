@@ -9,7 +9,6 @@ const BLOCKS: Record<string, [boolean, boolean]> = {
 }
 
 const QUIET_ZONE = 4
-const MODULE_PX = 7
 
 function qrModules(ascii: string): boolean[][] {
   const lines = ascii.split('\n').filter((line) => line.length > 0)
@@ -43,11 +42,21 @@ function qrModules(ascii: string): boolean[][] {
   return rows.slice(minRow, maxRow + 1).map((row) => row.slice(minCol, maxCol + 1))
 }
 
-export function TelegramQr({ ascii }: { ascii: string }): React.JSX.Element | null {
+export function TelegramQr({
+  ascii,
+  fit
+}: {
+  ascii: string
+  /** Fill most of the window instead of the normal size. */
+  fit?: boolean
+}): React.JSX.Element | null {
   const modules = qrModules(ascii)
   if (modules.length === 0) return null
   const size = modules.length + QUIET_ZONE * 2
   const width = (modules[0]?.length ?? 0) + QUIET_ZONE * 2
+  const modulePx = fit
+    ? Math.max(8, Math.floor((Math.min(window.innerWidth, window.innerHeight) * 0.85) / size))
+    : 8
   let path = ''
   modules.forEach((row, y) =>
     row.forEach((dark, x) => {
@@ -61,8 +70,8 @@ export function TelegramQr({ ascii }: { ascii: string }): React.JSX.Element | nu
       viewBox={`0 0 ${width} ${size}`}
       shapeRendering="crispEdges"
       // A whole number of pixels per module keeps every square the same width for a phone camera.
-      width={width * MODULE_PX}
-      height={size * MODULE_PX}
+      width={width * modulePx}
+      height={size * modulePx}
       className="max-w-full self-center rounded-[9px] bg-white"
     >
       <rect width={width} height={size} fill="#fff" />
