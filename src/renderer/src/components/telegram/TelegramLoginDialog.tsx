@@ -24,7 +24,8 @@ export function TelegramLoginDialog(): React.JSX.Element {
 const MODE_HELP: Record<TdlLoginMode, string> = {
   qr: 'Scan the code with Telegram on your phone: Settings → Devices → Link Desktop Device.',
   code: 'Enter your phone number, then the code Telegram sends you.',
-  desktop: 'Reuse the account that is signed in to Telegram Desktop on this computer.'
+  desktop:
+    'Reuse the account of Telegram Desktop (the telegram.org app). The Mac App Store version of Telegram cannot be imported: use the QR code instead.'
 }
 
 const PROMPTS = {
@@ -83,6 +84,12 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   }, [refresh])
 
   const start = async (): Promise<void> => {
+    if (mode === 'desktop' && /\.app\/?$/i.test(desktopDir.trim())) {
+      setError(
+        'That is the Telegram app itself. Pick the "Telegram Desktop" data folder, or sign in with the QR code.'
+      )
+      return
+    }
     setError(null)
     setQr(null)
     setPrompt(null)
