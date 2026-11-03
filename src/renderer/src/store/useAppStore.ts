@@ -1,6 +1,7 @@
 import { connectionsOnly, isVpn } from '@shared/networks'
 import type { FileKind } from '../utils/fileKind'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
+import type { TgMediaKind } from '@shared/telegram'
 import type {
   AppSettings,
   DownloadState,
@@ -116,7 +117,11 @@ function saveTable(layout: TableLayout): void {
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /** What the window shows: the list of downloads, or one download. */
-export type View = { name: 'list' } | { name: 'download'; id: string }
+export type View =
+  | { name: 'list' }
+  | { name: 'download'; id: string }
+  /** The Telegram section; `kind` narrows it to one media group. */
+  | { name: 'telegram'; kind: TgMediaKind | null }
 
 interface AppStore {
   /** The connections the UI lists: never a VPN tunnel (those are one separate layer). */

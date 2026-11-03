@@ -1,7 +1,8 @@
 import { cn } from 'cn'
-import { Archive, EyeOff, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Archive, EyeOff, PanelLeftClose, PanelLeftOpen, Send } from 'lucide-react'
 import { useState } from 'react'
 import { useAppStore, type DownloadFilter } from '../../store/useAppStore'
+import { isActiveJob, useTelegramStore } from '../../store/useTelegramStore'
 import type { ListCounts } from '../../utils/downloadList'
 import { FILE_KINDS, type FileKind } from '../../utils/fileKind'
 import { STATUSES } from './statusEntries'
@@ -18,7 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { FileKindIcon } from './FileKindIcon'
 
-function Item({
+export function Item({
   active,
   onClick,
   count,
@@ -29,18 +30,19 @@ function Item({
 }: {
   active: boolean
   onClick: () => void
-  count: number
+  /** Left off, an entry shows no number. */
+  count?: number
   title?: string
   label: string
   collapsed: boolean
   children: React.ReactNode
 }): React.JSX.Element {
-  const hint = collapsed ? `${label} (${count})` : title
+  const hint = collapsed ? (count === undefined ? label : `${label} (${count})`) : title
   const button = (
     <button
       type="button"
       aria-current={active ? 'true' : undefined}
-      aria-label={collapsed ? `${label}, ${count}` : undefined}
+      aria-label={collapsed ? (count === undefined ? label : `${label}, ${count}`) : undefined}
       onClick={onClick}
       className={cn(
         // One weight in every state: a bolder active item is wider, so its row reflowed.
@@ -53,7 +55,7 @@ function Item({
       )}
     >
       {children}
-      {!collapsed && (
+      {!collapsed && count !== undefined && (
         <span
           className={cn(
             'font-mono text-[11px] tabular-nums',
@@ -74,7 +76,7 @@ function Item({
   )
 }
 
-const labelClass =
+export const labelClass =
   'px-2 pt-3 pb-1 font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
 
 /** Categories down the left: by status, and by kind of file. Each filters the table. */
@@ -100,6 +102,10 @@ export function DownloadsSidebar({
   )
   const [hideOpen, setHideOpen] = useState(false)
   const hideSidebar = useAppStore((store) => store.hideSidebar)
+  const setView = useAppStore((store) => store.setView)
+  const telegramActive = useTelegramStore(
+    (store) => Object.values(store.jobs).filter(isActiveJob).length
+  )
   const toggle = (): void => {
     const next = !collapsed
     setCollapsed(next)
@@ -200,6 +206,18 @@ export function DownloadsSidebar({
             {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
           </Item>
         ))}
+        {section('Telegram')}
+        <Item
+          label="Telegram"
+          collapsed={collapsed}
+          active={false}
+          count={telegramActive}
+          title="Downloads from Telegram chats and links"
+          onClick={() => setView({ name: 'telegram', kind: null })}
+        >
+          <Send aria-hidden className="size-4 shrink-0 text-[var(--text-secondary)]" />
+          {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
+        </Item>
         <div className="flex-1" />
         {/* Always in place, only hidden when there is nothing to clear: the list above would
           otherwise move (or gain a scrollbar) when the first download finishes. */}

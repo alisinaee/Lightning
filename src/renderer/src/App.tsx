@@ -10,15 +10,21 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { UpdateDialog } from './components/UpdateDialog'
+import { TelegramAddDialog } from './components/telegram/TelegramAddDialog'
+import { TelegramExportDialog } from './components/telegram/TelegramExportDialog'
+import { TelegramLoginDialog } from './components/telegram/TelegramLoginDialog'
 import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useLabEvents } from './hooks/useLabEvents'
+import { useTelegramEvents } from './hooks/useTelegramEvents'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
 import { DownloadingScreen } from './screens/DownloadingScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
+import { TelegramScreen } from './screens/TelegramScreen'
+import { useTelegramStore } from './store/useTelegramStore'
 import { useLogsStore } from './store/useLogsStore'
 import { useAppStore } from './store/useAppStore'
 
@@ -56,6 +62,8 @@ function CurrentScreen({ onOpenSettings }: { onOpenSettings: () => void }): Reac
     if (view.name !== 'download') return null
     return store.downloads[view.id] ?? store.history.find((entry) => entry.id === view.id) ?? null
   })
+  const telegram = useAppStore((store) => store.view.name === 'telegram')
+  if (telegram) return <TelegramScreen onOpenSettings={onOpenSettings} />
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
   return shown && !cancelled ? (
     renderDownload(shown)
@@ -70,6 +78,7 @@ function App(): React.JSX.Element {
   useNewDownloadShortcuts()
   useNetworkEvents()
   useLabEvents()
+  useTelegramEvents()
 
   const checkForUpdate = useAppStore((store) => store.checkForUpdate)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -100,7 +109,20 @@ function App(): React.JSX.Element {
           seed = undefined
         }
         store.openMultiLinks(seed)
-      } else if (command === 'settings') setSettingsOpen(true)
+      } else if (command === 'telegram-links') {
+        // From the clipboard offer: the Telegram message links that were copied.
+        let links: string[] = []
+        try {
+          const parsed: unknown = argument ? JSON.parse(argument) : null
+          const found = (parsed as { links?: unknown } | null)?.links
+          if (Array.isArray(found)) links = found.filter((link) => typeof link === 'string')
+        } catch {
+          links = []
+        }
+        store.setView({ name: 'telegram', kind: null })
+        useTelegramStore.getState().openAdd(links)
+      } else if (command === 'open-telegram') store.setView({ name: 'telegram', kind: null })
+      else if (command === 'settings') setSettingsOpen(true)
       else if (command === 'open-download' && argument)
         store.setView({ name: 'download', id: argument })
       else if (command === 'check-update') {
@@ -150,6 +172,9 @@ function App(): React.JSX.Element {
         <NewDownloadDialog />
         <MultiLinkDialog />
         <GroupDialog />
+        <TelegramAddDialog />
+        <TelegramExportDialog />
+        <TelegramLoginDialog />
         <UpdateDialog />
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         <NetworkBindingDialog />

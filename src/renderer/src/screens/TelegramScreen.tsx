@@ -1,0 +1,505 @@
+import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
+import {
+  ListPlus,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  Send,
+  Settings,
+  TriangleAlert,
+  User,
+  X
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { TelegramItemRow } from '../components/telegram/TelegramItemRow'
+import { TelegramJobGroup } from '../components/telegram/TelegramJobGroup'
+import { TelegramSidebar } from '../components/telegram/TelegramSidebar'
+import { columnsFor, jobTitle, columnsContext } from '../components/telegram/telegramRowInfo'
+import { useAppStore } from '../store/useAppStore'
+import {
+  isActiveJob,
+  isFailedJob,
+  isFinishedJob,
+  useTelegramStore,
+  type TelegramJobFilter
+} from '../store/useTelegramStore'
+
+interface Entry {
+  job: TdlJob
+  items: TdlItem[]
+  group: boolean
+}
+
+const EMPTY_FILTERED: Record<TelegramJobFilter, string> = {
+  all: 'Nothing matches',
+  active: 'No Telegram downloads in progress',
+  finished: 'No finished Telegram downloads',
+  failed: 'No Telegram downloads need attention'
+}
+
+const matchesJob = (job: TdlJob, filter: TelegramJobFilter): boolean =>
+  filter === 'all' ||
+  (filter === 'active' && isActiveJob(job)) ||
+  (filter === 'finished' && isFinishedJob(job)) ||
+  (filter === 'failed' && isFailedJob(job))
+
+export function TelegramScreen({
+  onOpenSettings
+}: {
+  onOpenSettings: () => void
+}): React.JSX.Element {
+  const view = useAppStore((store) => store.view)
+  const setView = useAppStore((store) => store.setView)
+  const kind: TgMediaKind | null = view.name === 'telegram' ? view.kind : null
+  const jobs = useTelegramStore((store) => store.jobs)
+  const status = useTelegramStore((store) => store.status)
+  const jobFilter = useTelegramStore((store) => store.jobFilter)
+  const setJobFilter = useTelegramStore((store) => store.setJobFilter)
+  const search = useTelegramStore((store) => store.search)
+  const setSearch = useTelegramStore((store) => store.setSearch)
+  const selected = useTelegramStore((store) => store.selected)
+  const setSelected = useTelegramStore((store) => store.setSelected)
+  const expanded = useTelegramStore((store) => store.expanded)
+  const toggleExpanded = useTelegramStore((store) => store.toggleExpanded)
+  const openAdd = useTelegramStore((store) => store.openAdd)
+  const openExport = useTelegramStore((store) => store.openExport)
+  const openLogin = useTelegramStore((store) => store.openLogin)
+
+  const [width, setWidth] = useState(1000)
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const element = listRef.current
+    if (!element) return
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [status?.loggedIn, status?.binary])
+  const columns = useMemo(() => columnsFor(width), [width])
+
+  const allJobs = useMemo(
+    () => Object.values(jobs).sort((a, b) => b.createdAt - a.createdAt),
+    [jobs]
+  )
+  const needle = search.trim().toLowerCase()
+
+  const kindCounts = useMemo(() => {
+    const counts: Record<TgMediaKind | 'all', number> = {
+      all: 0,
+      video: 0,
+      photo: 0,
+      audio: 0,
+      document: 0,
+      other: 0
+    }
+    for (const job of allJobs) {
+      for (const item of job.items) {
+        counts.all++
+        counts[item.media]++
+      }
+    }
+    return counts
+  }, [allJobs])
+
+  const jobCounts = useMemo(
+    () => ({
+      active: allJobs.filter(isActiveJob).length,
+      finished: allJobs.filter(isFinishedJob).length,
+      failed: allJobs.filter(isFailedJob).length
+    }),
+    [allJobs]
+  )
+
+  const entries = useMemo(() => {
+    const list: Entry[] = []
+    for (const job of allJobs) {
+      if (!matchesJob(job, jobFilter)) continue
+      const items = job.items.filter(
+        (item) =>
+          (kind === null || item.media === kind) &&
+          (!needle ||
+            item.fileName.toLowerCase().includes(needle) ||
+            jobTitle(job).toLowerCase().includes(needle))
+      )
+      const narrowed = kind !== null || needle !== ''
+      if (items.length === 0 && (narrowed || job.items.length > 0)) continue
+      list.push({ job, items, group: job.items.length > 1 || job.source.type === 'export' })
+    }
+    return list
+  }, [allJobs, jobFilter, kind, needle])
+
+  const chosen = allJobs.filter((job) => selected.has(job.id))
+  const running = allJobs.filter((job) => job.status === 'running' || job.status === 'queued')
+  const paused = allJobs.filter((job) => job.status === 'paused')
+  const pausing = running.length > 0
+  const act = (list: TdlJob[], call: (id: string) => Promise<void>): void => {
+    for (const job of list) void call(job.id).catch(() => {})
+  }
+  const pausable = chosen.filter((job) => job.status === 'running' || job.status === 'queued')
+  const resumable = chosen.filter((job) => job.status === 'paused')
+  const retryable = chosen.filter((job) => isFailedJob(job) && !isActiveJob(job))
+  const removeChosen = (): void => {
+    for (const job of chosen) {
+      void window.lightning
+        .tdlRemoveJob(job.id)
+        .then(() => useTelegramStore.getState().removeJobLocal(job.id))
+        .catch(() => {})
+    }
+  }
+
+  const setKind = (next: TgMediaKind | null): void => {
+    setView({ name: 'telegram', kind: next })
+    setSelected(new Set())
+  }
+  const select = (id: string, on: boolean): void => {
+    const next = new Set(selected)
+    if (on) next.add(id)
+    else next.delete(id)
+    setSelected(next)
+  }
+
+  const ready = status?.binary && status.loggedIn
+  const accountLabel = status?.loggedIn ? (status.account ?? 'Signed in') : 'Sign in'
+
+  return (
+    <div className="flex h-full bg-background">
+      <TelegramSidebar
+        kind={kind}
+        onKind={setKind}
+        kindCounts={kindCounts}
+        jobFilter={jobFilter}
+        onJobFilter={setJobFilter}
+        jobCounts={jobCounts}
+      />
+      <div className="@container flex min-w-0 flex-1 flex-col">
+        {chosen.length === 0 ? (
+          <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
+            <h1 className="sr-only">Telegram</h1>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="secondary"
+                    aria-label={pausing ? 'Pause all' : 'Resume all'}
+                    disabled={pausing ? false : paused.length === 0}
+                    onClick={() =>
+                      pausing
+                        ? act(running, window.lightning.tdlPauseJob)
+                        : act(paused, window.lightning.tdlResumeJob)
+                    }
+                  >
+                    {pausing ? (
+                      <Pause className="fill-current" />
+                    ) : (
+                      <Play className="fill-current" />
+                    )}
+                  </Button>
+                }
+              />
+              <TooltipContent>{pausing ? 'Pause all' : 'Resume all'}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button type="button" disabled={!ready} onClick={() => openAdd()}>
+                    <Plus data-icon="inline-start" />
+                    Add links
+                  </Button>
+                }
+              />
+              <TooltipContent>Download files from Telegram message links</TooltipContent>
+            </Tooltip>
+            <Button type="button" variant="secondary" disabled={!ready} onClick={openExport}>
+              <ListPlus data-icon="inline-start" />
+              Export chat…
+            </Button>
+            <div className="flex-1" />
+            <div className="relative w-[260px] min-w-[140px] shrink">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                aria-label="Search Telegram downloads"
+                placeholder="Search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearch('')
+                    event.currentTarget.blur()
+                  }
+                }}
+                className="h-8 pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
+              />
+            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!status?.binary}
+                    onClick={() => openLogin()}
+                    aria-label={`Telegram account: ${accountLabel}`}
+                    className="max-w-[160px]"
+                  >
+                    <User data-icon="inline-start" />
+                    <span className="truncate">{accountLabel}</span>
+                  </Button>
+                }
+              />
+              <TooltipContent>
+                {status?.loggedIn ? 'Telegram account' : 'Sign in to Telegram'}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Settings"
+                    onClick={onOpenSettings}
+                  >
+                    <Settings />
+                  </Button>
+                }
+              />
+              <TooltipContent>Settings</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
+          <div
+            role="toolbar"
+            aria-label="Selected jobs"
+            className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
+          >
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Deselect all"
+              onClick={() => setSelected(new Set())}
+            >
+              <X />
+            </Button>
+            <span className="shrink-0 text-[13px] font-semibold whitespace-nowrap">
+              {chosen.length} selected
+            </span>
+            <div className="flex-1" />
+            {pausable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => act(pausable, window.lightning.tdlPauseJob)}
+              >
+                Pause ({pausable.length})
+              </Button>
+            )}
+            {resumable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => act(resumable, window.lightning.tdlResumeJob)}
+              >
+                Resume ({resumable.length})
+              </Button>
+            )}
+            {retryable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => act(retryable, window.lightning.tdlRetryJob)}
+              >
+                Retry ({retryable.length})
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              title="Takes them off the list; the files stay on your computer"
+              onClick={removeChosen}
+            >
+              Remove from list ({chosen.length})
+            </Button>
+          </div>
+        )}
+
+        {status === null ? (
+          <div className="flex-1" />
+        ) : !status.binary ? (
+          <div className="p-4">
+            <Alert variant="destructive">
+              <TriangleAlert />
+              <AlertTitle>The Telegram downloader is missing</AlertTitle>
+              <AlertDescription>
+                Lightning couldn’t start its bundled tdl program, so Telegram downloads are
+                unavailable. Reinstalling Lightning restores it.
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : !status.loggedIn ? (
+          <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
+            <div className="flex size-14 items-center justify-center rounded-[14px] bg-primary/10 text-primary">
+              <Send aria-hidden className="size-7" />
+            </div>
+            <div className="font-sans text-[16px] leading-[1.2] font-bold">Sign in to Telegram</div>
+            <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+              Lightning downloads the files in messages you can see in your Telegram account. Choose
+              how to sign in.
+            </div>
+            <div className="mt-1 flex flex-wrap justify-center gap-2">
+              <Button type="button" onClick={() => openLogin('qr')}>
+                QR code
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => openLogin('code')}>
+                Phone number
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => openLogin('desktop')}>
+                Telegram Desktop
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <columnsContext.Provider value={columns}>
+            <div
+              ref={listRef}
+              role="table"
+              aria-label="Telegram downloads"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              {entries.length > 0 && (
+                <div
+                  role="row"
+                  style={{ gridTemplateColumns: columns.template }}
+                  className="sticky top-0 z-10 grid h-8 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium text-muted-foreground"
+                >
+                  <div role="columnheader" className="flex items-center justify-center">
+                    <Checkbox
+                      aria-label="Select all"
+                      checked={entries.length > 0 && entries.every((e) => selected.has(e.job.id))}
+                      onCheckedChange={(on) =>
+                        setSelected(on ? new Set(entries.map((entry) => entry.job.id)) : new Set())
+                      }
+                    />
+                  </div>
+                  <div role="columnheader" className="px-2">
+                    Name
+                  </div>
+                  <div role="columnheader" className="px-2 text-right">
+                    Size
+                  </div>
+                  <div role="columnheader" className="px-2">
+                    Status
+                  </div>
+                  <div role="columnheader" className="px-2 text-right">
+                    Speed
+                  </div>
+                  {columns.eta && (
+                    <div role="columnheader" className="px-2 text-right">
+                      Time left
+                    </div>
+                  )}
+                  {columns.added && (
+                    <div role="columnheader" className="px-2">
+                      Added
+                    </div>
+                  )}
+                  <div role="columnheader" />
+                </div>
+              )}
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {entries.length === 0 ? (
+                  <EmptyList
+                    nothingAtAll={allJobs.length === 0}
+                    message={EMPTY_FILTERED[jobFilter]}
+                    onAdd={() => openAdd()}
+                    onExport={openExport}
+                  />
+                ) : (
+                  entries.map(({ job, items, group }) =>
+                    group ? (
+                      <TelegramJobGroup
+                        key={job.id}
+                        job={job}
+                        items={items}
+                        open={expanded.has(job.id)}
+                        selected={selected.has(job.id)}
+                        onToggle={() => toggleExpanded(job.id)}
+                        onSelect={(on) => select(job.id, on)}
+                      />
+                    ) : (
+                      <TelegramItemRow
+                        key={job.id}
+                        job={job}
+                        item={items[0]}
+                        selected={selected.has(job.id)}
+                        onSelect={(on) => select(job.id, on)}
+                      />
+                    )
+                  )
+                )}
+              </div>
+            </div>
+          </columnsContext.Provider>
+        )}
+        <div className="shrink-0 border-t-[0.5px] border-border px-3 py-1.5 text-[11.5px] text-muted-foreground">
+          Telegram downloads use the default connection.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyList({
+  nothingAtAll,
+  message,
+  onAdd,
+  onExport
+}: {
+  nothingAtAll: boolean
+  message: string
+  onAdd: () => void
+  onExport: () => void
+}): React.JSX.Element {
+  if (!nothingAtAll) {
+    return <div className="px-5 pt-16 text-center text-[13px] text-muted-foreground">{message}</div>
+  }
+  return (
+    <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
+      <div className="flex size-14 items-center justify-center rounded-[14px] bg-primary/10 text-primary">
+        <Send aria-hidden className="size-7" />
+      </div>
+      <div className="font-sans text-[16px] leading-[1.2] font-bold">No Telegram downloads yet</div>
+      <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
+        Copy a link to a Telegram message and Lightning offers to download it, or add links and
+        whole chats here.
+      </div>
+      <div className="mt-1 flex gap-2">
+        <Button type="button" onClick={onAdd}>
+          <Plus data-icon="inline-start" />
+          Add links
+        </Button>
+        <Button type="button" variant="secondary" onClick={onExport}>
+          <ListPlus data-icon="inline-start" />
+          Export chat…
+        </Button>
+      </div>
+    </div>
+  )
+}
