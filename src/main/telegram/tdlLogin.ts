@@ -60,9 +60,25 @@ interface Session {
   qr: string[]
   /** A QR row that arrived cut off by the end of a chunk. */
   qrTail: string
+  /** What the last prompt asked for, so the answer can be tidied before tdl sees it. */
+  field: 'phone' | 'code' | 'password' | null
   qrTimer?: NodeJS.Timeout
   finished: boolean
   release: () => void
+}
+
+/** Persian and Arabic-Indic digits to 0-9, which is all Telegram accepts. */
+function asciiDigits(text: string): string {
+  return text
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+}
+
+/** A code is digits only; a phone number keeps its leading + and loses spaces and dashes. */
+function tidyAnswer(field: Session['field'], value: string): string {
+  if (field === 'code') return asciiDigits(value).replace(/\D/g, '')
+  if (field === 'phone') return asciiDigits(value).replace(/[^\d+]/g, '')
+  return value
 }
 
 function mask(phone: string): string {
@@ -104,6 +120,7 @@ export class TdlLogin {
       phone: '',
       qr: [],
       qrTail: '',
+      field: null,
       finished: false,
       release
     }
@@ -129,8 +146,10 @@ export class TdlLogin {
     }
     session.buffer = ''
     session.prompted = false
-    // Never logged: it is a phone number, a code or a password.
-    session.process.write(`${value}\r`)
+    const tidy = tidyAnswer(session.field, value)
+    // The text itself is never logged: it is a phone number, a code or a password.
+    log.info('telegram', `login answer sent (${session.field ?? 'unknown'}, ${tidy.length} chars)`)
+    session.process.write(`${tidy}\r`)
   }
 
   cancel(sessionId: string): void {
@@ -186,6 +205,7 @@ export class TdlLogin {
           : null
     if (!field) return
     session.prompted = true
+    session.field = field
     session.emit({ type: 'prompt', field })
   }
 
