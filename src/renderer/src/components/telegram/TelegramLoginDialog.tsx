@@ -8,6 +8,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
+import { TelegramQr } from './TelegramQr'
 
 export function TelegramLoginDialog(): React.JSX.Element {
   const open = useTelegramStore((store) => store.loginOpen)
@@ -232,14 +233,7 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 />
               </div>
             )}
-            {qr && (
-              <pre
-                aria-label="Login QR code"
-                className="self-center overflow-auto rounded-[9px] bg-white p-3 font-mono text-[8px] leading-[1] text-black"
-              >
-                {qr}
-              </pre>
-            )}
+            {qr && <TelegramQr ascii={qr} />}
             {prompt && (
               <form
                 className="flex flex-col gap-1.5"
