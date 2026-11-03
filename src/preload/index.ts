@@ -3,6 +3,7 @@ import { IpcChannels } from '../shared/ipc-channels'
 import type { IpcContract } from '../shared/ipc-contract'
 import type { LabEvent } from '../shared/lab'
 import type { ScheduleStatus } from '../shared/schedule'
+import type { TdlJob, TdlLoginEvent } from '../shared/telegram'
 import type {
   AppSettings,
   DnsConfig,
@@ -34,6 +35,25 @@ const lightningApi = {
   deviceBindingSupported: () => invoke('deviceBindingSupported'),
   openNetworkSettings: () => invoke('openNetworkSettings'),
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
+  tdlStatus: () => invoke('tdlStatus'),
+  tdlLoginStart: (...args: IpcContract['tdlLoginStart']['args']) =>
+    invoke('tdlLoginStart', ...args),
+  tdlLoginAnswer: (sessionId: string, value: string) => invoke('tdlLoginAnswer', sessionId, value),
+  tdlLoginCancel: (sessionId: string) => invoke('tdlLoginCancel', sessionId),
+  tdlLogout: () => invoke('tdlLogout'),
+  tdlListChats: () => invoke('tdlListChats'),
+  tdlExportPreview: (input: IpcContract['tdlExportPreview']['args'][0]) =>
+    invoke('tdlExportPreview', input),
+  tdlStartJob: (input: IpcContract['tdlStartJob']['args'][0]) => invoke('tdlStartJob', input),
+  tdlListJobs: () => invoke('tdlListJobs'),
+  tdlPauseJob: (id: string) => invoke('tdlPauseJob', id),
+  tdlResumeJob: (id: string) => invoke('tdlResumeJob', id),
+  tdlCancelJob: (id: string) => invoke('tdlCancelJob', id),
+  tdlRetryJob: (id: string) => invoke('tdlRetryJob', id),
+  tdlRemoveJob: (id: string, options?: { trashFiles?: boolean }) =>
+    invoke('tdlRemoveJob', id, options),
+  tdlRevealItem: (jobId: string, key: string) => invoke('tdlRevealItem', jobId, key),
+  tdlOpenItem: (jobId: string, key: string) => invoke('tdlOpenItem', jobId, key),
   getDns: () => invoke('getDns'),
   testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>
     invoke('testDns', url, currentDnsId, extras),
@@ -129,6 +149,21 @@ const lightningApi = {
       callback(command, argument)
     ipcRenderer.on(IpcChannels.appCommand, listener)
     return () => ipcRenderer.removeListener(IpcChannels.appCommand, listener)
+  },
+
+  /** A Telegram job changed (throttled in main); the whole job is sent. */
+  onTdlJobUpdated: (callback: (job: TdlJob) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, job: TdlJob): void => callback(job)
+    ipcRenderer.on(IpcChannels.tdlJobUpdated, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.tdlJobUpdated, listener)
+  },
+
+  /** What a Telegram sign-in needs or has reached. */
+  onTdlLoginEvent: (callback: (sessionId: string, event: TdlLoginEvent) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, sessionId: string, event: TdlLoginEvent): void =>
+      callback(sessionId, event)
+    ipcRenderer.on(IpcChannels.tdlLoginEvent, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.tdlLoginEvent, listener)
   },
 
   /** The schedule opened or closed (or its cap changed). */

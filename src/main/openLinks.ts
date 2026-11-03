@@ -54,3 +54,12 @@ export function takePendingLink(): PendingLink | null {
   pending = null
   return link
 }
+
+/** Brings the window forward and hands it Telegram message links to fill the Add dialog with. */
+export function offerTelegram(links: string[], window: BrowserWindow | null): void {
+  if (!window || window.isDestroyed()) return
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+  window.webContents.send(IpcChannels.appCommand, 'telegram-links', JSON.stringify({ links }))
+}

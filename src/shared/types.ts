@@ -462,6 +462,24 @@ export interface AppPrefs {
   proxyHttps?: string
   proxyFtp?: string
   proxySocks?: string
+  /** Offer to download Telegram message links when they are copied (needs a signed-in account). */
+  telegramWatchClipboard?: boolean
+  /** Connections a Telegram download uses (tdl -t), 1 to 16. */
+  telegramThreads?: number
+  /** Files downloaded at once in a Telegram job (tdl -l), 1 to 8. */
+  telegramParallel?: number
+  /** Skip files already in the folder with the same name and size. */
+  telegramSkipSame?: boolean
+  /** Move a finished file into Videos, Photos, Audio, Documents or Other inside the folder. */
+  telegramSortByKind?: boolean
+  /** Download an album's files together. */
+  telegramGroupAlbums?: boolean
+  /** Use Telegram's takeout session (gentler limits for big exports). */
+  telegramTakeout?: boolean
+  /** Pass the manual proxy above to tdl. */
+  telegramUseProxy?: boolean
+  /** tdl's file name template; empty is tdl's own. */
+  telegramTemplate?: string
 }
 
 /** Every choice, with its default filled in: what the app reads. */
@@ -498,7 +516,16 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   proxyHttp: '',
   proxyHttps: '',
   proxyFtp: '',
-  proxySocks: ''
+  proxySocks: '',
+  telegramWatchClipboard: true,
+  telegramThreads: 4,
+  telegramParallel: 2,
+  telegramSkipSame: true,
+  telegramSortByKind: false,
+  telegramGroupAlbums: true,
+  telegramTakeout: false,
+  telegramUseProxy: true,
+  telegramTemplate: ''
 }
 
 /** What app-settings.json holds, and what the renderer sends to change it (merged over the saved
@@ -509,6 +536,8 @@ export interface AppSettings {
   prefs?: AppPrefs
   /** The last destination folder picked. */
   destinationDir?: string
+  /** Where Telegram downloads go; unset: Lightning Telegram in Downloads. */
+  telegramDir?: string
   /** User customizations (name/color) per network interface id. */
   networkPreferences?: NetworkPreferences
   /** How many downloads run at once; the rest wait in the queue. */
@@ -547,6 +576,8 @@ export interface InitialState {
   useVpn: boolean
   /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
+  /** The saved Telegram folder, if one was chosen; otherwise Lightning Telegram in downloadsDir. */
+  telegramDir?: string
   version: string
   prefs: ResolvedPrefs
   schedule: ScheduleSettings

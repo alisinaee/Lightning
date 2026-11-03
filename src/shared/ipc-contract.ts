@@ -1,5 +1,6 @@
 import type { DuplicateMatch, DuplicateOptions } from './duplicates'
 import type { DnsTestResult } from './dnsRecommend'
+import type { TdlChat, TdlItem, TdlJob, TdlLoginMode, TdlRangeType, TdlStatus } from './telegram'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
@@ -24,7 +25,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged and linkReceived) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged, linkReceived, tdlJobUpdated and tdlLoginEvent) — one source of truth for
  * both lightningApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -161,4 +162,37 @@ export interface IpcContract {
   labVerify: { args: [planId: string]; result: LabPlanRun }
   /** Stops the running plan (it cleans up first) and brings the real networks back. */
   labStop: { args: []; result: void }
+  /** Telegram downloads (main/telegram): the bundled tdl program and whether it is signed in. */
+  tdlStatus: { args: []; result: TdlStatus }
+  /** Starts a sign-in; the sessionId names its tdlLoginEvent pushes. */
+  tdlLoginStart: {
+    args: [mode: TdlLoginMode, options?: { desktopDir?: string; passcode?: string }]
+    result: string
+  }
+  /** The phone number, code or password a sign-in asked for. */
+  tdlLoginAnswer: { args: [sessionId: string, value: string]; result: void }
+  tdlLoginCancel: { args: [sessionId: string]; result: void }
+  /** Signs out and deletes tdl's stored session. */
+  tdlLogout: { args: []; result: void }
+  tdlListChats: { args: []; result: TdlChat[] }
+  /** The messages of a chat range that hold files, to review before they are downloaded. */
+  tdlExportPreview: {
+    args: [input: { chat: string; rangeType: TdlRangeType; range: string; filter?: string }]
+    result: { file: string; items: TdlItem[] }
+  }
+  /** Queues a job from links, or from an export file (all of it, or only `keys`). */
+  tdlStartJob: {
+    args: [input: { links?: string[]; exportFile?: string; keys?: string[]; dir?: string }]
+    result: string
+  }
+  tdlListJobs: { args: []; result: TdlJob[] }
+  tdlPauseJob: { args: [id: string]; result: void }
+  tdlResumeJob: { args: [id: string]; result: void }
+  tdlCancelJob: { args: [id: string]; result: void }
+  tdlRetryJob: { args: [id: string]; result: void }
+  /** Forgets a job (cancelling one under way); its files stay, unless `trashFiles`. */
+  tdlRemoveJob: { args: [id: string, options?: { trashFiles?: boolean }]; result: void }
+  /** Shows / opens one item's file; false when it is not there. */
+  tdlRevealItem: { args: [jobId: string, key: string]; result: boolean }
+  tdlOpenItem: { args: [jobId: string, key: string]; result: boolean }
 }

@@ -84,7 +84,10 @@ export async function applyBehavior(settings: AppSettings): Promise<void> {
   behavior.closeHides = prefs.closeToBackground
   setTrayConfig(prefs.statusBar, settings.networkPreferences, prefs.accent)
   applyLoginItem(prefs.openAtLogin)
-  clipboardWatcher?.setEnabled(prefs.watchClipboard)
+  clipboardWatcher?.setEnabled({
+    files: prefs.watchClipboard,
+    telegram: prefs.telegramWatchClipboard
+  })
   browserFeatures = {
     capture: prefs.browserCapture,
     menuDownload: prefs.browserMenuDownload,

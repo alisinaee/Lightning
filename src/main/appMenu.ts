@@ -16,6 +16,10 @@ export type AppCommand =
   | 'settings'
   | 'check-update'
   | 'logs'
+  /** Opens the Telegram section. */
+  | 'open-telegram'
+  /** Opens the Add dialog of the Telegram section; the links go with it as JSON. */
+  | 'telegram-links'
   /** Opens one download's page; the id goes with it. */
   | 'open-download'
 
@@ -78,6 +82,7 @@ export function installAppMenu(getWindow: () => BrowserWindow | null): void {
           accelerator: 'CommandOrControl+Shift+N',
           click: () => send(getWindow, 'several-links')
         },
+        { label: 'Telegram', click: () => send(getWindow, 'open-telegram') },
         { type: 'separator' },
         { label: 'Pause All', click: () => send(getWindow, 'pause-all') },
         { label: 'Resume All', click: () => send(getWindow, 'resume-all') },

@@ -114,6 +114,9 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (typeof destinationDir === 'string' && isAbsolute(destinationDir)) {
     settings.destinationDir = destinationDir
   }
+  if (typeof parsed.telegramDir === 'string' && isAbsolute(parsed.telegramDir)) {
+    settings.telegramDir = parsed.telegramDir
+  }
   if (
     Number.isInteger(downloadsAtOnce) &&
     (downloadsAtOnce as number) >= DOWNLOADS_AT_ONCE.min &&
@@ -194,6 +197,12 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'progressLine',
     'openAtLogin',
     'watchClipboard',
+    'telegramWatchClipboard',
+    'telegramSkipSame',
+    'telegramSortByKind',
+    'telegramGroupAlbums',
+    'telegramTakeout',
+    'telegramUseProxy',
     'askWhenFinished',
     'removeMissingFiles',
     'warnDuplicates',
@@ -213,6 +222,17 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
   if (typeof parsed.stallTimeoutSec === 'number' && Number.isFinite(parsed.stallTimeoutSec)) {
     prefs.stallTimeoutSec = Math.min(120, Math.max(5, Math.round(parsed.stallTimeoutSec)))
   }
+  for (const [key, most] of [
+    ['telegramThreads', 16],
+    ['telegramParallel', 8]
+  ] as const) {
+    const value = parsed[key]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      prefs[key] = Math.min(most, Math.max(1, Math.round(value)))
+    }
+  }
+  const template = shortText(parsed.telegramTemplate)
+  if (template !== undefined) prefs.telegramTemplate = template
   if (parsed.statusBar !== undefined) prefs.statusBar = sanitizeStatusBar(parsed.statusBar)
   if ((PROXY_MODES as readonly string[]).includes(parsed.proxyMode as string)) {
     prefs.proxyMode = parsed.proxyMode as AppPrefs['proxyMode']

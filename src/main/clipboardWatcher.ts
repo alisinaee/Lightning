@@ -1,7 +1,8 @@
 import { BrowserWindow, clipboard, Notification } from 'electron'
 import { downloadableLink } from '../shared/clipboardLinks'
 import { redactUrl } from '../shared/urlTools'
-import { offerLink } from './openLinks'
+import { parseTelegramLinks } from '../shared/telegram'
+import { offerLink, offerTelegram } from './openLinks'
 
 const POLL_MS = 1000
 
@@ -12,11 +13,17 @@ export class ClipboardWatcher {
   private timer: NodeJS.Timeout | null = null
   private last = ''
   private active: Notification | null = null
+  private files = false
+  private telegram = false
 
   constructor(private getWindow: () => BrowserWindow | null) {}
 
-  /** Starts or stops watching to match the setting. */
-  setEnabled(enabled: boolean): void {
+  /** Starts or stops watching to match the settings: `files` offers links to files, `telegram`
+   * offers Telegram message links. Either one keeps the clipboard watched. */
+  setEnabled({ files, telegram }: { files: boolean; telegram: boolean }): void {
+    this.files = files
+    this.telegram = telegram
+    const enabled = files || telegram
     if (enabled === (this.timer !== null)) return
     if (!enabled) {
       clearInterval(this.timer!)
@@ -42,9 +49,31 @@ export class ClipboardWatcher {
     this.last = text
     // In the window already: the New download dialog reads the clipboard itself.
     if (BrowserWindow.getFocusedWindow()) return
-    const link = downloadableLink(text)
-    if (!link || !Notification.isSupported()) return
-    this.offer(link)
+    if (!Notification.isSupported()) return
+    if (this.telegram) {
+      const links = parseTelegramLinks(text)
+      if (links.length > 0) {
+        this.offerMessages(links)
+        return
+      }
+    }
+    const link = this.files ? downloadableLink(text) : null
+    if (link) this.offer(link)
+  }
+
+  private offerMessages(links: string[]): void {
+    this.active?.close()
+    const notification = new Notification({
+      title:
+        links.length === 1
+          ? 'Download this Telegram message?'
+          : `Download ${links.length} Telegram messages?`,
+      body: links.length === 1 ? redactUrl(links[0]) : 'Click to review the links.',
+      silent: true
+    })
+    notification.on('click', () => offerTelegram(links, this.getWindow()))
+    notification.show()
+    this.active = notification
   }
 
   private offer(link: string): void {
@@ -60,7 +89,7 @@ export class ClipboardWatcher {
   }
 
   stop(): void {
-    this.setEnabled(false)
+    this.setEnabled({ files: false, telegram: false })
     this.active?.close()
   }
 }

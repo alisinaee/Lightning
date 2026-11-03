@@ -4,8 +4,9 @@ import type { AccentId, AppPrefs, ResolvedPrefs, StatusBarPrefs } from '@shared/
 import { useCallback, useRef } from 'react'
 import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
+import type { TdlStatus } from '@shared/telegram'
 import { isProxyAddress } from '@shared/networks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
@@ -87,6 +88,7 @@ const PAGES = [
   'Power',
   'Schedule',
   'Browser',
+  'Telegram',
   'Interface',
   'Status bar'
 ] as const
@@ -172,6 +174,37 @@ function ProxyField({
   )
 }
 
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onChange
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}): React.JSX.Element {
+  return (
+    <label className="flex items-center gap-3">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => {
+          const count = Math.floor(Number(event.target.value))
+          if (count >= min && count <= max) onChange(count)
+        }}
+        className="h-8 w-16 rounded-md border border-input bg-[var(--input-bg)] px-2 text-center outline-none"
+      />
+    </label>
+  )
+}
+
 /** Settings: version and updates, text size and theme, the proxy, notices, power, and how the
  * window closes. Saved as they change. */
 export function SettingsDialog({
@@ -199,8 +232,18 @@ export function SettingsDialog({
   const setDestinationDir = useAppStore((store) => store.setDestinationDir)
   const homeDir = useAppStore((store) => store.homeDir)
   const openLimitsDialog = useAppStore((store) => store.openLimitsDialog)
+  const [telegramDir, setTelegramDir] = useState(
+    initial.telegramDir ??
+      `${initial.downloadsDir}${window.lightning.platform === 'win32' ? '\\' : '/'}Lightning Telegram`
+  )
+  const [tdl, setTdl] = useState<TdlStatus | null>(null)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<'available' | 'current' | 'failed' | null>(null)
+
+  useEffect(() => {
+    if (!open || page !== 'Telegram') return
+    void window.lightning.tdlStatus().then(setTdl, () => setTdl(null))
+  }, [open, page])
 
   const save = (patch: Partial<AppPrefs>): void => {
     const next: ResolvedPrefs = {
@@ -551,6 +594,136 @@ export function SettingsDialog({
                 }}
                 onFeatureChange={(patch) => save(patch)}
               />
+            )}
+            {page === 'Telegram' && (
+              <>
+                <div>
+                  <div className="text-[15px] font-semibold">Telegram</div>
+                  <div className="text-[12.5px] text-muted-foreground">
+                    {tdl === null
+                      ? 'Checking the account…'
+                      : !tdl.binary
+                        ? 'The Telegram downloader (tdl) is missing from this build.'
+                        : tdl.loggedIn
+                          ? `Signed in${tdl.account ? ` as ${tdl.account}` : ''}.`
+                          : 'Not signed in. Sign in from the Telegram section.'}
+                  </div>
+                  {tdl?.loggedIn && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Sign out of Telegram? The saved session is deleted from this computer.'
+                          )
+                        ) {
+                          void window.lightning.tdlLogout().then(() => {
+                            setTdl({ ...tdl, loggedIn: false, account: undefined })
+                          })
+                        }
+                      }}
+                    >
+                      Sign out
+                    </Button>
+                  )}
+                </div>
+                <Row
+                  checked={prefs.telegramWatchClipboard}
+                  onChange={(telegramWatchClipboard) => save({ telegramWatchClipboard })}
+                  label="Offer to download a Telegram message when its link is copied"
+                />
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[12.5px] text-muted-foreground">Telegram folder</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      aria-label="Telegram folder"
+                      value={toDisplayPath(telegramDir, homeDir)}
+                      title={telegramDir}
+                      className="h-8 min-w-0 flex-1 rounded-md border border-input bg-[var(--input-bg)] px-2 font-mono text-[12px] outline-none"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        void window.lightning
+                          .chooseDestinationFolder(telegramDir)
+                          .then((picked) => {
+                            if (!picked) return
+                            setTelegramDir(picked)
+                            void window.lightning.updateSettings({ telegramDir: picked })
+                          })
+                      }
+                    >
+                      Change…
+                    </Button>
+                  </div>
+                </div>
+                <NumberField
+                  label="Connections per file"
+                  value={prefs.telegramThreads}
+                  min={1}
+                  max={16}
+                  onChange={(telegramThreads) => save({ telegramThreads })}
+                />
+                <NumberField
+                  label="Files at once"
+                  value={prefs.telegramParallel}
+                  min={1}
+                  max={8}
+                  onChange={(telegramParallel) => save({ telegramParallel })}
+                />
+                <div className="text-[12px] text-muted-foreground">
+                  High numbers can make Telegram slow the account down (FLOOD_WAIT).
+                </div>
+                <Row
+                  checked={prefs.telegramSkipSame}
+                  onChange={(telegramSkipSame) => save({ telegramSkipSame })}
+                  label="Skip files already in the folder with the same name and size"
+                />
+                <Row
+                  checked={prefs.telegramSortByKind}
+                  onChange={(telegramSortByKind) => save({ telegramSortByKind })}
+                  label="Sort finished files into Videos, Photos, Audio, Documents and Other folders"
+                />
+                <Row
+                  checked={prefs.telegramGroupAlbums}
+                  onChange={(telegramGroupAlbums) => save({ telegramGroupAlbums })}
+                  label="Download an album's files together"
+                />
+                <Row
+                  checked={prefs.telegramTakeout}
+                  onChange={(telegramTakeout) => save({ telegramTakeout })}
+                  label="Use a takeout session (gentler limits for large exports)"
+                />
+                <Row
+                  checked={prefs.telegramUseProxy}
+                  onChange={(telegramUseProxy) => save({ telegramUseProxy })}
+                  label="Use the manual proxy from Network settings"
+                />
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12.5px] text-muted-foreground">
+                    File name template (empty: tdl&apos;s own)
+                  </span>
+                  <input
+                    defaultValue={prefs.telegramTemplate}
+                    spellCheck={false}
+                    onBlur={(event) => {
+                      const telegramTemplate = event.target.value.trim()
+                      if (telegramTemplate !== prefs.telegramTemplate) save({ telegramTemplate })
+                    }}
+                    className="h-8 rounded-md border border-input bg-[var(--input-bg)] px-2 font-mono text-[12px] outline-none"
+                  />
+                </label>
+                <div className="text-[12px] text-muted-foreground">
+                  Telegram downloads use the default connection, not Lightning&apos;s networks, DNS
+                  or speed limits. Only the proxy is passed on.
+                </div>
+              </>
             )}
             {page === 'Status bar' && (
               <>
