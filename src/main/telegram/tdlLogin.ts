@@ -62,6 +62,8 @@ interface Session {
   qrTail: string
   /** What the last prompt asked for, so the answer can be tidied before tdl sees it. */
   field: 'phone' | 'code' | 'password' | null
+  /** tdl prints a question again with its answer after it is answered; that echo is not a new question. */
+  answered: 'phone' | 'code' | 'password' | null
   qrTimer?: NodeJS.Timeout
   finished: boolean
   release: () => void
@@ -121,6 +123,7 @@ export class TdlLogin {
       qr: [],
       qrTail: '',
       field: null,
+      answered: null,
       finished: false,
       release
     }
@@ -147,6 +150,7 @@ export class TdlLogin {
     session.buffer = ''
     session.prompted = false
     const tidy = tidyAnswer(session.field, value)
+    session.answered = session.field
     // The text itself is never logged: it is a phone number, a code or a password.
     log.info('telegram', `login answer sent (${session.field ?? 'unknown'}, ${tidy.length} chars)`)
     session.process.write(`${tidy}\r`)
@@ -203,7 +207,7 @@ export class TdlLogin {
         : /phone|number/i.test(prompt)
           ? 'phone'
           : null
-    if (!field) return
+    if (!field || field === session.answered) return
     session.prompted = true
     session.field = field
     session.emit({ type: 'prompt', field })
