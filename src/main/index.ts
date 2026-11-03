@@ -15,6 +15,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
+import { registerTelegramHandlers, type TelegramHandlers } from './ipc/telegramHandlers'
 import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences, migrateVpnDefault } from './settings'
 import { log, logFilePath } from './logger'
@@ -42,6 +43,7 @@ process.on('unhandledRejection', (reason) => log.error('process', 'unhandledReje
 
 let mainWindow: BrowserWindow | null = null
 let downloadManager: DownloadManager | null = null
+let telegram: TelegramHandlers | null = null
 let quitAfterSuspending = false
 let quitting = false
 
@@ -266,6 +268,7 @@ app.whenReady().then(async () => {
   })
 
   downloadManager = registerIpcHandlers(() => mainWindow)
+  telegram = await registerTelegramHandlers(() => mainWindow)
 
   nativeTheme.on('updated', () => {
     mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
@@ -314,7 +317,7 @@ app.on('before-quit', (event) => {
     app.exit(0)
   }, 3000)
 
-  void downloadManager.suspendAll().finally(() => {
+  void Promise.all([downloadManager.suspendAll(), telegram?.dispose()]).finally(() => {
     clearTimeout(forceQuitTimeout)
     quitAfterSuspending = true
     log.info('app', 'quit')

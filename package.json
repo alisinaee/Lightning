@@ -6,6 +6,7 @@
   "author": "alisinaee",
   "homepage": "https://github.com/alisinaee/Lightning",
   "scripts": {
+    "fetch-tdl": "node scripts/fetch-tdl.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --cache .",

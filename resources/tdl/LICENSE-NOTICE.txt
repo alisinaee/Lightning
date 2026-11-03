@@ -1,0 +1,15 @@
+Third-party software: tdl
+
+Lightning's Telegram downloads run the program "tdl" (Telegram Downloader) as a separate,
+unmodified executable. Lightning does not link to it or change it.
+
+  tdl        https://github.com/iyear/tdl
+  Version    0.20.4
+  Licence    GNU Affero General Public License v3.0 (AGPL-3.0)
+
+The licence text is in the LICENSE file next to this notice (copied from the tdl release) and at
+https://www.gnu.org/licenses/agpl-3.0.html
+
+Source code: the complete source of tdl, for the version above, is available at
+https://github.com/iyear/tdl/tree/v0.20.4 (release archives:
+https://github.com/iyear/tdl/releases/tag/v0.20.4).

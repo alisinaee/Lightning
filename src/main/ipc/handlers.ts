@@ -349,6 +349,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         useVpn: settings.useVpn ?? true,
         destinationDir: destinationExists ? destinationDir : undefined,
+        telegramDir: settings.telegramDir,
         version: app.getVersion(),
         prefs: prefsOf(settings),
         schedule: settings.schedule ?? DEFAULT_SCHEDULE,

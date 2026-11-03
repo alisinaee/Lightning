@@ -23,9 +23,19 @@ files:
 extraResources:
   - from: extension
     to: extension
+  # Telegram downloader notice (the program itself is added per OS below).
+  - from: resources/tdl
+    to: tdl
 asarUnpack:
   - resources/**
 win:
+  # tdl (AGPL-3.0, a separate unmodified program): `npm run fetch-tdl all` puts every build under
+  # vendor/tdl/<platform>-<arch>/. It lands next to the app as tdl/tdl[.exe], which
+  # main/telegram/tdlBinary.ts runs.
+  extraResources:
+    - from: vendor/tdl/win32-${arch}
+      to: tdl
+      filter: ['tdl.exe', 'LICENSE']
   # No protocols or fileAssociations: the NSIS installer would register Lightning as *the* handler for
   # magnet links and .torrent files, taking them from a torrent client the user already has.
   # A .torrent can still be opened with Lightning through "Open with".
@@ -45,6 +55,13 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # tdl (AGPL-3.0, a separate unmodified program): `npm run fetch-tdl all` puts every build under
+  # vendor/tdl/<platform>-<arch>/. It lands next to the app as tdl/tdl[.exe], which
+  # main/telegram/tdlBinary.ts runs.
+  extraResources:
+    - from: vendor/tdl/darwin-${arch}
+      to: tdl
+      filter: ['tdl', 'LICENSE']
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -65,10 +82,19 @@ mac:
           LSHandlerRank: Alternate
           CFBundleTypeExtensions: [torrent]
           LSItemContentTypes: [org.bittorrent.torrent]
+  # The sidecar sits in Resources/tdl and is signed with the app (electron-builder signs every
+  # Mach-O it finds there, with entitlementsInherit); it needs no extra entitlements.
   notarize: false
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
+  # tdl (AGPL-3.0, a separate unmodified program): `npm run fetch-tdl all` puts every build under
+  # vendor/tdl/<platform>-<arch>/. It lands next to the app as tdl/tdl[.exe], which
+  # main/telegram/tdlBinary.ts runs.
+  extraResources:
+    - from: vendor/tdl/linux-${arch}
+      to: tdl
+      filter: ['tdl', 'LICENSE']
   target:
     - target: AppImage
       arch: [x64, arm64]
