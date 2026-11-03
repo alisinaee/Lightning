@@ -23,8 +23,10 @@ export const pipeTransport: LoginTransport = {
   start(args) {
     const child: ChildProcess = spawnTdl(args)
     const dataListeners: ((text: string) => void)[] = []
-    const feed = (data: Buffer | string): void => {
-      const text = String(data)
+    // utf8 streams keep a multi-byte block character whole when a chunk ends inside it.
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    const feed = (text: string): void => {
       // Terminal queries: where is the cursor? Answered with a plausible position.
       if (text.includes('\x1b[6n'))
         child.stdin?.write('\x1b[24;80R'.repeat(text.split('\x1b[6n').length - 1))
@@ -56,6 +58,8 @@ interface Session {
   prompted: boolean
   phone: string
   qr: string[]
+  /** A QR row that arrived cut off by the end of a chunk. */
+  qrTail: string
   qrTimer?: NodeJS.Timeout
   finished: boolean
   release: () => void
@@ -99,6 +103,7 @@ export class TdlLogin {
       prompted: false,
       phone: '',
       qr: [],
+      qrTail: '',
       finished: false,
       release
     }
@@ -142,9 +147,13 @@ export class TdlLogin {
   }
 
   private read(session: Session, raw: string): void {
-    const text = stripAnsi(raw)
+    const lines = (session.qrTail + stripAnsi(raw)).split(/\r?\n/)
+    // A row cut off at the end of this chunk is finished by the next one.
+    session.qrTail = BLOCKS.test(lines[lines.length - 1]) ? lines[lines.length - 1] : ''
+    const complete = session.qrTail ? lines.slice(0, -1) : lines
+    const text = complete.join('\n')
     // QR code: rows of block characters; one picture is complete when no more rows follow.
-    const rows = text.split(/\r?\n/).filter((line) => BLOCKS.test(line))
+    const rows = complete.filter((line) => BLOCKS.test(line))
     if (rows.length > 0) {
       session.qr.push(...rows)
       clearTimeout(session.qrTimer)
