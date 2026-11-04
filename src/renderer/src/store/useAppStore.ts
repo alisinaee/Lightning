@@ -122,6 +122,7 @@ export type View =
   | { name: 'download'; id: string }
   /** The Telegram section; `kind` narrows it to one media group. */
   | { name: 'telegram'; kind: TgMediaKind | null }
+  | { name: 'youtube' }
 
 interface AppStore {
   /** The connections the UI lists: never a VPN tunnel (those are one separate layer). */

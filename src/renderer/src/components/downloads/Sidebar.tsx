@@ -3,6 +3,8 @@ import { Archive, EyeOff, PanelLeftClose, PanelLeftOpen, Send } from 'lucide-rea
 import { useState } from 'react'
 import { useAppStore, type DownloadFilter } from '../../store/useAppStore'
 import { isActiveJob, useTelegramStore } from '../../store/useTelegramStore'
+import { isActiveYoutubeJob, useYoutubeStore } from '../../store/useYoutubeStore'
+import { YoutubeIcon } from '../youtube/YoutubeIcon'
 import type { ListCounts } from '../../utils/downloadList'
 import { FILE_KINDS, type FileKind } from '../../utils/fileKind'
 import { STATUSES } from './statusEntries'
@@ -106,6 +108,9 @@ export function DownloadsSidebar({
   const telegramActive = useTelegramStore(
     (store) => Object.values(store.jobs).filter(isActiveJob).length
   )
+  const youtubeActive = useYoutubeStore(
+    (store) => Object.values(store.jobs).filter(isActiveYoutubeJob).length
+  )
   const toggle = (): void => {
     const next = !collapsed
     setCollapsed(next)
@@ -206,7 +211,7 @@ export function DownloadsSidebar({
             {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
           </Item>
         ))}
-        {section('Telegram')}
+        {section('Services')}
         <Item
           label="Telegram"
           collapsed={collapsed}
@@ -217,6 +222,17 @@ export function DownloadsSidebar({
         >
           <Send aria-hidden className="size-4 shrink-0 text-[var(--text-secondary)]" />
           {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
+        </Item>
+        <Item
+          label="YouTube"
+          collapsed={collapsed}
+          active={false}
+          count={youtubeActive}
+          title="YouTube video & audio downloads (yt-dlp)"
+          onClick={() => setView({ name: 'youtube' })}
+        >
+          <YoutubeIcon className="size-4 shrink-0 text-red-500" />
+          {!collapsed && <span className="min-w-0 flex-1 truncate">YouTube</span>}
         </Item>
         <div className="flex-1" />
         {/* Always in place, only hidden when there is nothing to clear: the list above would

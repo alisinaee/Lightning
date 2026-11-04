@@ -36,6 +36,9 @@ win:
     - from: vendor/tdl/win32-${arch}
       to: tdl
       filter: ['tdl.exe', 'LICENSE']
+    - from: vendor/yt-dlp/win32-${arch}
+      to: yt-dlp
+      filter: ['yt-dlp.exe']
   # No protocols or fileAssociations: the NSIS installer would register Lightning as *the* handler for
   # magnet links and .torrent files, taking them from a torrent client the user already has.
   # A .torrent can still be opened with Lightning through "Open with".
@@ -62,6 +65,9 @@ mac:
     - from: vendor/tdl/darwin-${arch}
       to: tdl
       filter: ['tdl', 'LICENSE']
+    - from: vendor/yt-dlp/darwin-${arch}
+      to: yt-dlp
+      filter: ['yt-dlp']
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -95,6 +101,9 @@ linux:
     - from: vendor/tdl/linux-${arch}
       to: tdl
       filter: ['tdl', 'LICENSE']
+    - from: vendor/yt-dlp/linux-${arch}
+      to: yt-dlp
+      filter: ['yt-dlp']
   target:
     - target: AppImage
       arch: [x64, arm64]

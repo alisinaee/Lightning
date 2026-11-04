@@ -5,6 +5,12 @@ import type { LabEvent } from '../shared/lab'
 import type { ScheduleStatus } from '../shared/schedule'
 import type { TdlJob, TdlLoginEvent } from '../shared/telegram'
 import type {
+  StartYoutubeRequest,
+  YoutubeJob,
+  YoutubeStatus,
+  YoutubeVideoMeta
+} from '../shared/youtube'
+import type {
   AppSettings,
   DnsConfig,
   DownloadUpdate,
@@ -54,6 +60,20 @@ const lightningApi = {
     invoke('tdlRemoveJob', id, options),
   tdlRevealItem: (jobId: string, key: string) => invoke('tdlRevealItem', jobId, key),
   tdlOpenItem: (jobId: string, key: string) => invoke('tdlOpenItem', jobId, key),
+
+  youtubeStatus: (): Promise<YoutubeStatus> => invoke('youtubeStatus'),
+  youtubeProbe: (url: string): Promise<YoutubeVideoMeta> => invoke('youtubeProbe', url),
+  youtubeStart: (request: StartYoutubeRequest): Promise<YoutubeJob> =>
+    invoke('youtubeStart', request),
+  youtubeListJobs: (): Promise<YoutubeJob[]> => invoke('youtubeListJobs'),
+  youtubePauseJob: (id: string): Promise<void> => invoke('youtubePauseJob', id),
+  youtubeResumeJob: (id: string): Promise<void> => invoke('youtubeResumeJob', id),
+  youtubeCancelJob: (id: string): Promise<void> => invoke('youtubeCancelJob', id),
+  youtubeRetryJob: (id: string): Promise<void> => invoke('youtubeRetryJob', id),
+  youtubeRemoveJob: (id: string, deleteFile?: boolean): Promise<void> =>
+    invoke('youtubeRemoveJob', id, deleteFile),
+  youtubeRevealJob: (id: string): Promise<void> => invoke('youtubeRevealJob', id),
+  youtubeOpenJob: (id: string): Promise<void> => invoke('youtubeOpenJob', id),
   getDns: () => invoke('getDns'),
   testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>
     invoke('testDns', url, currentDnsId, extras),
@@ -156,6 +176,12 @@ const lightningApi = {
     const listener = (_event: IpcRendererEvent, job: TdlJob): void => callback(job)
     ipcRenderer.on(IpcChannels.tdlJobUpdated, listener)
     return () => ipcRenderer.removeListener(IpcChannels.tdlJobUpdated, listener)
+  },
+
+  onYoutubeJobUpdated: (callback: (job: YoutubeJob) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, job: YoutubeJob): void => callback(job)
+    ipcRenderer.on(IpcChannels.youtubeJobUpdated, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.youtubeJobUpdated, listener)
   },
 
   /** What a Telegram sign-in needs or has reached. */

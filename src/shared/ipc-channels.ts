@@ -90,5 +90,17 @@ export const IpcChannels = {
   tdlRevealItem: 'tdl:reveal-item',
   tdlOpenItem: 'tdl:open-item',
   tdlJobUpdated: 'tdl:job-updated',
-  tdlLoginEvent: 'tdl:login-event'
+  tdlLoginEvent: 'tdl:login-event',
+  youtubeStatus: 'youtube:status',
+  youtubeProbe: 'youtube:probe',
+  youtubeStart: 'youtube:start',
+  youtubeListJobs: 'youtube:list-jobs',
+  youtubePauseJob: 'youtube:pause-job',
+  youtubeResumeJob: 'youtube:resume-job',
+  youtubeCancelJob: 'youtube:cancel-job',
+  youtubeRetryJob: 'youtube:retry-job',
+  youtubeRemoveJob: 'youtube:remove-job',
+  youtubeRevealJob: 'youtube:reveal-job',
+  youtubeOpenJob: 'youtube:open-job',
+  youtubeJobUpdated: 'youtube:job-updated'
 } as const

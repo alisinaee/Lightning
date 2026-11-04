@@ -1,6 +1,7 @@
 import type { DuplicateMatch, DuplicateOptions } from './duplicates'
 import type { DnsTestResult } from './dnsRecommend'
 import type { TdlChat, TdlItem, TdlJob, TdlLoginMode, TdlRangeType, TdlStatus } from './telegram'
+import type { StartYoutubeRequest, YoutubeJob, YoutubeStatus, YoutubeVideoMeta } from './youtube'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
@@ -195,4 +196,17 @@ export interface IpcContract {
   /** Shows / opens one item's file; false when it is not there. */
   tdlRevealItem: { args: [jobId: string, key: string]; result: boolean }
   tdlOpenItem: { args: [jobId: string, key: string]; result: boolean }
+
+  /** YouTube downloads (main/youtube) */
+  youtubeStatus: { args: []; result: YoutubeStatus }
+  youtubeProbe: { args: [url: string]; result: YoutubeVideoMeta }
+  youtubeStart: { args: [request: StartYoutubeRequest]; result: YoutubeJob }
+  youtubeListJobs: { args: []; result: YoutubeJob[] }
+  youtubePauseJob: { args: [id: string]; result: void }
+  youtubeResumeJob: { args: [id: string]; result: void }
+  youtubeCancelJob: { args: [id: string]; result: void }
+  youtubeRetryJob: { args: [id: string]; result: void }
+  youtubeRemoveJob: { args: [id: string, deleteFile?: boolean]; result: void }
+  youtubeRevealJob: { args: [id: string]; result: void }
+  youtubeOpenJob: { args: [id: string]; result: void }
 }

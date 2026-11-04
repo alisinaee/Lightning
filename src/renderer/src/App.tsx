@@ -17,6 +17,7 @@ import { TooltipProvider } from './components/ui/tooltip'
 import { useDownloadEvents } from './hooks/useDownloadEvents'
 import { useLabEvents } from './hooks/useLabEvents'
 import { useTelegramEvents } from './hooks/useTelegramEvents'
+import { useYoutubeEvents } from './hooks/useYoutubeEvents'
 import { useNetworkEvents } from './hooks/useNetworks'
 import { useNewDownloadShortcuts, useOpenedLinks } from './hooks/useOpenedLinks'
 import { CompleteScreen } from './screens/CompleteScreen'
@@ -24,6 +25,7 @@ import { DownloadingScreen } from './screens/DownloadingScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
 import { TelegramScreen } from './screens/TelegramScreen'
+import { YouTubeScreen } from './screens/YouTubeScreen'
 import { useTelegramStore } from './store/useTelegramStore'
 import { useLogsStore } from './store/useLogsStore'
 import { useAppStore } from './store/useAppStore'
@@ -62,8 +64,11 @@ function CurrentScreen({ onOpenSettings }: { onOpenSettings: () => void }): Reac
     if (view.name !== 'download') return null
     return store.downloads[view.id] ?? store.history.find((entry) => entry.id === view.id) ?? null
   })
-  const telegram = useAppStore((store) => store.view.name === 'telegram')
-  if (telegram) return <TelegramScreen onOpenSettings={onOpenSettings} />
+  const viewName = useAppStore((store) => store.view.name)
+
+  if (viewName === 'telegram') return <TelegramScreen onOpenSettings={onOpenSettings} />
+  if (viewName === 'youtube') return <YouTubeScreen onOpenSettings={onOpenSettings} />
+
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
   return shown && !cancelled ? (
     renderDownload(shown)
@@ -79,6 +84,7 @@ function App(): React.JSX.Element {
   useNetworkEvents()
   useLabEvents()
   useTelegramEvents()
+  useYoutubeEvents()
 
   const checkForUpdate = useAppStore((store) => store.checkForUpdate)
   const [settingsOpen, setSettingsOpen] = useState(false)
