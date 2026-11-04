@@ -48,6 +48,9 @@ mac:
   target:
     - target: dmg
       arch: [x64, arm64]
+  identity: '-'
+  hardenedRuntime: false
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDownloadsFolderUsageDescription: Lightning saves downloaded files to your Downloads folder.
