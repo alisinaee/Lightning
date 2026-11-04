@@ -1,5 +1,5 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, Menu, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
 import { createTrayPanel } from './trayPanel'
 import {
@@ -234,6 +234,9 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.lightning.app')
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(nativeImage.createFromPath(icon))
+  }
   log.info(
     'app',
     `${appVariant().name} ${app.getVersion()} on ${process.platform} ${process.arch}`,
