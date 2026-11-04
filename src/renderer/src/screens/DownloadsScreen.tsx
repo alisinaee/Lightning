@@ -780,81 +780,79 @@ export function DownloadsScreen({
       </div>
 
       <div className="@container flex min-h-0 flex-1">
+        {!sidebarHidden && (
+          <DownloadsSidebar
+            counts={counts}
+            filter={filter}
+            kind={kindFilter}
+            onFilter={chooseFilter}
+            onKind={(kind) => {
+              setKindFilter(kind)
+              setSelected(new Set())
+            }}
+            canClear={history.length > 0}
+            onClear={() => void window.lightning.clearHistory()}
+          />
+        )}
         {noDownloadsAtAll ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <EmptyState />
           </div>
         ) : (
-          <>
-            {!sidebarHidden && (
-              <DownloadsSidebar
-                counts={counts}
-                filter={filter}
-                kind={kindFilter}
-                onFilter={chooseFilter}
-                onKind={(kind) => {
-                  setKindFilter(kind)
-                  setSelected(new Set())
-                }}
-                canClear={history.length > 0}
-                onClear={() => void window.lightning.clearHistory()}
-              />
-            )}
-            <TableBoundary>
-              <DownloadsTable
-                allSelected={items.length > 0 && chosen.length === items.length}
-                someSelected={chosen.length > 0 && chosen.length < items.length}
-                selectable={items.length > 0}
-                onSelectAll={(on) =>
-                  setSelected(on ? new Set(items.map((item) => item.id)) : new Set())
-                }
-              >
-                {shown.length === 0 && (
-                  <div
-                    role="status"
-                    className="flex flex-col items-center gap-2 px-5 py-16 text-center"
-                  >
-                    <p className="text-[16px] font-semibold">
-                      {kindFilter !== null || search.trim() !== ''
-                        ? 'No matching downloads'
-                        : (EMPTY_MESSAGES[filter] ?? 'No downloads')}
-                    </p>
-                    <Button type="button" variant="secondary" onClick={showAll}>
-                      Show all downloads
-                    </Button>
-                  </div>
-                )}
-                {shown.map((entry) =>
-                  entry.type === 'item' ? (
-                    <DownloadRow
-                      key={entry.id}
-                      item={entry.item}
-                      queuePosition={positions.get(entry.id)}
-                      selected={selected.has(entry.id)}
-                      hit={filtered.hits.has(entry.id)}
-                      handlers={handlers}
-                      getVisual={getVisual}
-                      visualsKey={visualsKey}
-                    />
-                  ) : (
-                    <GroupTableRow
-                      key={entry.id}
-                      entry={entry.entry}
-                      selected={selected}
-                      only={filtered.only?.get(entry.id)}
-                      forceOpen={filtered.only !== null}
-                      hits={filtered.hits}
-                      getVisual={getVisual}
-                      onToggle={toggle}
-                      onSelect={selectRow}
-                      onOpen={openRow}
-                      handlers={handlers}
-                    />
-                  )
-                )}
-              </DownloadsTable>
-            </TableBoundary>
-          </>
+          <TableBoundary>
+            <DownloadsTable
+              allSelected={items.length > 0 && chosen.length === items.length}
+              someSelected={chosen.length > 0 && chosen.length < items.length}
+              selectable={items.length > 0}
+              onSelectAll={(on) =>
+                setSelected(on ? new Set(items.map((item) => item.id)) : new Set())
+              }
+            >
+              {shown.length === 0 && (
+                <div
+                  role="status"
+                  className="flex flex-col items-center gap-2 px-5 py-16 text-center"
+                >
+                  <p className="text-[16px] font-semibold">
+                    {kindFilter !== null || search.trim() !== ''
+                      ? 'No matching downloads'
+                      : (EMPTY_MESSAGES[filter] ?? 'No downloads')}
+                  </p>
+                  <Button type="button" variant="secondary" onClick={showAll}>
+                    Show all downloads
+                  </Button>
+                </div>
+              )}
+              {shown.map((entry) =>
+                entry.type === 'item' ? (
+                  <DownloadRow
+                    key={entry.id}
+                    item={entry.item}
+                    queuePosition={positions.get(entry.id)}
+                    selected={selected.has(entry.id)}
+                    hit={filtered.hits.has(entry.id)}
+                    handlers={handlers}
+                    getVisual={getVisual}
+                    visualsKey={visualsKey}
+                  />
+                ) : (
+                  <GroupTableRow
+                    key={entry.id}
+                    entry={entry.entry}
+                    selected={selected}
+                    only={filtered.only?.get(entry.id)}
+                    forceOpen={filtered.only !== null}
+                    hits={filtered.hits}
+                    getVisual={getVisual}
+                    onToggle={toggle}
+                    onSelect={selectRow}
+                    onOpen={openRow}
+                    handlers={handlers}
+                  />
+                )
+              )}
+            </DownloadsTable>
+          </TableBoundary>
         )}
       </div>
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />

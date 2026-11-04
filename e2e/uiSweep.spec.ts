@@ -175,10 +175,10 @@ async function clickEverySidebarEntry(page: Page): Promise<void> {
 test.describe('sidebar', () => {
   test.beforeEach(async ({ lightning }) => resize(lightning, 1200))
 
-  test('an empty list shows the empty state and no sidebar', async ({ lightning }) => {
-    // With nothing listed there is no sidebar, only the empty state.
+  test('an empty list shows the empty state and the sidebar', async ({ lightning }) => {
+    // With nothing listed, the sidebar and empty state are both shown.
     await expect(lightning.page.getByText('No downloads yet', { exact: true })).toBeVisible()
-    await expect(sidebar(lightning.page)).toBeHidden()
+    await expect(sidebar(lightning.page)).toBeVisible()
   })
 
   test('every entry works with one download in each state', async ({ lightning, serve }) => {
