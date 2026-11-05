@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { ResolvedPrefs } from '../../shared/types'
@@ -71,7 +72,7 @@ export function ytDlpEnv(): NodeJS.ProcessEnv {
 export function spawnYtDlp(args: string[], options: SpawnOptions = {}): ChildProcess {
   const ffmpeg = ffmpegExecutable()
   const finalArgs = [...args]
-  if (ffmpeg && !finalArgs.includes('--ffmpeg-location')) {
+  if (ffmpeg && !finalArgs.includes('--ffmpeg-location') && !finalArgs.includes('--version')) {
     finalArgs.unshift('--ffmpeg-location', ffmpeg)
   }
   return spawn(ytDlpExecutable(), finalArgs, {
@@ -123,16 +124,35 @@ export async function getYoutubeStatus(): Promise<YoutubeStatus> {
   if (cachedStatus && cachedStatus.binary) {
     return cachedStatus
   }
+
+  let fallbackVersion: string | undefined
   try {
-    const { code, stdout } = await runYtDlp(['--version'], 10_000)
-    const version = code === 0 ? stdout.trim() : undefined
+    const versionFile = join(exe, '..', '.version')
+    if (existsSync(versionFile)) {
+      fallbackVersion = (await readFile(versionFile, 'utf-8')).trim()
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const { code, stdout } = await runYtDlp(['--version'], 30_000)
+    const version = code === 0 && stdout.trim() ? stdout.trim() : fallbackVersion
     cachedStatus = {
-      binary: code === 0,
-      version,
+      binary: code === 0 || fallbackVersion !== undefined,
+      version: version || fallbackVersion,
       ffmpeg: ffmpegExecutable() !== undefined
     }
     return cachedStatus
   } catch {
+    if (fallbackVersion) {
+      cachedStatus = {
+        binary: true,
+        version: fallbackVersion,
+        ffmpeg: ffmpegExecutable() !== undefined
+      }
+      return cachedStatus
+    }
     return { binary: false, ffmpeg: ffmpegExecutable() !== undefined }
   }
 }

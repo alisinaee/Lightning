@@ -15,7 +15,7 @@ import {
   Video,
   X
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { YoutubeIcon } from '../components/youtube/YoutubeIcon'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -63,6 +63,14 @@ export function YouTubeScreen({
   const setJobFilter = useYoutubeStore((store) => store.setJobFilter)
   const search = useYoutubeStore((store) => store.search)
   const setSearch = useYoutubeStore((store) => store.setSearch)
+
+  const refreshStatus = useYoutubeStore((store) => store.refreshStatus)
+  const loadJobs = useYoutubeStore((store) => store.loadJobs)
+
+  useEffect(() => {
+    void refreshStatus()
+    void loadJobs()
+  }, [refreshStatus, loadJobs])
 
   const [starting, setStarting] = useState(false)
 
