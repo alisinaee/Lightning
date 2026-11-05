@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { extractYoutubeId, isYoutubeUrl } from '../src/shared/youtube'
 
 test.describe('YouTube helpers', () => {
@@ -20,5 +20,35 @@ test.describe('YouTube helpers', () => {
     expect(isYoutubeUrl('https://vimeo.com/123456')).toBe(false)
     expect(isYoutubeUrl('')).toBe(false)
     expect(isYoutubeUrl('not a url')).toBe(false)
+  })
+})
+
+test.describe('YouTube screen UI & yt-dlp', () => {
+  test('navigates to YouTube screen and detects yt-dlp status', async ({ lightning }) => {
+    const page = lightning.page
+
+    const status = await page.evaluate(async () => {
+      return await window.lightning.youtubeStatus()
+    })
+    expect(status.binary).toBe(true)
+    expect(status.version).toBe('2026.10.26')
+    expect(status.ffmpeg).toBe(true)
+
+    const youtubeBtn = page.getByRole('button', { name: 'YouTube' })
+    await expect(youtubeBtn).toBeVisible()
+    await youtubeBtn.click()
+
+    await expect(page.getByText('YouTube Downloader')).toBeVisible()
+    await expect(page.getByText(/yt-dlp 2026\.10\.26/)).toBeVisible()
+    await expect(page.getByText('ffmpeg active')).toBeVisible()
+    await expect(page.getByPlaceholder(/Paste YouTube video or shorts link/)).toBeVisible()
+
+    await page.screenshot({
+      path: '/Users/ali/.gemini/antigravity/brain/e797b6ad-d8dd-40b7-8ef9-833104ae11a2/scratch/youtube_screen.png'
+    })
+
+    // Test back button
+    await page.getByRole('button', { name: 'Back to downloads' }).click()
+    await expect(page.getByText('No downloads yet')).toBeVisible()
   })
 })
