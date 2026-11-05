@@ -43,7 +43,9 @@ export async function probeYoutube(url: string, proxy?: string): Promise<Youtube
   }
   args.push(url)
 
-  const { code, stdout, stderr } = await runYtDlp(args, 30_000)
+  // Probing YouTube runs JavaScript challenge solving and can take well over 30s on
+  // slow links, so give it more room before reporting a timeout.
+  const { code, stdout, stderr } = await runYtDlp(args, 90_000)
   if (code !== 0 || !stdout.trim()) {
     throw new Error(stderr.trim() || `Failed to probe video: exit code ${code}`)
   }

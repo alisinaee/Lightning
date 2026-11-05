@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { app } from 'electron'
 import type { ResolvedPrefs } from '../../shared/types'
 import type { YoutubeStatus } from '../../shared/youtube'
@@ -68,11 +68,30 @@ export function ytDlpEnv(): NodeJS.ProcessEnv {
   return env
 }
 
+// yt-dlp only enables Deno as a JavaScript runtime by default. Without any runtime,
+// YouTube extraction warns and can stall while it retries, so point it at a Node
+// binary when one exists. A packaged Electron app is launched by launchd/Finder with a
+// minimal PATH, so common install locations are checked explicitly.
+const NODE_CANDIDATES = ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']
+
+export function nodeRuntimePath(): string | undefined {
+  const pathDirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
+  const candidates = [
+    ...pathDirs.map((dir) => join(dir, process.platform === 'win32' ? 'node.exe' : 'node')),
+    ...NODE_CANDIDATES
+  ]
+  return candidates.find((candidate) => existsSync(candidate))
+}
+
 export function spawnYtDlp(args: string[], options: SpawnOptions = {}): ChildProcess {
   const ffmpeg = ffmpegExecutable()
   const finalArgs = [...args]
   if (ffmpeg && !finalArgs.includes('--ffmpeg-location')) {
     finalArgs.unshift('--ffmpeg-location', ffmpeg)
+  }
+  const node = nodeRuntimePath()
+  if (node && !finalArgs.includes('--js-runtimes')) {
+    finalArgs.unshift('--js-runtimes', `node:${node}`)
   }
   return spawn(ytDlpExecutable(), finalArgs, {
     ...options,
@@ -99,7 +118,9 @@ export function runYtDlp(
     child.stderr?.on('data', (d) => (stderr += d))
     const timer = setTimeout(() => {
       child.kill('SIGTERM')
-      reject(new Error(`yt-dlp timed out after ${timeoutMs}ms`))
+      const lastLine = stderr.trim().split('\n').pop()
+      const hint = lastLine ? `: ${lastLine}` : ''
+      reject(new Error(`yt-dlp timed out after ${timeoutMs}ms${hint}`))
     }, timeoutMs)
     child.on('error', (err) => {
       clearTimeout(timer)
