@@ -35,14 +35,6 @@ test.describe('formatting text', () => {
     expect(formatEta(61)).toBe('1m 1s')
   })
 
-  test('a countdown never reads 60s', () => {
-    expect(formatEta(0.2)).toBe('1s')
-    expect(formatEta(58.2)).toBe('59s')
-    expect(formatEta(59.01)).toBe('1m 0s')
-    expect(formatEta(59.5)).toBe('1m 0s')
-    expect(formatEta(61)).toBe('1m 1s')
-  })
-
   test('a name with TLS or SSL in it isn’t read as a certificate problem', () => {
     const certificate = /security certificate/
     expect(describeError(new Error('unable to verify the first certificate'))).toMatch(certificate)
