@@ -88,6 +88,15 @@ function clean(raw: unknown): YoutubeOptions {
     writeDescription: flag(input.writeDescription, d.writeDescription),
     writeThumbnail: flag(input.writeThumbnail, d.writeThumbnail),
     useRemoteTime: flag(input.useRemoteTime, d.useRemoteTime),
+    writeAutoSubs: flag(input.writeAutoSubs, d.writeAutoSubs),
+    splitChapters: flag(input.splitChapters, d.splitChapters),
+    liveFromStart: flag(input.liveFromStart, d.liveFromStart),
+    cookiesBrowser: pick(
+      input.cookiesBrowser,
+      ['', 'chrome', 'safari', 'firefox', 'edge', 'brave'] as const,
+      d.cookiesBrowser
+    ),
+    matchFilter: matching(input.matchFilter, FORMAT, d.matchFilter),
     noOverwrites: flag(input.noOverwrites, d.noOverwrites)
   }
 }

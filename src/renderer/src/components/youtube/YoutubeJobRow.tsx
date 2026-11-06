@@ -137,17 +137,15 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center" />
       <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'pl-8' : 'pl-0')}>
-        {job.thumbnail ? (
-          <img
-            src={job.thumbnail}
-            alt=""
-            loading="lazy"
-            className="h-9 w-16 shrink-0 rounded-[5px] bg-muted object-cover"
-          />
-        ) : (
-          <FormatBadge name={fileName} />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <FormatBadge name={fileName} />
+        <button
+          type="button"
+          data-title
+          aria-label={finished ? `Open ${job.title}` : job.title}
+          disabled={!finished}
+          onClick={() => finished && openJob(job.id)}
+          className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+        >
           <ClippedText
             text={job.title}
             className={cn(
@@ -155,6 +153,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
               finished && 'text-[var(--text-secondary)]'
             )}
           />
+          {/* A non-breaking space when empty, so the row keeps its height, as on Downloads rows. */}
           <span className="truncate text-[11px] leading-none text-muted-foreground">
             {[
               'YouTube',
@@ -162,9 +161,9 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
               job.error && job.status === 'error' ? job.error.split('\n')[0] : ''
             ]
               .filter(Boolean)
-              .join(' · ')}
+              .join(' · ') || ' '}
           </span>
-        </div>
+        </button>
       </div>
       <SizeCell received={info.received} total={info.total} running={active} done={finished} />
       <StatusCell info={info} />

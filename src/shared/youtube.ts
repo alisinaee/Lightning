@@ -147,6 +147,16 @@ export interface YoutubeOptions {
   writeThumbnail: boolean
   /** Set the file's date from the website's upload date. */
   useRemoteTime: boolean
+  /** Subtitles YouTube made itself, when the video has no written ones. */
+  writeAutoSubs: boolean
+  /** One file per chapter, for a video with chapters. */
+  splitChapters: boolean
+  /** A live stream, downloaded from its start rather than from now. */
+  liveFromStart: boolean
+  /** Sign-in cookies read from this browser. Empty: off. */
+  cookiesBrowser: '' | 'chrome' | 'safari' | 'firefox' | 'edge' | 'brave'
+  /** A yt-dlp match filter, e.g. "duration < 900". Empty: every video. */
+  matchFilter: string
   /** Do not overwrite a file that is already there. */
   noOverwrites: boolean
 }
@@ -187,6 +197,11 @@ export const DEFAULT_YOUTUBE_OPTIONS: YoutubeOptions = {
   writeDescription: false,
   writeThumbnail: false,
   useRemoteTime: false,
+  writeAutoSubs: false,
+  splitChapters: false,
+  liveFromStart: false,
+  cookiesBrowser: '',
+  matchFilter: '',
   noOverwrites: false
 }
 

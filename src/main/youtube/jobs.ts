@@ -297,6 +297,10 @@ export class YoutubeJobManager {
     if (options.writeDescription) args.push('--write-description')
     if (options.writeThumbnail) args.push('--write-thumbnail')
     if (options.useRemoteTime) args.push('--mtime')
+    if (options.writeAutoSubs) args.push('--write-auto-subs')
+    if (options.splitChapters) args.push('--split-chapters')
+    if (options.liveFromStart) args.push('--live-from-start')
+    if (options.matchFilter) args.push('--match-filter', options.matchFilter)
     if (options.noOverwrites) args.push('--no-overwrites')
     if (options.restrictFilenames) args.push('--restrict-filenames')
     if (options.windowsFilenames) args.push('--windows-filenames')
@@ -316,6 +320,8 @@ export class YoutubeJobManager {
     const cookies = this.cookieFiles.get(job.id) ?? this.optionCookies(options)
     if (cookies) {
       args.push('--cookies', cookies.file)
+    } else if (options.cookiesBrowser) {
+      args.push('--cookies-from-browser', options.cookiesBrowser)
     }
 
     args.push(job.url)

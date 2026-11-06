@@ -237,6 +237,24 @@ function CommonSettings({
             onChange={(cookieMode) => change({ cookieMode })}
           />
         </Row>
+        <Row
+          title="Browser cookies"
+          hint="Read the sign-in from this browser. macOS may ask for Keychain access"
+        >
+          <Choice
+            label="Browser cookies"
+            value={options.cookiesBrowser}
+            choices={[
+              { value: '', label: 'Off' },
+              { value: 'chrome', label: 'Chrome' },
+              { value: 'safari', label: 'Safari' },
+              { value: 'firefox', label: 'Firefox' },
+              { value: 'edge', label: 'Edge' },
+              { value: 'brave', label: 'Brave' }
+            ]}
+            onChange={(cookiesBrowser) => change({ cookiesBrowser })}
+          />
+        </Row>
         {options.cookieMode === 'manual' && (
           <Row title="cookies.txt file" hint={options.manualCookiesFile || 'No file chosen'}>
             <Button variant="secondary" size="sm" onClick={() => void chooseCookies()}>
@@ -343,6 +361,35 @@ function AdvancedSettings({
               { value: 'firefox', label: 'Firefox' }
             ]}
             onChange={(impersonate) => change({ impersonate })}
+          />
+        </Row>
+        <Row title="Live streams" hint="Download a live stream from its start, not from now">
+          <Toggle
+            label="Live from start"
+            checked={options.liveFromStart}
+            onChange={(liveFromStart) => change({ liveFromStart })}
+          />
+        </Row>
+        <Row title="Auto-made subtitles" hint="Use YouTube's own captions when the video has none">
+          <Toggle
+            label="Auto-made subtitles"
+            checked={options.writeAutoSubs}
+            onChange={(writeAutoSubs) => change({ writeAutoSubs })}
+          />
+        </Row>
+        <Row title="Split by chapter" hint="One file per chapter, for videos with chapters">
+          <Toggle
+            label="Split by chapter"
+            checked={options.splitChapters}
+            onChange={(splitChapters) => change({ splitChapters })}
+          />
+        </Row>
+        <Row title="Match filter" hint="yt-dlp expression, e.g. duration < 900. Empty: every video">
+          <Field
+            label="Match filter"
+            value={options.matchFilter}
+            placeholder="duration < 900"
+            onSave={(matchFilter) => change({ matchFilter })}
           />
         </Row>
       </Section>
