@@ -51,6 +51,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 export const labelClass =
   'px-2 pt-3 pb-1 font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
 
+// Every entry icon sits in the same 20px box, so labels line up whatever the icon.
+const ICON_BOX = 'flex size-5 shrink-0 items-center justify-center'
+
 /** One entry in the side panel: an icon, a label and an optional count. Collapsed, only the icon shows. */
 export function Item({
   active,
@@ -181,7 +184,12 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
     useTelegramStore.getState().setSelected(new Set())
   }
   return (
-    <div className={cn('flex flex-col gap-0.5', !collapsed && 'pl-3')}>
+    <div
+      className={cn(
+        'flex flex-col gap-0.5',
+        !collapsed && 'ml-3 border-l-[0.5px] border-border pl-1.5'
+      )}
+    >
       <Item
         label="All"
         collapsed={collapsed}
@@ -216,7 +224,9 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
             count={jobCounts[entry.value]}
             onClick={() => setJobFilter(jobFilter === entry.value ? 'all' : entry.value)}
           >
-            <Icon aria-hidden className="size-4 shrink-0" style={{ color: entry.color }} />
+            <span className={ICON_BOX}>
+              <Icon aria-hidden className="size-4" style={{ color: entry.color }} />
+            </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
           </Item>
         )
@@ -238,7 +248,12 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
     failed: jobList.filter(isFailedYoutubeJob).length
   }
   return (
-    <div className={cn('flex flex-col gap-0.5', !collapsed && 'pl-3')}>
+    <div
+      className={cn(
+        'flex flex-col gap-0.5',
+        !collapsed && 'ml-3 border-l-[0.5px] border-border pl-1.5'
+      )}
+    >
       {YOUTUBE_JOBS.map((entry) => {
         const Icon = entry.icon
         return (
@@ -250,7 +265,9 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
             count={counts[entry.value]}
             onClick={() => setJobFilter(entry.value)}
           >
-            <Icon aria-hidden className="size-4 shrink-0" style={{ color: entry.color }} />
+            <span className={ICON_BOX}>
+              <Icon aria-hidden className="size-4" style={{ color: entry.color }} />
+            </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
           </Item>
         )
@@ -383,11 +400,13 @@ export function AppSidebar(): React.JSX.Element {
               title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
               onClick={() => chooseFilter(entry.value)}
             >
-              <Icon
-                aria-hidden
-                className="size-4 shrink-0"
-                style={{ color: entry.color ?? 'var(--text-secondary)' }}
-              />
+              <span className={ICON_BOX}>
+                <Icon
+                  aria-hidden
+                  className="size-4"
+                  style={{ color: entry.color ?? 'var(--text-secondary)' }}
+                />
+              </span>
               {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
             </Item>
           )
@@ -444,7 +463,9 @@ export function AppSidebar(): React.JSX.Element {
             if (!telegramOpen) setView({ name: 'telegram', kind: null })
           }}
         >
-          <Send aria-hidden className="size-4 shrink-0 text-[var(--text-secondary)]" />
+          <span className={ICON_BOX}>
+            <Send aria-hidden className="size-4 text-[var(--text-secondary)]" />
+          </span>
           {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
         </Item>
         {telegramOpen && <TelegramEntries collapsed={collapsed} />}
@@ -458,7 +479,9 @@ export function AppSidebar(): React.JSX.Element {
             if (!youtubeOpen) setView({ name: 'youtube' })
           }}
         >
-          <YoutubeIcon className="size-4 shrink-0 text-red-500" />
+          <span className={ICON_BOX}>
+            <YoutubeIcon className="size-4 text-red-500" />
+          </span>
           {!collapsed && <span className="min-w-0 flex-1 truncate">YouTube</span>}
         </Item>
         {youtubeOpen && <YoutubeEntries collapsed={collapsed} />}
