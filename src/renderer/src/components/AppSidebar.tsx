@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleAlert,
   CircleCheck,
+  Download,
   EyeOff,
   Layers,
   PanelLeftClose,
@@ -54,9 +55,14 @@ export const labelClass =
 // Every entry icon sits in the same 20px box, so labels line up whatever the icon.
 const ICON_BOX = 'flex size-5 shrink-0 items-center justify-center'
 
-/** One entry in the side panel: an icon, a label and an optional count. Collapsed, only the icon shows. */
+// The indent that holds a section's entries, with a guide line down their left.
+const NESTED = 'ml-3 border-l-[0.5px] border-border pl-1.5'
+
+/** One entry in the side panel: an icon, a label and an optional count. Collapsed, only the icon shows.
+ * `expanded` is for a section header: it says whether that section's entries are showing. */
 export function Item({
   active,
+  expanded,
   onClick,
   count,
   title,
@@ -65,6 +71,8 @@ export function Item({
   children
 }: {
   active: boolean
+  /** Set on a section header only. Left off, the entry is a plain item. */
+  expanded?: boolean
   onClick: () => void
   /** Left off, an entry shows no number. */
   count?: number
@@ -77,7 +85,8 @@ export function Item({
   const button = (
     <button
       type="button"
-      aria-current={active ? 'true' : undefined}
+      aria-current={expanded === undefined && active ? 'true' : undefined}
+      aria-expanded={expanded}
       aria-label={collapsed ? (count === undefined ? label : `${label}, ${count}`) : undefined}
       onClick={onClick}
       className={cn(
@@ -109,6 +118,16 @@ export function Item({
       <TooltipTrigger render={button} />
       <TooltipContent side="right">{hint}</TooltipContent>
     </Tooltip>
+  )
+}
+
+/** The arrow on a section header: pointing down while its entries show, to the side when shut. */
+function Chevron({ open }: { open: boolean }): React.JSX.Element {
+  return (
+    <ChevronDown
+      aria-hidden
+      className={cn('size-3 shrink-0 text-muted-foreground', !open && '-rotate-90')}
+    />
   )
 }
 
@@ -145,7 +164,7 @@ const YOUTUBE_JOBS: {
   { value: 'failed', label: 'Failed', icon: CircleAlert, color: STATUS_STYLE.failed.color }
 ]
 
-/** The Telegram entries, shown under its service while the Telegram section is open. */
+/** The Telegram entries, shown under its header while the Telegram section is open. */
 function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Element {
   const view = useAppStore((store) => store.view)
   const setView = useAppStore((store) => store.setView)
@@ -184,12 +203,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
     useTelegramStore.getState().setSelected(new Set())
   }
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-0.5',
-        !collapsed && 'ml-3 border-l-[0.5px] border-border pl-1.5'
-      )}
-    >
+    <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
       <Item
         label="All"
         collapsed={collapsed}
@@ -235,7 +249,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
   )
 }
 
-/** The YouTube entries, shown under its service while the YouTube section is open. */
+/** The YouTube entries, shown under its header while the YouTube section is open. */
 function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Element {
   const jobs = useYoutubeStore((store) => store.jobs)
   const jobFilter = useYoutubeStore((store) => store.jobFilter)
@@ -248,12 +262,7 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
     failed: jobList.filter(isFailedYoutubeJob).length
   }
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-0.5',
-        !collapsed && 'ml-3 border-l-[0.5px] border-border pl-1.5'
-      )}
-    >
+    <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
       {YOUTUBE_JOBS.map((entry) => {
         const Icon = entry.icon
         return (
@@ -277,14 +286,15 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
 }
 
 /**
- * The one side panel for every section: Downloads (status and file type), then Telegram and
- * YouTube. A service's entries open under it only while that section is showing, so switching
- * sections never leaves a separate screen to go back from.
+ * The one side panel: three sections, Downloads, Telegram and YouTube. Only one is open at a time,
+ * and the open one is the section the screen on show belongs to. Opening a section goes to its
+ * screen, so the panel and the screen never disagree and there is no back button to go by.
  */
 export function AppSidebar(): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('lightning.sidebar') === 'min'
   )
+  // The file types are a long list most people don't need, so they start shut.
   const [kindsOpen, setKindsOpen] = useState(false)
   const [hideOpen, setHideOpen] = useState(false)
   const hideSidebar = useAppStore((store) => store.hideSidebar)
@@ -311,6 +321,10 @@ export function AppSidebar(): React.JSX.Element {
     return countEntries(buildEntries(downloads, history, groupInfos))
   }, [downloadsById, history, groupInfos])
 
+  const downloadsOpen = view.name !== 'telegram' && view.name !== 'youtube'
+  const telegramOpen = view.name === 'telegram'
+  const youtubeOpen = view.name === 'youtube'
+
   const toggle = (): void => {
     const next = !collapsed
     setCollapsed(next)
@@ -327,14 +341,6 @@ export function AppSidebar(): React.JSX.Element {
     setSelected(new Set())
   }
   const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose
-  const section = (text: string): React.JSX.Element =>
-    collapsed ? (
-      <div aria-hidden className="mx-2 mt-2 mb-1 h-px bg-border" />
-    ) : (
-      <div className={labelClass}>{text}</div>
-    )
-  const telegramOpen = view.name === 'telegram'
-  const youtubeOpen = view.name === 'youtube'
   const buttonClass = cn(
     'flex h-8 shrink-0 items-center rounded-md text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
     collapsed ? 'w-full justify-center' : 'w-8 justify-center'
@@ -387,104 +393,130 @@ export function AppSidebar(): React.JSX.Element {
           </Tooltip>
         </div>
 
-        {section('Status')}
-        {STATUSES.map((entry) => {
-          const Icon = entry.icon
-          return (
-            <Item
-              key={entry.value}
-              active={view.name === 'list' && filter === entry.value}
-              count={counts.statuses[entry.value] ?? 0}
-              label={entry.label}
-              collapsed={collapsed}
-              title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
-              onClick={() => chooseFilter(entry.value)}
-            >
-              <span className={ICON_BOX}>
-                <Icon
-                  aria-hidden
-                  className="size-4"
-                  style={{ color: entry.color ?? 'var(--text-secondary)' }}
-                />
-              </span>
-              {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-            </Item>
-          )
-        })}
+        {/* Downloads: its status and file type entries show while it is open. */}
+        <Item
+          label="Downloads"
+          collapsed={collapsed}
+          active={downloadsOpen}
+          expanded={downloadsOpen}
+          onClick={() => {
+            if (view.name !== 'list') setView({ name: 'list' })
+          }}
+        >
+          <span className={ICON_BOX}>
+            <Download aria-hidden className="size-4 text-[var(--text-secondary)]" />
+          </span>
+          {!collapsed && <span className="min-w-0 flex-1 truncate">Downloads</span>}
+          {!collapsed && <Chevron open={downloadsOpen} />}
+        </Item>
+        {downloadsOpen && (
+          <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
+            {STATUSES.map((entry) => {
+              const Icon = entry.icon
+              return (
+                <Item
+                  key={entry.value}
+                  active={view.name === 'list' && filter === entry.value}
+                  count={counts.statuses[entry.value] ?? 0}
+                  label={entry.label}
+                  collapsed={collapsed}
+                  title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
+                  onClick={() => chooseFilter(entry.value)}
+                >
+                  <span className={ICON_BOX}>
+                    <Icon
+                      aria-hidden
+                      className="size-4"
+                      style={{ color: entry.color ?? 'var(--text-secondary)' }}
+                    />
+                  </span>
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                </Item>
+              )
+            })}
 
-        {/* Closed until opened: the file types are a long list most people don't need. */}
-        {collapsed ? (
-          <button
-            type="button"
-            aria-label="File type"
-            aria-expanded={kindsOpen}
-            onClick={() => setKindsOpen((open) => !open)}
-            className="mt-1 flex h-6 w-full items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ChevronDown aria-hidden className={cn('size-3.5', !kindsOpen && '-rotate-90')} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-expanded={kindsOpen}
-            onClick={() => setKindsOpen((open) => !open)}
-            className={cn(
-              labelClass,
-              'flex w-full items-center justify-between rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+            {collapsed ? (
+              <button
+                type="button"
+                aria-label="File type"
+                aria-expanded={kindsOpen}
+                onClick={() => setKindsOpen((open) => !open)}
+                className="mt-1 flex h-6 w-full items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown aria-hidden className={cn('size-3.5', !kindsOpen && '-rotate-90')} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-expanded={kindsOpen}
+                onClick={() => setKindsOpen((open) => !open)}
+                className={cn(
+                  labelClass,
+                  'flex w-full items-center justify-between rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+                )}
+              >
+                File type
+                <ChevronDown aria-hidden className={cn('size-3', !kindsOpen && '-rotate-90')} />
+              </button>
             )}
-          >
-            File type
-            <ChevronDown aria-hidden className={cn('size-3', !kindsOpen && '-rotate-90')} />
-          </button>
+            {kindsOpen &&
+              FILE_KINDS.map((entry) => (
+                <Item
+                  key={entry.kind}
+                  label={entry.label}
+                  collapsed={collapsed}
+                  active={view.name === 'list' && kindFilter === entry.kind}
+                  count={counts.kinds[entry.kind] ?? 0}
+                  onClick={() => chooseKind(kindFilter === entry.kind ? null : entry.kind)}
+                >
+                  <FileKindIcon kind={entry.kind} size="sm" className="size-5 [&>svg]:size-3" />
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                </Item>
+              ))}
+          </div>
         )}
-        {kindsOpen &&
-          FILE_KINDS.map((entry) => (
-            <Item
-              key={entry.kind}
-              label={entry.label}
-              collapsed={collapsed}
-              active={view.name === 'list' && kindFilter === entry.kind}
-              count={counts.kinds[entry.kind] ?? 0}
-              onClick={() => chooseKind(kindFilter === entry.kind ? null : entry.kind)}
-            >
-              <FileKindIcon kind={entry.kind} size="sm" className="size-5 [&>svg]:size-3" />
-              {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-            </Item>
-          ))}
 
-        {section('Services')}
-        <Item
-          label="Telegram"
-          collapsed={collapsed}
-          active={telegramOpen}
-          count={telegramActive}
-          title="Downloads from Telegram chats and links"
-          onClick={() => {
-            if (!telegramOpen) setView({ name: 'telegram', kind: null })
-          }}
-        >
-          <span className={ICON_BOX}>
-            <Send aria-hidden className="size-4 text-[var(--text-secondary)]" />
-          </span>
-          {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
-        </Item>
-        {telegramOpen && <TelegramEntries collapsed={collapsed} />}
-        <Item
-          label="YouTube"
-          collapsed={collapsed}
-          active={youtubeOpen}
-          count={youtubeActive}
-          title="YouTube video & audio downloads (yt-dlp)"
-          onClick={() => {
-            if (!youtubeOpen) setView({ name: 'youtube' })
-          }}
-        >
-          <span className={ICON_BOX}>
-            <YoutubeIcon className="size-4 text-red-500" />
-          </span>
-          {!collapsed && <span className="min-w-0 flex-1 truncate">YouTube</span>}
-        </Item>
-        {youtubeOpen && <YoutubeEntries collapsed={collapsed} />}
+        <div className="mt-1.5">
+          <Item
+            label="Telegram"
+            collapsed={collapsed}
+            active={telegramOpen}
+            expanded={telegramOpen}
+            count={telegramActive}
+            title="Downloads from Telegram chats and links"
+            onClick={() => {
+              if (!telegramOpen) setView({ name: 'telegram', kind: null })
+            }}
+          >
+            <span className={ICON_BOX}>
+              <Send aria-hidden className="size-4 text-[var(--text-secondary)]" />
+            </span>
+            {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
+            {!collapsed && <Chevron open={telegramOpen} />}
+          </Item>
+          {telegramOpen && <TelegramEntries collapsed={collapsed} />}
+        </div>
+
+        <div className="mt-1.5">
+          <Item
+            label="YouTube"
+            collapsed={collapsed}
+            active={youtubeOpen}
+            expanded={youtubeOpen}
+            count={youtubeActive}
+            title="YouTube video & audio downloads (yt-dlp)"
+            onClick={() => {
+              if (!youtubeOpen) setView({ name: 'youtube' })
+            }}
+          >
+            <span className={ICON_BOX}>
+              <YoutubeIcon className="size-4 text-red-500" />
+            </span>
+            {!collapsed && <span className="min-w-0 flex-1 truncate">YouTube</span>}
+            {!collapsed && <Chevron open={youtubeOpen} />}
+          </Item>
+          {youtubeOpen && <YoutubeEntries collapsed={collapsed} />}
+        </div>
 
         <div className="flex-1" />
         {/* Always in place, only hidden when there is nothing to clear: the list above would

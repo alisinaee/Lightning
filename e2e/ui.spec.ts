@@ -370,8 +370,9 @@ test('a link just started is not offered again from the clipboard', async ({
   await page.getByRole('button', { name: 'Download', exact: true }).click()
   await expect(link).toBeHidden()
 
-  // Started: its own screen is open, so back to the list for the next one.
-  await page.getByRole('button', { name: 'Downloads', exact: true }).click()
+  // Started: its own screen is open, so back to the list for the next one. The screen's own back
+  // button, not the side panel's Downloads section header (same name, earlier in the page).
+  await page.getByRole('button', { name: 'Downloads', exact: true }).last().click()
   await lightning.newDownload()
   // Answered after the dialog's own read, so that one has been applied (or skipped) by now.
   await page.evaluate(() => window.lightning.readClipboardText())

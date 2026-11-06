@@ -41,7 +41,8 @@ test('download filters show live counts, retain the filter, and clear hidden sel
   await expect(page.getByRole('button', { name: 'Open failed.bin', exact: true })).toBeHidden()
 
   await page.getByRole('button', { name: 'Open paused.bin', exact: true }).click()
-  await page.getByRole('button', { name: 'Downloads', exact: true }).click()
+  // The screen's own back button; the side panel has a Downloads section header with the same name.
+  await page.getByRole('button', { name: 'Downloads', exact: true }).last().click()
   await expect(cat('Paused')).toHaveAttribute('aria-current', 'true')
   await page.getByRole('checkbox', { name: 'Select paused.bin', exact: true }).check()
   await expect(page.getByRole('toolbar', { name: 'Selected downloads' })).toBeVisible()

@@ -10,13 +10,29 @@ test('the YouTube options sheet closes from its close button', async ({ lightnin
   await expect(sheet).toBeHidden()
 })
 
-test('YouTube and Downloads share one side panel, with no back button', async ({ lightning }) => {
+test('Downloads, YouTube and Telegram are accordion sections in one side panel, one open at a time', async ({
+  lightning
+}) => {
   const page = lightning.page
   const panel = page.getByRole('navigation', { name: 'Download categories' })
-  await panel.getByRole('button', { name: 'YouTube' }).click()
+  const downloads = panel.getByRole('button', { name: 'Downloads', exact: true })
+  const youtube = panel.getByRole('button', { name: /^YouTube/ })
+  const telegram = panel.getByRole('button', { name: /^Telegram/ })
+
+  await youtube.click()
   await expect(page.getByRole('heading', { name: 'YouTube' })).toBeVisible()
-  await expect(panel).toBeVisible()
+  await expect(youtube).toHaveAttribute('aria-expanded', 'true')
+  await expect(downloads).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('button', { name: 'Back to Downloads' })).toHaveCount(0)
-  await panel.getByRole('button', { name: /^Completed/ }).click()
+  await expect(panel.getByRole('button', { name: /^Completed/ })).toBeHidden()
+
+  await telegram.click()
+  await expect(telegram).toHaveAttribute('aria-expanded', 'true')
+  await expect(youtube).toHaveAttribute('aria-expanded', 'false')
+
+  await downloads.click()
+  await expect(downloads).toHaveAttribute('aria-expanded', 'true')
+  await expect(telegram).toHaveAttribute('aria-expanded', 'false')
+  await expect(panel.getByRole('button', { name: /^Completed/ })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'YouTube' })).toBeHidden()
 })
