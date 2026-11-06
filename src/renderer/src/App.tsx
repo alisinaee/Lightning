@@ -1,12 +1,13 @@
 import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
 import { useEffect, useState } from 'react'
+import { AppSidebar } from './components/AppSidebar'
 import { SimBanner } from './components/lab/SimBanner'
 import { TestLab } from './components/lab/TestLab'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { GroupDialog } from './components/GroupDialog'
 import { MultiLinkDialog } from './components/MultiLinkDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
-import { SettingsDialog } from './components/SettingsDialog'
+import { SettingsDialog, type SettingsPage } from './components/SettingsDialog'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { UpdateDialog } from './components/UpdateDialog'
@@ -57,7 +58,11 @@ function renderDownload(download: DownloadState | FinishedDownload): React.JSX.E
 
 /** The download shown, or the list. Only this re-renders on a progress update: App, the title
  * bar, the status bar and the dialogs around it don't. */
-function CurrentScreen({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
+function CurrentScreen({
+  onOpenSettings
+}: {
+  onOpenSettings: (page?: SettingsPage) => void
+}): React.JSX.Element {
   // Just the one shown: an update to any other download leaves this selector's result alone.
   // A download that's gone (removed, deleted) leaves the list showing.
   const shown = useAppStore((store) => {
@@ -88,7 +93,16 @@ function App(): React.JSX.Element {
   useYoutubeEvents()
 
   const checkForUpdate = useAppStore((store) => store.checkForUpdate)
+  const sidebarHidden = useAppStore((store) => store.sidebarHidden)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Each open gets a new key, so the dialog starts on the page asked for (General by default).
+  const [settingsRequest, setSettingsRequest] = useState<{ id: number; page?: SettingsPage }>({
+    id: 0
+  })
+  const openSettings = (page?: SettingsPage): void => {
+    setSettingsRequest((previous) => ({ id: previous.id + 1, page }))
+    setSettingsOpen(true)
+  }
 
   useEffect(() => {
     window.lightning.setZoom(window.lightning.initialState.prefs.uiScale)
@@ -152,7 +166,7 @@ function App(): React.JSX.Element {
         store.setView({ name: 'telegram', kind: null })
         useTelegramStore.getState().openAdd(links)
       } else if (command === 'open-telegram') store.setView({ name: 'telegram', kind: null })
-      else if (command === 'settings') setSettingsOpen(true)
+      else if (command === 'settings') openSettings()
       else if (command === 'open-download' && argument)
         store.setView({ name: 'download', id: argument })
       else if (command === 'check-update') {
@@ -195,8 +209,11 @@ function App(): React.JSX.Element {
       <div className="flex h-full flex-col">
         <TitleBar />
         <SimBanner />
-        <div className="min-h-0 flex-1">
-          <CurrentScreen onOpenSettings={() => setSettingsOpen(true)} />
+        <div className="flex min-h-0 flex-1">
+          {!sidebarHidden && <AppSidebar />}
+          <div className="min-h-0 min-w-0 flex-1">
+            <CurrentScreen onOpenSettings={openSettings} />
+          </div>
         </div>
         <StatusBar />
         <NewDownloadDialog />
@@ -206,7 +223,12 @@ function App(): React.JSX.Element {
         <TelegramExportDialog />
         <TelegramLoginDialog />
         <UpdateDialog />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog
+          key={settingsRequest.id}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialPage={settingsRequest.page}
+        />
         <NetworkBindingDialog />
         {window.lightning.initialState.labEnabled && <TestLab />}
       </div>

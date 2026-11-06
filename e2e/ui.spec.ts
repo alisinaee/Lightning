@@ -140,7 +140,7 @@ test.describe('UI journeys @smoke', () => {
       .poll(async () => JSON.parse(await readFile(manifestPath, 'utf-8')).requestPayload)
       .toMatchObject({ streamsPerNetwork: 8 })
     // Started: its own screen opens.
-    await page.getByRole('button', { name: 'Pause' }).click()
+    await page.getByRole('button', { name: 'Pause', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Progress', exact: true })).toBeVisible()
     // An HTTP download's connections are streams, and its blocks chunks.

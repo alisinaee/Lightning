@@ -157,8 +157,15 @@ async function grouped(
   return group
 }
 
+/** The file-type list folds away until opened; open it before reaching its entries. */
+async function openFileTypes(page: Page): Promise<void> {
+  const toggle = page.getByRole('button', { name: 'File type' })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+}
+
 /** Clicks every sidebar entry, then every one again off the menu, expecting no error. */
 async function clickEverySidebarEntry(page: Page): Promise<void> {
+  await openFileTypes(page)
   for (const name of [...SIDEBAR_STATUSES, ...SIDEBAR_KINDS]) {
     await entry(page, name).click()
     await expect(page.getByText('Something went wrong')).toBeHidden()
@@ -204,6 +211,7 @@ test.describe('sidebar', () => {
     await expect(rowButton(page, 'broke.pdf')).toBeVisible()
     await expect(rowButton(page, 'expired.iso')).toBeVisible()
     await entry(page, 'All downloads').click()
+    await openFileTypes(page)
     await entry(page, 'Video').click()
     await expect(rowButton(page, 'done.mp4')).toBeVisible()
     await expect(rowButton(page, 'held.zip')).toBeHidden()
@@ -508,6 +516,7 @@ test.describe('layout stability', () => {
     await paused(lightning, serve, 'held.zip')
     await failed(lightning, serve, 'broke.pdf', 500)
     const page = lightning.page
+    await openFileTypes(page)
     const names = [
       'Completed',
       'Failed',

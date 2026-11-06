@@ -19,8 +19,8 @@ import { Input } from '../components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { TelegramItemRow } from '../components/telegram/TelegramItemRow'
 import { TelegramJobGroup } from '../components/telegram/TelegramJobGroup'
-import { TelegramSidebar } from '../components/telegram/TelegramSidebar'
 import { columnsFor, jobTitle, columnsContext } from '../components/telegram/telegramRowInfo'
+import type { SettingsPage } from '../components/SettingsDialog'
 import { useAppStore } from '../store/useAppStore'
 import {
   isActiveJob,
@@ -52,15 +52,13 @@ const matchesJob = (job: TdlJob, filter: TelegramJobFilter): boolean =>
 export function TelegramScreen({
   onOpenSettings
 }: {
-  onOpenSettings: () => void
+  onOpenSettings: (page?: SettingsPage) => void
 }): React.JSX.Element {
   const view = useAppStore((store) => store.view)
-  const setView = useAppStore((store) => store.setView)
   const kind: TgMediaKind | null = view.name === 'telegram' ? view.kind : null
   const jobs = useTelegramStore((store) => store.jobs)
   const status = useTelegramStore((store) => store.status)
   const jobFilter = useTelegramStore((store) => store.jobFilter)
-  const setJobFilter = useTelegramStore((store) => store.setJobFilter)
   const search = useTelegramStore((store) => store.search)
   const setSearch = useTelegramStore((store) => store.setSearch)
   const selected = useTelegramStore((store) => store.selected)
@@ -87,33 +85,6 @@ export function TelegramScreen({
     [jobs]
   )
   const needle = search.trim().toLowerCase()
-
-  const kindCounts = useMemo(() => {
-    const counts: Record<TgMediaKind | 'all', number> = {
-      all: 0,
-      video: 0,
-      photo: 0,
-      audio: 0,
-      document: 0,
-      other: 0
-    }
-    for (const job of allJobs) {
-      for (const item of job.items) {
-        counts.all++
-        counts[item.media]++
-      }
-    }
-    return counts
-  }, [allJobs])
-
-  const jobCounts = useMemo(
-    () => ({
-      active: allJobs.filter(isActiveJob).length,
-      finished: allJobs.filter(isFinishedJob).length,
-      failed: allJobs.filter(isFailedJob).length
-    }),
-    [allJobs]
-  )
 
   const entries = useMemo(() => {
     const list: Entry[] = []
@@ -152,10 +123,6 @@ export function TelegramScreen({
     }
   }
 
-  const setKind = (next: TgMediaKind | null): void => {
-    setView({ name: 'telegram', kind: next })
-    setSelected(new Set())
-  }
   const select = (id: string, on: boolean): void => {
     const next = new Set(selected)
     if (on) next.add(id)
@@ -167,15 +134,7 @@ export function TelegramScreen({
   const accountLabel = status?.loggedIn ? (status.account ?? 'Signed in') : 'Sign in'
 
   return (
-    <div className="flex h-full bg-background">
-      <TelegramSidebar
-        kind={kind}
-        onKind={setKind}
-        kindCounts={kindCounts}
-        jobFilter={jobFilter}
-        onJobFilter={setJobFilter}
-        jobCounts={jobCounts}
-      />
+    <div className="flex h-full min-w-0 flex-1 bg-background">
       <div className="@container flex min-w-0 flex-1 flex-col">
         {chosen.length === 0 ? (
           <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
@@ -270,7 +229,7 @@ export function TelegramScreen({
                     size="icon"
                     variant="ghost"
                     aria-label="Settings"
-                    onClick={onOpenSettings}
+                    onClick={() => onOpenSettings('Telegram')}
                   >
                     <Settings />
                   </Button>

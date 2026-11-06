@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
+import { YoutubeOptionsPanel } from './youtube/YoutubeOptionsSheet'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
@@ -89,9 +90,12 @@ const PAGES = [
   'Schedule',
   'Browser',
   'Telegram',
+  'YouTube',
   'Interface',
   'Status bar'
 ] as const
+
+export type SettingsPage = (typeof PAGES)[number]
 
 const ACCENTS: { id: AccentId; label: string; color: string }[] = [
   { id: 'amber', label: 'Amber', color: '#d97706' },
@@ -209,13 +213,16 @@ function NumberField({
  * window closes. Saved as they change. */
 export function SettingsDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  initialPage
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The page to show when it opens; General when left off. */
+  initialPage?: SettingsPage
 }): React.JSX.Element {
   const initial = window.lightning.initialState
-  const [page, setPage] = useState<(typeof PAGES)[number]>('General')
+  const [page, setPage] = useState<SettingsPage>(initialPage ?? 'General')
   // The store holds the prefs, so a change made from the side panel shows here too.
   const prefs = useAppStore((store) => store.prefsSnapshot)
   const setPrefs = useAppStore((store) => store.setPrefsSnapshot)
@@ -295,6 +302,17 @@ export function SettingsDialog({
           <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4 text-[13px]">
             {page === 'General' && (
               <>
+                <div className="flex flex-col gap-2">
+                  <div className="text-[13px] font-medium">Telegram and YouTube</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" onClick={() => setPage('Telegram')}>
+                      Telegram settings
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setPage('YouTube')}>
+                      YouTube options
+                    </Button>
+                  </div>
+                </div>
                 <div>
                   <div className="text-[15px] font-semibold">Lightning {initial.version}</div>
                   <div className="text-[12.5px] text-muted-foreground">
@@ -594,6 +612,17 @@ export function SettingsDialog({
                 }}
                 onFeatureChange={(patch) => save(patch)}
               />
+            )}
+            {page === 'YouTube' && (
+              <>
+                <div>
+                  <div className="text-[15px] font-semibold">YouTube</div>
+                  <div className="text-[12.5px] text-muted-foreground">
+                    Used by every new YouTube download.
+                  </div>
+                </div>
+                <YoutubeOptionsPanel />
+              </>
             )}
             {page === 'Telegram' && (
               <>

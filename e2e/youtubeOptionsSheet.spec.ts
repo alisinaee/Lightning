@@ -10,10 +10,13 @@ test('the YouTube options sheet closes from its close button', async ({ lightnin
   await expect(sheet).toBeHidden()
 })
 
-test('the YouTube section has a way back to Downloads', async ({ lightning }) => {
+test('YouTube and Downloads share one side panel, with no back button', async ({ lightning }) => {
   const page = lightning.page
-  await page.getByRole('button', { name: 'YouTube' }).click()
+  const panel = page.getByRole('navigation', { name: 'Download categories' })
+  await panel.getByRole('button', { name: 'YouTube' }).click()
   await expect(page.getByRole('heading', { name: 'YouTube' })).toBeVisible()
-  await page.getByRole('button', { name: 'Downloads', exact: true }).click()
+  await expect(panel).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Back to Downloads' })).toHaveCount(0)
+  await panel.getByRole('button', { name: /^Completed/ }).click()
   await expect(page.getByRole('heading', { name: 'YouTube' })).toBeHidden()
 })

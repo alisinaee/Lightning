@@ -21,7 +21,6 @@ import type { RowHandlers } from '../components/downloads/rowHelpers'
 import { TableBoundary } from '../components/downloads/TableBoundary'
 import { DownloadsTable } from '../components/downloads/DownloadsTable'
 import { GroupTableRow } from '../components/downloads/GroupRows'
-import { DownloadsSidebar } from '../components/downloads/Sidebar'
 import { STATUSES } from '../components/downloads/statusEntries'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { LimitsDialog } from '../components/LimitsDialog'
@@ -648,7 +647,7 @@ export function DownloadsScreen({
               </span>
             )}
           </div>
-          <SettingsButton onClick={onOpenSettings} />
+          <SettingsButton onClick={() => onOpenSettings()} />
         </div>
       ) : (
         <div
@@ -764,7 +763,7 @@ export function DownloadsScreen({
               </Button>
             )}
           </div>
-          <SettingsButton onClick={onOpenSettings} />
+          <SettingsButton onClick={() => onOpenSettings()} />
         </div>
       )}
       {/* Laid over the table, not above it, so it doesn't push the table down. */}
@@ -780,20 +779,6 @@ export function DownloadsScreen({
       </div>
 
       <div className="@container flex min-h-0 flex-1">
-        {!sidebarHidden && (
-          <DownloadsSidebar
-            counts={counts}
-            filter={filter}
-            kind={kindFilter}
-            onFilter={chooseFilter}
-            onKind={(kind) => {
-              setKindFilter(kind)
-              setSelected(new Set())
-            }}
-            canClear={history.length > 0}
-            onClear={() => void window.lightning.clearHistory()}
-          />
-        )}
         {noDownloadsAtAll ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <EmptyState />

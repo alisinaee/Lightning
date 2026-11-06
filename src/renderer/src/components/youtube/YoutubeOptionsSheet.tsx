@@ -554,7 +554,49 @@ function AdvancedSettings({
   )
 }
 
-/** The YouTube downloader's settings, in two tabs: Common for everyday use, Advanced for yt-dlp's finer controls. */
+/** The YouTube downloader's settings, in two tabs: Common for everyday use, Advanced for yt-dlp's
+ * finer controls. Shown in the YouTube options sheet and on the YouTube page of Settings. */
+export function YoutubeOptionsPanel(): React.JSX.Element {
+  const options = useYoutubeStore((store) => store.options)
+  const setOptions = useYoutubeStore((store) => store.setOptions)
+  const [tab, setTab] = useState<'common' | 'advanced'>('common')
+  const change: Change = (part) => void setOptions(part)
+
+  return (
+    <>
+      <div className="px-4 pt-3">
+        <div role="tablist" aria-label="Option groups" className="flex rounded-md bg-muted p-0.5">
+          {(['common', 'advanced'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={cn(
+                'h-7 flex-1 rounded-[5px] text-[12px] font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                tab === value
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 py-4">
+        {tab === 'common' ? (
+          <CommonSettings options={options} change={change} />
+        ) : (
+          <AdvancedSettings options={options} change={change} />
+        )}
+      </div>
+    </>
+  )
+}
+
+/** The YouTube options as a side sheet, opened from the YouTube section's settings button. */
 export function YoutubeOptionsSheet({
   open,
   onOpenChange
@@ -562,48 +604,14 @@ export function YoutubeOptionsSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
-  const options = useYoutubeStore((store) => store.options)
-  const setOptions = useYoutubeStore((store) => store.setOptions)
-  const [tab, setTab] = useState<'common' | 'advanced'>('common')
-  const change: Change = (part) => void setOptions(part)
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[440px] max-w-full gap-0 overflow-y-auto">
         <SheetHeader className="border-b-[0.5px] border-border">
           <SheetTitle>YouTube options</SheetTitle>
           <SheetDescription>Used by every new YouTube download.</SheetDescription>
-          <div
-            role="tablist"
-            aria-label="Option groups"
-            className="mt-2 flex rounded-md bg-muted p-0.5"
-          >
-            {(['common', 'advanced'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={cn(
-                  'h-7 flex-1 rounded-[5px] text-[12px] font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  tab === value
-                    ? 'bg-background text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
         </SheetHeader>
-        <div className="px-4 py-4">
-          {tab === 'common' ? (
-            <CommonSettings options={options} change={change} />
-          ) : (
-            <AdvancedSettings options={options} change={change} />
-          )}
-        </div>
+        <YoutubeOptionsPanel />
       </SheetContent>
     </Sheet>
   )

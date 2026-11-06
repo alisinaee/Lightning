@@ -9,7 +9,6 @@ import { YoutubeAddDialog } from '../components/youtube/YoutubeAddDialog'
 import { YoutubeOptionsSheet } from '../components/youtube/YoutubeOptionsSheet'
 import { YoutubeJobRow } from '../components/youtube/YoutubeJobRow'
 import { YoutubeGroupRow } from '../components/youtube/YoutubeGroupRow'
-import { YoutubeSidebar } from '../components/youtube/YoutubeSidebar'
 import { YOUTUBE_COLUMNS } from '../components/youtube/youtubeRowModel'
 import { YoutubeFetchQueue } from '../components/youtube/YoutubeFetchQueue'
 import {
@@ -104,19 +103,8 @@ export function YouTubeScreen(): React.JSX.Element {
     return items.sort((a, b) => b.at - a.at).map((item) => item.node)
   }, [visible, expandedGroups])
 
-  const counts = (filter: YoutubeJobFilter): number =>
-    all.filter((job) => matchesFilter(job, filter)).length
-
   return (
-    <div className="flex h-full bg-background">
-      <YoutubeSidebar
-        counts={{
-          all: counts('all'),
-          active: counts('active'),
-          finished: counts('finished'),
-          failed: counts('failed')
-        }}
-      />
+    <div className="flex h-full min-w-0 flex-1 bg-background">
       <div className="@container flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
           <h1 className="flex shrink-0 items-center gap-2 text-[14px] font-semibold">
