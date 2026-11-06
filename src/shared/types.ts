@@ -421,6 +421,7 @@ export interface AppPrefs {
   notifyWhenInactive?: boolean
   preventSleep?: boolean
   closeToBackground?: boolean
+  /** No longer used: the Dock icon always stays so the launcher shows the running app. Kept so old settings files still load. */
   hideDock?: boolean
   /** The side panel of the downloads list, hidden completely until Settings brings it back. */
   sidebarHidden?: boolean

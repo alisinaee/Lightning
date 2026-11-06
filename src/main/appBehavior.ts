@@ -94,10 +94,8 @@ export async function applyBehavior(settings: AppSettings): Promise<void> {
     menuScan: prefs.browserMenuScan
   }
   await localApi?.setEnabled(prefs.browserIntegration)
-  if (process.platform === 'darwin' && app.dock) {
-    if (prefs.hideDock) app.dock.hide()
-    else app.dock.show()
-  }
+  // The Dock icon always stays: it is how macOS shows Lightning is running (dot, bounce, Cmd+Tab).
+  if (process.platform === 'darwin' && app.dock) app.dock.show()
   // Checked again here, for the text that becomes the rules (prefsOf already dropped the rest).
   const valid = (value: string): string => (isProxyAddress(value) ? value : '')
   prefs.proxyHttp = valid(prefs.proxyHttp)

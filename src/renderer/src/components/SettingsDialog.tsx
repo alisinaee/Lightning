@@ -916,11 +916,6 @@ export function SettingsDialog({
                   label="Closing the window keeps Lightning running in the background"
                 />
                 <Row
-                  checked={prefs.hideDock}
-                  onChange={(hideDock) => save({ hideDock })}
-                  label="Hide the Dock icon"
-                />
-                <Row
                   checked={prefs.openAtLogin}
                   onChange={(openAtLogin) => save({ openAtLogin })}
                   label="Start Lightning when I sign in (hidden in the tray)"

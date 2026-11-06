@@ -238,7 +238,10 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.lightning.app')
-  if (process.platform === 'darwin' && app.dock) {
+  // Packaged, the Dock uses the app bundle's icon, the same one the pinned Dock icon uses, so the
+  // running app and its launcher icon are one. A runtime setIcon would replace it with a copy that
+  // stays stale after an update. Only a dev run (no bundle icon) sets the image.
+  if (process.platform === 'darwin' && app.dock && !app.isPackaged) {
     app.dock.setIcon(nativeImage.createFromPath(icon))
   }
   log.info(
