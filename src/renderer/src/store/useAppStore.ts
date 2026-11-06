@@ -272,7 +272,9 @@ interface AppStore {
   /** The Speed and data limits dialog, opened from outside its screen (Settings → Network). The
    * screen clears the flag when it opens the dialog. */
   limitsDialogOpen: boolean
-  openLimitsDialog: () => void
+  /** The page the limits dialog opens on, when it was asked for one (null: the general page). */
+  limitsDialogPage: string | null
+  openLimitsDialog: (page?: string | null) => void
   closeLimitsDialog: () => void
 }
 
@@ -579,7 +581,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setDraftUrl: (draftUrl) => set({ draftUrl }),
   limitsDialogOpen: false,
-  openLimitsDialog: () => set({ limitsDialogOpen: true }),
+  limitsDialogPage: null,
+  openLimitsDialog: (page) => set({ limitsDialogOpen: true, limitsDialogPage: page ?? null }),
   closeLimitsDialog: () => set({ limitsDialogOpen: false }),
   setDestinationDir: (destinationDir) => {
     set({ destinationDir })

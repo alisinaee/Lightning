@@ -2,6 +2,7 @@ import { memo, type CSSProperties } from 'react'
 import { Copy, ExternalLink, FolderOpen, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
 import type { YoutubeJob } from '@shared/youtube'
 import { Button } from '../ui/button'
+import { Checkbox } from '../ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RowActionsMenu, RowContextMenu, type RowAction } from '../downloads/rowMenu'
 import { ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
@@ -18,6 +19,7 @@ import {
 } from '../downloads/cells'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
 import { describeYoutubeJob, YOUTUBE_COLUMNS } from './youtubeRowModel'
+import { explainYoutubeError } from './youtubeErrors'
 import { cn } from 'cn'
 import type { LucideIcon } from 'lucide-react'
 
@@ -54,11 +56,15 @@ function IconAction({
 
 export const YoutubeJobRow = memo(function YoutubeJobRow({
   job,
-  nested = false
+  nested = false,
+  selected = false,
+  onSelect
 }: {
   job: YoutubeJob
   /** Shown under its playlist's group row, so the name is indented. */
   nested?: boolean
+  selected?: boolean
+  onSelect?: (on: boolean) => void
 }): React.JSX.Element {
   const pauseJob = useYoutubeStore((store) => store.pauseJob)
   const resumeJob = useYoutubeStore((store) => store.resumeJob)
@@ -131,11 +137,17 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       role="row"
       data-row-entry={job.id}
       data-status={info.status}
-      className={cn(ROW_CLASS)}
+      className={cn(ROW_CLASS, selected && 'bg-primary/10 hover:bg-primary/15')}
       style={{ '--cols': YOUTUBE_COLUMNS, ...stateEdge(info.status) } as CSSProperties}
     >
       <RowProgressLine info={info} />
-      <div role="cell" className="flex items-center justify-center" />
+      <div role="cell" className="flex items-center justify-center">
+        <Checkbox
+          aria-label={`Select ${job.title}`}
+          checked={selected}
+          onCheckedChange={(on) => onSelect?.(on)}
+        />
+      </div>
       <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'pl-8' : 'pl-0')}>
         <FormatBadge name={fileName} />
         <button
@@ -158,7 +170,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
             {[
               'YouTube',
               job.resolution,
-              job.error && job.status === 'error' ? job.error.split('\n')[0] : ''
+              job.error && job.status === 'error' ? explainYoutubeError(job.error).summary : ''
             ]
               .filter(Boolean)
               .join(' · ') || ' '}

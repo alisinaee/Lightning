@@ -73,7 +73,7 @@ function CurrentScreen({
   const viewName = useAppStore((store) => store.view.name)
 
   if (viewName === 'telegram') return <TelegramScreen onOpenSettings={onOpenSettings} />
-  if (viewName === 'youtube') return <YouTubeScreen />
+  if (viewName === 'youtube') return <YouTubeScreen onOpenSettings={onOpenSettings} />
 
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
   return shown && !cancelled ? (

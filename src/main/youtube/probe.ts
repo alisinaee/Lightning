@@ -37,7 +37,8 @@ const COMMON_RESOLUTIONS = [
 ]
 
 export async function probeYoutube(url: string, proxy?: string): Promise<YoutubeVideoMeta> {
-  const args = ['--dump-single-json', '--no-warnings', '--no-playlist']
+  // A stalled connection fails after 20s with yt-dlp's own message, not after the whole wait.
+  const args = ['--dump-single-json', '--no-warnings', '--no-playlist', '--socket-timeout', '20']
   if (proxy) {
     args.push('--proxy', proxy)
   }

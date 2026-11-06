@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
+import { YoutubeErrorText } from './YoutubeErrorText'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
 import { formatBytes, formatSeconds } from '../../utils/format'
 import { cn } from 'cn'
@@ -85,9 +86,11 @@ export function YoutubeAddDialog(): React.JSX.Element {
           </div>
 
           {probeError && (
-            <p role="alert" className="text-[12.5px] text-[var(--color-danger)]">
-              {probeError}
-            </p>
+            <YoutubeErrorText
+              role="alert"
+              error={probeError}
+              className="text-[12.5px] text-[var(--color-danger)]"
+            />
           )}
 
           {probe && (

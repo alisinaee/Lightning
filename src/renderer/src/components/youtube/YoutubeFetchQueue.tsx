@@ -1,6 +1,7 @@
 import { Loader2, X } from 'lucide-react'
 import { Button } from '../ui/button'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
+import { YoutubeErrorText } from './YoutubeErrorText'
 
 /** Links being fetched, and fetched links waiting for a quality choice. Shown above the job list. */
 export function YoutubeFetchQueue(): React.JSX.Element | null {
@@ -33,9 +34,10 @@ export function YoutubeFetchQueue(): React.JSX.Element | null {
             </>
           )}
           {item.state === 'error' && (
-            <span className="min-w-0 flex-1 truncate text-[13px] text-destructive">
-              {item.error || 'Could not fetch this link'}
-            </span>
+            <YoutubeErrorText
+              error={item.error}
+              className="min-w-0 flex-1 text-[13px] text-destructive"
+            />
           )}
           <Button
             type="button"

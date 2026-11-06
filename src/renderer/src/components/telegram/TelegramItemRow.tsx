@@ -78,6 +78,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
       row={
         <div
           role="row"
+          data-row-entry={job.id}
           data-status={info.status}
           data-selected={selected || undefined}
           onClick={(event) => {

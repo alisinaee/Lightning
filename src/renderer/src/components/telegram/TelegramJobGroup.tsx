@@ -52,6 +52,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
         row={
           <div
             role="row"
+            data-row-entry={job.id}
             aria-expanded={open}
             data-status={info.status}
             data-selected={selected || undefined}

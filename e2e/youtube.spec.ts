@@ -38,7 +38,8 @@ test.describe('YouTube screen UI & yt-dlp', () => {
     await expect(youtubeBtn).toBeVisible()
     await youtubeBtn.click()
 
-    await expect(page.getByRole('heading', { name: 'YouTube' })).toBeVisible()
+    // The screen's heading is for screen readers; the sidebar and the top bar carry the name.
+    await expect(page.getByRole('heading', { name: 'YouTube' })).toBeAttached()
     await expect(page.getByText(/yt-dlp 2026\.10\.26/)).toBeVisible()
 
     // Adding a video opens the dialog with the link box.

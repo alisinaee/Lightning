@@ -1,18 +1,5 @@
 import type { DownloadState } from '@shared/types'
-import {
-  ChevronDown,
-  ChevronUp,
-  Link2,
-  ListFilter,
-  ListPlus,
-  Pause,
-  RotateCw,
-  Play,
-  Plus,
-  Search,
-  Settings,
-  X
-} from 'lucide-react'
+import { Link2, ListFilter, ListPlus, Pause, RotateCw, Play, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { filterLabel } from '../components/downloadFilterLabels'
@@ -23,8 +10,9 @@ import { DownloadsTable } from '../components/downloads/DownloadsTable'
 import { GroupTableRow } from '../components/downloads/GroupRows'
 import { STATUSES } from '../components/downloads/statusEntries'
 import { FixLinkDialog } from '../components/FixLinkDialog'
-import { LimitsDialog } from '../components/LimitsDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
+import { NewMenu, SearchField, SettingsButton } from '../components/ListTopBar'
+import { useLimitsDialog } from '../hooks/useLimitsDialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,14 +27,12 @@ import { Button, buttonVariants } from '../components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../components/ui/dropdown-menu'
-import { Input } from '../components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { VpnControl } from '../components/VpnControl'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -91,21 +77,6 @@ const isTrashable = (item: Item): boolean =>
   !(isFinished(item) && item.missing) &&
   (item.kind !== 'torrent' || !item.folder || !isFinished(item) || !!item.downloadedFiles?.length)
 
-function SettingsButton({ onClick }: { onClick: () => void }): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button type="button" size="icon" variant="ghost" aria-label="Settings" onClick={onClick}>
-            <Settings />
-          </Button>
-        }
-      />
-      <TooltipContent>Settings</TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function DownloadsScreen({
   onOpenSettings
 }: {
@@ -138,10 +109,7 @@ export function DownloadsScreen({
   } | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [limitsOpen, setLimitsOpen] = useState(false)
-  const [limitsPage, setLimitsPage] = useState<string | null>(null)
-  const limitsDialogOpen = useAppStore((store) => store.limitsDialogOpen)
-  const closeLimitsDialog = useAppStore((store) => store.closeLimitsDialog)
+  const { openLimits, limitsDialog } = useLimitsDialog()
   const searchInput = useRef<HTMLInputElement>(null)
   const downloads = useMemo(
     () =>
@@ -171,12 +139,6 @@ export function DownloadsScreen({
     setMatchIndex((index) => (index + dir + matchCount) % matchCount)
   }
   useEffect(() => setMatchIndex(0), [search])
-  // Settings → Network asks for the limits dialog through the store; it is opened here.
-  useEffect(() => {
-    if (!limitsDialogOpen) return
-    setLimitsOpen(true)
-    closeLimitsDialog()
-  }, [limitsDialogOpen, closeLimitsDialog])
   // Only a move through the results or a new search scrolls: a progress push does not.
   useEffect(() => {
     const hit = document.querySelectorAll<HTMLElement>('[data-hit="true"]')[matchIndex]
@@ -500,36 +462,14 @@ export function DownloadsScreen({
             />
             <TooltipContent>{pausing ? 'Pause all' : resumeLabel}</TooltipContent>
           </Tooltip>
-          <NetworksMenu
-            onOpenLimits={(page) => {
-              setLimitsPage(page)
-              setLimitsOpen(true)
-            }}
+          <NetworksMenu onOpenLimits={openLimits} />
+          <NewMenu
+            label="New download"
+            items={[
+              { label: 'One link', icon: Link2, run: () => openNewDownload() },
+              { label: 'Several links', icon: ListPlus, run: () => openMultiLinks() }
+            ]}
           />
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <DropdownMenuTrigger
-                    render={<Button type="button" size="icon" aria-label="New download" />}
-                  >
-                    <Plus />
-                  </DropdownMenuTrigger>
-                }
-              />
-              <TooltipContent>New download</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => openNewDownload()}>
-                <Link2 />
-                One link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openMultiLinks()}>
-                <ListPlus />
-                Several links
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           {/* After the + button, so a VPN turning up doesn't move it. */}
           <VpnControl />
           <div className="flex-1" />
@@ -595,58 +535,16 @@ export function DownloadsScreen({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <div className="relative w-[260px] min-w-[140px] shrink">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              ref={searchInput}
-              type="search"
-              disabled={noDownloadsAtAll}
-              aria-label="Search downloads"
-              placeholder="Search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setSearch('')
-                  event.currentTarget.blur()
-                } else if (event.key === 'Enter') {
-                  event.preventDefault()
-                  stepMatch(event.shiftKey ? -1 : 1)
-                }
-              }}
-              className="h-8 pr-[92px] pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
-            />
-            {search.trim() !== '' && (
-              <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
-                <span className="px-1 font-mono text-[11px] tabular-nums text-muted-foreground">
-                  {matchCount === 0 ? '0/0' : `${matchIndex + 1}/${matchCount}`}
-                </span>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Previous result"
-                  disabled={matchCount === 0}
-                  onClick={() => stepMatch(-1)}
-                >
-                  <ChevronUp />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Next result"
-                  disabled={matchCount === 0}
-                  onClick={() => stepMatch(1)}
-                >
-                  <ChevronDown />
-                </Button>
-              </span>
-            )}
-          </div>
+          <SearchField
+            inputRef={searchInput}
+            label="Search downloads"
+            value={search}
+            onChange={setSearch}
+            disabled={noDownloadsAtAll}
+            matches={matchCount}
+            matchIndex={matchIndex}
+            onStep={stepMatch}
+          />
           <SettingsButton onClick={() => onOpenSettings()} />
         </div>
       ) : (
@@ -841,12 +739,7 @@ export function DownloadsScreen({
         )}
       </div>
       <FixLinkDialog download={fixing} onClose={() => setFixing(null)} />
-      <LimitsDialog
-        open={limitsOpen}
-        onOpenChange={setLimitsOpen}
-        page={limitsPage}
-        onPageChange={setLimitsPage}
-      />
+      {limitsDialog}
 
       <AlertDialog
         open={confirmation !== null}

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, SlidersHorizontal, Video } from 'lucide-react'
+import { Plus, SlidersHorizontal, Video, X } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
+import { Checkbox } from '../components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
-import { YoutubeIcon } from '../components/youtube/YoutubeIcon'
 import { YoutubeAddDialog } from '../components/youtube/YoutubeAddDialog'
 import { YoutubeOptionsSheet } from '../components/youtube/YoutubeOptionsSheet'
 import { YoutubeJobRow } from '../components/youtube/YoutubeJobRow'
@@ -19,6 +18,19 @@ import {
   type YoutubeJobFilter
 } from '../store/useYoutubeStore'
 import type { YoutubeJob } from '@shared/youtube'
+import type { SettingsPage } from '../components/SettingsDialog'
+import { NetworksMenu } from '../components/NetworksMenu'
+import { VpnControl } from '../components/VpnControl'
+import { NewMenu, PauseAllButton, SearchField, SettingsButton } from '../components/ListTopBar'
+import { useLimitsDialog } from '../hooks/useLimitsDialog'
+
+/** Adds or removes one job from the selection. */
+const setJobSelected = (id: string, on: boolean): void => {
+  const next = new Set(useYoutubeStore.getState().selected)
+  if (on) next.add(id)
+  else next.delete(id)
+  useYoutubeStore.getState().setSelected(next)
+}
 
 const matchesFilter = (job: YoutubeJob, filter: YoutubeJobFilter): boolean => {
   if (filter === 'active') return isActiveYoutubeJob(job)
@@ -28,17 +40,30 @@ const matchesFilter = (job: YoutubeJob, filter: YoutubeJobFilter): boolean => {
 }
 
 /** The YouTube downloader: a list of its downloads, with the add dialog and the options sheet. */
-export function YouTubeScreen(): React.JSX.Element {
+export function YouTubeScreen({
+  onOpenSettings
+}: {
+  onOpenSettings: (page?: SettingsPage) => void
+}): React.JSX.Element {
   const jobs = useYoutubeStore((store) => store.jobs)
   const status = useYoutubeStore((store) => store.status)
   const jobFilter = useYoutubeStore((store) => store.jobFilter)
   const search = useYoutubeStore((store) => store.search)
   const setSearch = useYoutubeStore((store) => store.setSearch)
+  const selected = useYoutubeStore((store) => store.selected)
+  const setSelected = useYoutubeStore((store) => store.setSelected)
   const refreshStatus = useYoutubeStore((store) => store.refreshStatus)
   const loadJobs = useYoutubeStore((store) => store.loadJobs)
   const loadOptions = useYoutubeStore((store) => store.loadOptions)
   const setAddOpen = useYoutubeStore((store) => store.setAddOpen)
+  const pauseJob = useYoutubeStore((store) => store.pauseJob)
+  const resumeJob = useYoutubeStore((store) => store.resumeJob)
+  const cancelJob = useYoutubeStore((store) => store.cancelJob)
+  const retryJob = useYoutubeStore((store) => store.retryJob)
+  const removeJob = useYoutubeStore((store) => store.removeJob)
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const { openLimits, limitsDialog } = useLimitsDialog()
+  const [matchIndex, setMatchIndex] = useState(0)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -71,7 +96,17 @@ export function YouTubeScreen(): React.JSX.Element {
       groups.set(job.groupId, list)
     }
     for (const job of singles) {
-      items.push({ at: job.createdAt, node: <YoutubeJobRow key={job.id} job={job} /> })
+      items.push({
+        at: job.createdAt,
+        node: (
+          <YoutubeJobRow
+            key={job.id}
+            job={job}
+            selected={selected.has(job.id)}
+            onSelect={(on) => setJobSelected(job.id, on)}
+          />
+        )
+      })
     }
     for (const [groupId, list] of groups) {
       // Videos keep the playlist's order (they were queued in it).
@@ -95,84 +130,221 @@ export function YouTubeScreen(): React.JSX.Element {
                 })
               }
             />
-            {expanded && list.map((job) => <YoutubeJobRow key={job.id} job={job} nested />)}
+            {expanded &&
+              list.map((job) => (
+                <YoutubeJobRow
+                  key={job.id}
+                  job={job}
+                  nested
+                  selected={selected.has(job.id)}
+                  onSelect={(on) => setJobSelected(job.id, on)}
+                />
+              ))}
           </div>
         )
       })
     }
     return items.sort((a, b) => b.at - a.at).map((item) => item.node)
-  }, [visible, expandedGroups])
+  }, [visible, expandedGroups, selected])
+
+  // What the person can see and pick: the top-level videos, and a playlist's videos once its
+  // group is open (a closed group's videos are not on screen).
+  const listed = useMemo(
+    () => visible.filter((job) => !job.groupId || expandedGroups.has(job.groupId)),
+    [visible, expandedGroups]
+  )
+  const chosen = listed.filter((job) => selected.has(job.id))
+  const allListedChosen = listed.length > 0 && chosen.length === listed.length
+  const pausable = chosen.filter((job) => job.status === 'downloading' || job.status === 'queued')
+  const resumable = chosen.filter((job) => job.status === 'paused')
+  const retryable = chosen.filter((job) => job.status === 'error' || job.status === 'cancelled')
+  const cancellable = chosen.filter(
+    (job) => job.status === 'downloading' || job.status === 'queued'
+  )
+
+  // Keyboard, as on Downloads: Esc lets go of the selection, ⌘/Ctrl+A takes everything listed.
+  // Not while typing in a box or a dialog is open, so those keep their own keys.
+  useEffect(() => {
+    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
+      if (typing || document.querySelector('[role="dialog"]')) return
+      if (event.key === 'Escape') setSelected(new Set())
+      else if (event[mod] && event.key.toLowerCase() === 'a') {
+        event.preventDefault()
+        setSelected(new Set(listed.map((job) => job.id)))
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [listed, setSelected])
+
+  // Running, paused and failed videos among those chosen or listed: what the top bar acts on.
+  const running = listed.filter((job) => job.status === 'downloading' || job.status === 'queued')
+  const pausedAll = listed.filter((job) => job.status === 'paused')
+  const failedAll = listed.filter((job) => job.status === 'error' || job.status === 'cancelled')
+  // The rows a search finds, in order: Enter and the arrows step through them and scroll to each.
+  const hitIds = useMemo(
+    () => (search.trim() === '' ? [] : visible.map((job) => job.id)),
+    [visible, search]
+  )
+  const stepMatch = (dir: 1 | -1): void => {
+    if (hitIds.length === 0) return
+    setMatchIndex((index) => (index + dir + hitIds.length) % hitIds.length)
+  }
+  useEffect(() => {
+    const id = hitIds[matchIndex]
+    if (id)
+      document
+        .querySelector(`[data-row-entry="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'nearest' })
+  }, [matchIndex, hitIds])
+
+  const toggleAll = (on: boolean): void =>
+    setSelected(on ? new Set(listed.map((job) => job.id)) : new Set())
 
   return (
     <div className="flex h-full min-w-0 flex-1 bg-background">
       <div className="@container flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
-          <h1 className="flex shrink-0 items-center gap-2 text-[14px] font-semibold">
-            <YoutubeIcon className="size-4 text-[#ff0033]" />
-            YouTube
-          </h1>
-          <Badge variant="outline" className="shrink-0">
-            {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : 'yt-dlp missing'}
-          </Badge>
-          {status && !status.ffmpeg && (
-            <Badge variant="destructive" className="shrink-0">
-              ffmpeg missing
-            </Badge>
-          )}
-
-          <div className="flex-1" />
-
-          <div className="relative w-[260px] min-w-[140px] shrink">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+        {limitsDialog}
+        {chosen.length === 0 ? (
+          <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
+            <h1 className="sr-only">YouTube</h1>
+            <PauseAllButton
+              pausing={running.length > 0}
+              resumeLabel={pausedAll.length > 0 ? 'Resume all' : 'Try again all'}
+              resumeIcon={pausedAll.length > 0 ? 'play' : 'retry'}
+              disabled={running.length === 0 && pausedAll.length + failedAll.length === 0}
+              onPause={() => running.forEach((job) => void pauseJob(job.id))}
+              onResume={() =>
+                pausedAll.length > 0
+                  ? pausedAll.forEach((job) => void resumeJob(job.id))
+                  : failedAll.forEach((job) => void retryJob(job.id))
+              }
             />
-            <Input
-              type="search"
-              aria-label="Search YouTube downloads"
-              placeholder="Search"
+            <NetworksMenu onOpenLimits={openLimits} />
+            <NewMenu
+              label="New download"
+              items={[{ label: 'Video link', icon: Plus, run: () => setAddOpen(true) }]}
+            />
+            {/* After the + button, so a VPN turning up doesn't move it. */}
+            <VpnControl />
+            <Badge variant="outline" className="shrink-0">
+              {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : 'yt-dlp missing'}
+            </Badge>{' '}
+            {status && !status.binary && (
+              <Badge variant="destructive" className="shrink-0">
+                yt-dlp missing
+              </Badge>
+            )}
+            {status && !status.ffmpeg && (
+              <Badge variant="destructive" className="shrink-0">
+                ffmpeg missing
+              </Badge>
+            )}
+            <div className="flex-1" />
+            <SearchField
+              label="Search YouTube downloads"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setSearch('')
+              onChange={(value) => {
+                setSearch(value)
+                setMatchIndex(0)
               }}
-              className="h-8 pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
+              matches={search.trim() === '' ? undefined : hitIds.length}
+              matchIndex={matchIndex}
+              onStep={stepMatch}
             />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label="YouTube options"
+                    onClick={() => setOptionsOpen(true)}
+                  >
+                    <SlidersHorizontal />
+                  </Button>
+                }
+              />
+              <TooltipContent>YouTube options</TooltipContent>
+            </Tooltip>
+            <SettingsButton label="Settings" onClick={() => onOpenSettings('YouTube')} />
           </div>
-
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  aria-label="YouTube options"
-                  onClick={() => setOptionsOpen(true)}
-                >
-                  <SlidersHorizontal />
-                </Button>
-              }
-            />
-            <TooltipContent>Options</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon"
-                  aria-label="Add video"
-                  onClick={() => setAddOpen(true)}
-                >
-                  <Plus />
-                </Button>
-              }
-            />
-            <TooltipContent>Add video</TooltipContent>
-          </Tooltip>
-        </div>
+        ) : (
+          <div
+            role="toolbar"
+            aria-label="Selected YouTube downloads"
+            className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
+          >
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Deselect all"
+              onClick={() => setSelected(new Set())}
+            >
+              <X />
+            </Button>
+            <span className="shrink-0 text-[13px] font-semibold whitespace-nowrap">
+              {chosen.length} selected
+            </span>
+            <div className="flex-1" />
+            {pausable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => pausable.forEach((job) => void pauseJob(job.id))}
+              >
+                Pause ({pausable.length})
+              </Button>
+            )}
+            {resumable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => resumable.forEach((job) => void resumeJob(job.id))}
+              >
+                Resume ({resumable.length})
+              </Button>
+            )}
+            {retryable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => retryable.forEach((job) => void retryJob(job.id))}
+              >
+                Try again ({retryable.length})
+              </Button>
+            )}
+            {cancellable.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => cancellable.forEach((job) => void cancelJob(job.id))}
+              >
+                Cancel ({cancellable.length})
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              title="Takes them off the list; the files stay on your computer"
+              onClick={() => chosen.forEach((job) => void removeJob(job.id, false))}
+            >
+              Remove from list ({chosen.length})
+            </Button>
+          </div>
+        )}
 
         <YoutubeFetchQueue />
 
@@ -192,7 +364,15 @@ export function YouTubeScreen(): React.JSX.Element {
             className="sticky top-0 z-10 grid h-8 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium text-muted-foreground [grid-template-columns:var(--cols)]"
             style={{ '--cols': YOUTUBE_COLUMNS } as React.CSSProperties}
           >
-            <div role="columnheader" />
+            <div role="columnheader" className="flex items-center justify-center">
+              <Checkbox
+                aria-label="Select all YouTube downloads"
+                checked={allListedChosen}
+                indeterminate={chosen.length > 0 && !allListedChosen}
+                disabled={listed.length === 0}
+                onCheckedChange={toggleAll}
+              />
+            </div>
             <div role="columnheader" className="px-2">
               Name
             </div>

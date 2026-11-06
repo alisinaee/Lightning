@@ -55,6 +55,8 @@ interface YoutubeStore {
   status: YoutubeStatus | null
   jobFilter: YoutubeJobFilter
   search: string
+  /** The job ids picked with their checkboxes, as on the Downloads list. */
+  selected: Set<string>
   options: YoutubeOptions
   /** The add dialog, and the browser video it is confirming (if one came from the extension). */
   addOpen: boolean
@@ -84,6 +86,7 @@ interface YoutubeStore {
   removeJobLocal: (id: string) => void
   setJobFilter: (filter: YoutubeJobFilter) => void
   setSearch: (search: string) => void
+  setSelected: (selected: Set<string>) => void
   setSelectedFormat: (format: YoutubeFormatOption | null) => void
 
   queueFetch: (url: string, offerId?: string | null) => Promise<void>
@@ -111,6 +114,7 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
   status: null,
   jobFilter: 'all',
   search: '',
+  selected: new Set(),
   options: DEFAULT_YOUTUBE_OPTIONS,
   addOpen: false,
   offerId: null,
@@ -185,8 +189,10 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
       delete jobs[id]
       return { jobs }
     }),
-  setJobFilter: (jobFilter) => set({ jobFilter }),
+  // A new filter clears the selection, as on Downloads: what was picked may not be listed now.
+  setJobFilter: (jobFilter) => set({ jobFilter, selected: new Set() }),
   setSearch: (search) => set({ search }),
+  setSelected: (selected) => set({ selected }),
   setSelectedFormat: (selectedFormat) => set({ selectedFormat }),
 
   // Puts the link in the fetch queue and returns at once; the dialog closes and the person keeps

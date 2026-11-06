@@ -1,23 +1,15 @@
 import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
-import {
-  ListPlus,
-  Pause,
-  Play,
-  Plus,
-  Search,
-  Send,
-  Settings,
-  TriangleAlert,
-  User,
-  X
-} from 'lucide-react'
+import { ListPlus, Plus, Send, TriangleAlert, User, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
-import { Input } from '../components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { TelegramItemRow } from '../components/telegram/TelegramItemRow'
+import { NetworksMenu } from '../components/NetworksMenu'
+import { VpnControl } from '../components/VpnControl'
+import { NewMenu, PauseAllButton, SearchField, SettingsButton } from '../components/ListTopBar'
+import { useLimitsDialog } from '../hooks/useLimitsDialog'
 import { TelegramJobGroup } from '../components/telegram/TelegramJobGroup'
 import { columnsFor, jobTitle, columnsContext } from '../components/telegram/telegramRowInfo'
 import type { SettingsPage } from '../components/SettingsDialog'
@@ -68,6 +60,8 @@ export function TelegramScreen({
   const openAdd = useTelegramStore((store) => store.openAdd)
   const openExport = useTelegramStore((store) => store.openExport)
   const openLogin = useTelegramStore((store) => store.openLogin)
+  const { openLimits, limitsDialog } = useLimitsDialog()
+  const [matchIndex, setMatchIndex] = useState(0)
 
   const [width, setWidth] = useState(1000)
   const listRef = useRef<HTMLDivElement>(null)
@@ -104,6 +98,23 @@ export function TelegramScreen({
     return list
   }, [allJobs, jobFilter, kind, needle])
 
+  // The rows a search finds, in order: Enter and the arrows step through them and scroll to each.
+  const hitIds = useMemo(
+    () => (needle === '' ? [] : entries.map((entry) => entry.job.id)),
+    [entries, needle]
+  )
+  const stepMatch = (dir: 1 | -1): void => {
+    if (hitIds.length === 0) return
+    setMatchIndex((index) => (index + dir + hitIds.length) % hitIds.length)
+  }
+  useEffect(() => {
+    const id = hitIds[matchIndex]
+    if (id)
+      document
+        .querySelector(`[data-row-entry="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'nearest' })
+  }, [matchIndex, hitIds])
+
   const chosen = allJobs.filter((job) => selected.has(job.id))
   const running = allJobs.filter((job) => job.status === 'running' || job.status === 'queued')
   const paused = allJobs.filter((job) => job.status === 'paused')
@@ -130,76 +141,66 @@ export function TelegramScreen({
     setSelected(next)
   }
 
+  // Keyboard, as on Downloads: Esc lets go of the selection, ⌘/Ctrl+A takes everything listed.
+  // Not while typing in a box or a dialog is open, so those keep their own keys.
+  useEffect(() => {
+    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
+      if (typing || document.querySelector('[role="dialog"]')) return
+      if (event.key === 'Escape') setSelected(new Set())
+      else if (event[mod] && event.key.toLowerCase() === 'a') {
+        event.preventDefault()
+        setSelected(new Set(entries.map((entry) => entry.job.id)))
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [entries, setSelected])
+
   const ready = status?.binary && status.loggedIn
   const accountLabel = status?.loggedIn ? (status.account ?? 'Signed in') : 'Sign in'
 
   return (
     <div className="flex h-full min-w-0 flex-1 bg-background">
       <div className="@container flex min-w-0 flex-1 flex-col">
+        {limitsDialog}
         {chosen.length === 0 ? (
           <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
             <h1 className="sr-only">Telegram</h1>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="secondary"
-                    aria-label={pausing ? 'Pause all' : 'Resume all'}
-                    disabled={pausing ? false : paused.length === 0}
-                    onClick={() =>
-                      pausing
-                        ? act(running, window.lightning.tdlPauseJob)
-                        : act(paused, window.lightning.tdlResumeJob)
-                    }
-                  >
-                    {pausing ? (
-                      <Pause className="fill-current" />
-                    ) : (
-                      <Play className="fill-current" />
-                    )}
-                  </Button>
-                }
-              />
-              <TooltipContent>{pausing ? 'Pause all' : 'Resume all'}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button type="button" disabled={!ready} onClick={() => openAdd()}>
-                    <Plus data-icon="inline-start" />
-                    Add links
-                  </Button>
-                }
-              />
-              <TooltipContent>Download files from Telegram message links</TooltipContent>
-            </Tooltip>
-            <Button type="button" variant="secondary" disabled={!ready} onClick={openExport}>
-              <ListPlus data-icon="inline-start" />
-              Export chat…
-            </Button>
+            <PauseAllButton
+              pausing={pausing}
+              resumeLabel="Resume all"
+              disabled={pausing ? false : paused.length === 0}
+              onPause={() => act(running, window.lightning.tdlPauseJob)}
+              onResume={() => act(paused, window.lightning.tdlResumeJob)}
+            />
+            <NetworksMenu onOpenLimits={openLimits} />
+            <NewMenu
+              label="New download"
+              disabled={!ready}
+              items={[
+                { label: 'Telegram links', icon: Plus, run: () => openAdd() },
+                { label: 'Export a chat', icon: ListPlus, run: openExport }
+              ]}
+            />
+            {/* After the + button, so a VPN turning up doesn't move it. */}
+            <VpnControl />
             <div className="flex-1" />
-            <div className="relative w-[260px] min-w-[140px] shrink">
-              <Search
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                type="search"
-                aria-label="Search Telegram downloads"
-                placeholder="Search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setSearch('')
-                    event.currentTarget.blur()
-                  }
-                }}
-                className="h-8 pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden"
-              />
-            </div>
+            <SearchField
+              label="Search Telegram downloads"
+              value={search}
+              onChange={(value) => {
+                setSearch(value)
+                setMatchIndex(0)
+              }}
+              matches={needle === '' ? undefined : hitIds.length}
+              matchIndex={matchIndex}
+              onStep={stepMatch}
+            />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -221,22 +222,7 @@ export function TelegramScreen({
                 {status?.loggedIn ? 'Telegram account' : 'Sign in to Telegram'}
               </TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Settings"
-                    onClick={() => onOpenSettings('Telegram')}
-                  >
-                    <Settings />
-                  </Button>
-                }
-              />
-              <TooltipContent>Settings</TooltipContent>
-            </Tooltip>
+            <SettingsButton label="Settings" onClick={() => onOpenSettings('Telegram')} />
           </div>
         ) : (
           <div
