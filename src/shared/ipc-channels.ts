@@ -102,5 +102,10 @@ export const IpcChannels = {
   youtubeRemoveJob: 'youtube:remove-job',
   youtubeRevealJob: 'youtube:reveal-job',
   youtubeOpenJob: 'youtube:open-job',
+  youtubeGetOptions: 'youtube:get-options',
+  youtubeSetOptions: 'youtube:set-options',
+  youtubeChooseFolder: 'youtube:choose-folder',
+  youtubeChooseCookies: 'youtube:choose-cookies',
+  youtubeCancelOffer: 'youtube:cancel-offer',
   youtubeJobUpdated: 'youtube:job-updated'
 } as const

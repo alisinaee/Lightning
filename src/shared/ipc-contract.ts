@@ -1,7 +1,13 @@
 import type { DuplicateMatch, DuplicateOptions } from './duplicates'
 import type { DnsTestResult } from './dnsRecommend'
 import type { TdlChat, TdlItem, TdlJob, TdlLoginMode, TdlRangeType, TdlStatus } from './telegram'
-import type { StartYoutubeRequest, YoutubeJob, YoutubeStatus, YoutubeVideoMeta } from './youtube'
+import type {
+  StartYoutubeRequest,
+  YoutubeJob,
+  YoutubeOptions,
+  YoutubeStatus,
+  YoutubeVideoMeta
+} from './youtube'
 import type { LabPlanInfo, LabPlanRun, LabState } from './lab'
 import type {
   AppSettings,
@@ -209,4 +215,9 @@ export interface IpcContract {
   youtubeRemoveJob: { args: [id: string, deleteFile?: boolean]; result: void }
   youtubeRevealJob: { args: [id: string]; result: void }
   youtubeOpenJob: { args: [id: string]; result: void }
+  youtubeGetOptions: { args: []; result: YoutubeOptions }
+  youtubeSetOptions: { args: [options: Partial<YoutubeOptions>]; result: YoutubeOptions }
+  youtubeChooseFolder: { args: [defaultPath?: string]; result: string | null }
+  youtubeChooseCookies: { args: []; result: string | null }
+  youtubeCancelOffer: { args: [id: string]; result: void }
 }

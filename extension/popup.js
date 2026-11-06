@@ -1,5 +1,5 @@
 const api = typeof browser !== 'undefined' ? browser : chrome
-const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '' }
+const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'send' }
 const $ = (id) => document.getElementById(id)
 
 async function load() {
@@ -8,6 +8,7 @@ async function load() {
   $('key').value = saved.key
   $('minSizeMB').value = saved.minSizeMB
   $('excluded').value = saved.excluded
+  $('videoCookies').value = saved.videoCookies
 }
 
 async function refresh() {
@@ -32,7 +33,8 @@ $('save').addEventListener('click', async () => {
     enabled: $('enabled').checked,
     key: $('key').value.trim(),
     minSizeMB: Math.max(0, Number($('minSizeMB').value) || 0),
-    excluded: $('excluded').value
+    excluded: $('excluded').value,
+    videoCookies: $('videoCookies').value
   })
   await refresh()
 })

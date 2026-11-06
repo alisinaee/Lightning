@@ -3,7 +3,7 @@
 const api = typeof browser !== 'undefined' ? browser : chrome
 
 const PORTS = [17891, 17892, 17893, 17894, 17895, 17896, 17897, 17898, 17899, 17900]
-const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '' }
+const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'send' }
 
 let cachedPort = null
 // Links the browser is allowed to download itself (the app was not there to take them).
@@ -110,6 +110,7 @@ function problem(result) {
   if (result === 'down') return 'Lightning is not running.'
   if (result === 'key')
     return 'Pair the extension with Lightning: open its popup and paste the key.'
+  if (result === 'off') return 'Turn on browser downloads in Lightning: Settings → Browser.'
   return 'Lightning could not take the link.'
 }
 
@@ -177,6 +178,11 @@ api.runtime.onInstalled.addListener(() => {
     contexts: ['link', 'video', 'audio', 'image']
   })
   api.contextMenus.create({
+    id: 'lightning-video',
+    title: 'Download video with Lightning',
+    contexts: ['page', 'video', 'link', 'frame']
+  })
+  api.contextMenus.create({
     id: 'lightning-scan',
     title: 'Scan this page with Lightning',
     contexts: ['page', 'frame', 'selection']
@@ -187,7 +193,9 @@ api.runtime.onInstalled.addListener(() => {
  * (so pages that build their links with JavaScript work too). Runs inside the page. */
 function collectLinks() {
   const found = new Set()
-  for (const element of document.querySelectorAll('a[href], source[src], video[src], audio[src], [data-href], [data-url], [data-download]')) {
+  for (const element of document.querySelectorAll(
+    'a[href], source[src], video[src], audio[src], [data-href], [data-url], [data-download]'
+  )) {
     for (const name of ['href', 'src', 'data-href', 'data-url', 'data-download']) {
       const value = element.getAttribute(name)
       if (!value) continue
@@ -280,6 +288,14 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     if (on.menuScan) await scanPage(tab, info.frameId)
     return
   }
+  if (info.menuItemId === 'lightning-video') {
+    // The page the video is on, or the link it points at (the page is used when the video has no address).
+    const url = info.linkUrl || info.pageUrl || tab?.url
+    if (!url || !/^https?:/i.test(url)) return
+    const result = await sendVideo(url, tab?.title)
+    if (result !== 'ok') notify(problem(result))
+    return
+  }
   if (!on.menuDownload) return
   const url = info.linkUrl || info.srcUrl
   if (!url || !/^(https?:|magnet:)/i.test(url)) return
@@ -295,6 +311,44 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   const result = await handOver(url, info.pageUrl || tab?.url)
   if (result !== 'ok') notify(problem(result))
 })
+
+/** Sends a video page to the YouTube downloader in Lightning, with the cookies the chosen mode allows
+ * (see the Video cookies setting in the popup). Returns the same results as sendToLightning. */
+async function sendVideo(url, title) {
+  const { key, videoCookies } = await settings()
+  const port = await findPort()
+  if (!port) return 'down'
+  const mode = ['send', 'save', 'saved', 'none'].includes(videoCookies) ? videoCookies : 'send'
+  let cookies = []
+  if (mode === 'send' || mode === 'save') {
+    try {
+      cookies = (await api.cookies.getAll({ url })).map((cookie) => ({
+        domain: cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        expirationDate: cookie.expirationDate,
+        name: cookie.name,
+        value: cookie.value
+      }))
+    } catch {
+      cookies = []
+    }
+  }
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/video`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ url, title: title || undefined, cookieMode: mode, cookies })
+    })
+    if (response.status === 401) return 'key'
+    if (response.status === 403) return 'off'
+    return response.ok ? 'ok' : 'error'
+  } catch {
+    cachedPort = null
+    return 'down'
+  }
+}
 
 // The popup asks for the app's state.
 api.runtime.onMessage.addListener((message, _sender, respond) => {

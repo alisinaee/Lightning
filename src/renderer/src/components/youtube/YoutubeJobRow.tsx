@@ -1,0 +1,185 @@
+import { memo, type CSSProperties } from 'react'
+import { Copy, ExternalLink, FolderOpen, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
+import type { YoutubeJob } from '@shared/youtube'
+import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { RowActionsMenu, RowContextMenu, type RowAction } from '../downloads/rowMenu'
+import { ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
+import { RowProgressLine } from '../downloads/RowProgressLine'
+import { FormatBadge } from '../downloads/FileKindIcon'
+import {
+  AddedCell,
+  ClippedText,
+  EtaCell,
+  SizeCell,
+  SpeedCell,
+  StatusCell,
+  cellClass
+} from '../downloads/cells'
+import { useYoutubeStore } from '../../store/useYoutubeStore'
+import { describeYoutubeJob, YOUTUBE_COLUMNS } from './youtubeRowModel'
+import { cn } from 'cn'
+import type { LucideIcon } from 'lucide-react'
+
+/** A row's main action as an icon, the same look as the Downloads rows. */
+function IconAction({
+  label,
+  icon: Icon,
+  onClick
+}: {
+  label: string
+  icon: LucideIcon
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={label}
+            onClick={onClick}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Icon />
+          </Button>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+export const YoutubeJobRow = memo(function YoutubeJobRow({
+  job,
+  nested = false
+}: {
+  job: YoutubeJob
+  /** Shown under its playlist's group row, so the name is indented. */
+  nested?: boolean
+}): React.JSX.Element {
+  const pauseJob = useYoutubeStore((store) => store.pauseJob)
+  const resumeJob = useYoutubeStore((store) => store.resumeJob)
+  const cancelJob = useYoutubeStore((store) => store.cancelJob)
+  const retryJob = useYoutubeStore((store) => store.retryJob)
+  const removeJob = useYoutubeStore((store) => store.removeJob)
+  const revealJob = useYoutubeStore((store) => store.revealJob)
+  const openJob = useYoutubeStore((store) => store.openJob)
+
+  const info = describeYoutubeJob(job)
+  const active = job.status === 'queued' || job.status === 'downloading'
+  const finished = job.status === 'completed'
+  const fileName = `${job.title}.${job.resolution === 'Audio' ? 'm4a' : 'mp4'}`
+
+  // The main action, as on a Downloads row: open when done, retry when failed, pause or resume otherwise.
+  const primary: { label: string; icon: LucideIcon; run: () => void } | null = finished
+    ? { label: 'Open', icon: ExternalLink, run: () => openJob(job.id) }
+    : job.status === 'downloading' || job.status === 'queued'
+      ? { label: 'Pause', icon: Pause, run: () => void pauseJob(job.id) }
+      : job.status === 'paused'
+        ? { label: 'Resume', icon: Play, run: () => void resumeJob(job.id) }
+        : job.status === 'error' || job.status === 'cancelled'
+          ? { label: 'Try again', icon: RotateCw, run: () => void retryJob(job.id) }
+          : null
+
+  const actions: RowAction[] = [
+    ...(finished
+      ? [{ id: 'open', label: 'Open', icon: ExternalLink, run: () => openJob(job.id) }]
+      : []),
+    { id: 'reveal', label: 'Show in Folder', icon: FolderOpen, run: () => revealJob(job.id) },
+    ...(active
+      ? [{ id: 'pause', label: 'Pause', icon: Pause, run: () => void pauseJob(job.id) }]
+      : []),
+    ...(job.status === 'paused'
+      ? [{ id: 'resume', label: 'Resume', icon: Play, run: () => void resumeJob(job.id) }]
+      : []),
+    ...(job.status === 'error' || job.status === 'cancelled'
+      ? [{ id: 'retry', label: 'Try again', icon: RotateCw, run: () => void retryJob(job.id) }]
+      : []),
+    {
+      id: 'copy',
+      label: 'Copy link',
+      icon: Copy,
+      run: () => void navigator.clipboard.writeText(job.url)
+    },
+    ...(active
+      ? [
+          {
+            id: 'cancel',
+            label: 'Cancel',
+            icon: X,
+            danger: true,
+            divider: true,
+            run: () => void cancelJob(job.id)
+          }
+        ]
+      : []),
+    {
+      id: 'remove',
+      label: 'Remove from list',
+      icon: Trash2,
+      danger: true,
+      divider: !active,
+      run: () => void removeJob(job.id, false)
+    }
+  ]
+
+  const row = (
+    <div
+      role="row"
+      data-row-entry={job.id}
+      data-status={info.status}
+      className={cn(ROW_CLASS)}
+      style={{ '--cols': YOUTUBE_COLUMNS, ...stateEdge(info.status) } as CSSProperties}
+    >
+      <RowProgressLine info={info} />
+      <div role="cell" className="flex items-center justify-center" />
+      <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'pl-8' : 'pl-0')}>
+        {job.thumbnail ? (
+          <img
+            src={job.thumbnail}
+            alt=""
+            loading="lazy"
+            className="h-9 w-16 shrink-0 rounded-[5px] bg-muted object-cover"
+          />
+        ) : (
+          <FormatBadge name={fileName} />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <ClippedText
+            text={job.title}
+            className={cn(
+              'font-sans text-[13px] leading-none font-medium',
+              finished && 'text-[var(--text-secondary)]'
+            )}
+          />
+          <span className="truncate text-[11px] leading-none text-muted-foreground">
+            {[
+              'YouTube',
+              job.resolution,
+              job.error && job.status === 'error' ? job.error.split('\n')[0] : ''
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </div>
+      </div>
+      <SizeCell received={info.received} total={info.total} running={active} done={finished} />
+      <StatusCell info={info} />
+      <SpeedCell speed={info.speed} />
+      <EtaCell seconds={info.etaSeconds} />
+      <AddedCell at={finished ? (job.finishedAt ?? job.createdAt) : job.createdAt} />
+      <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+        {primary && <IconAction label={primary.label} icon={primary.icon} onClick={primary.run} />}
+        {finished && (
+          <IconAction label="Show in Folder" icon={FolderOpen} onClick={() => revealJob(job.id)} />
+        )}
+        <RowActionsMenu label={job.title} actions={actions} />
+      </div>
+    </div>
+  )
+
+  return <RowContextMenu actions={actions} row={row} />
+})

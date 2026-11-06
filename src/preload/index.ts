@@ -7,6 +7,7 @@ import type { TdlJob, TdlLoginEvent } from '../shared/telegram'
 import type {
   StartYoutubeRequest,
   YoutubeJob,
+  YoutubeOptions,
   YoutubeStatus,
   YoutubeVideoMeta
 } from '../shared/youtube'
@@ -74,6 +75,13 @@ const lightningApi = {
     invoke('youtubeRemoveJob', id, deleteFile),
   youtubeRevealJob: (id: string): Promise<void> => invoke('youtubeRevealJob', id),
   youtubeOpenJob: (id: string): Promise<void> => invoke('youtubeOpenJob', id),
+  youtubeGetOptions: (): Promise<YoutubeOptions> => invoke('youtubeGetOptions'),
+  youtubeSetOptions: (options: Partial<YoutubeOptions>): Promise<YoutubeOptions> =>
+    invoke('youtubeSetOptions', options),
+  youtubeChooseFolder: (defaultPath?: string): Promise<string | null> =>
+    invoke('youtubeChooseFolder', defaultPath),
+  youtubeChooseCookies: (): Promise<string | null> => invoke('youtubeChooseCookies'),
+  youtubeCancelOffer: (id: string): Promise<void> => invoke('youtubeCancelOffer', id),
   getDns: () => invoke('getDns'),
   testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>
     invoke('testDns', url, currentDnsId, extras),

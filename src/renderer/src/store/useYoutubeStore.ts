@@ -1,12 +1,46 @@
-import type {
-  YoutubeFormatOption,
-  YoutubeJob,
-  YoutubeStatus,
-  YoutubeVideoMeta
+import {
+  DEFAULT_YOUTUBE_OPTIONS,
+  formatForQuality,
+  type YoutubeFormatOption,
+  type YoutubeJob,
+  type YoutubeOptions,
+  type YoutubeStatus,
+  type YoutubeVideoMeta
 } from '@shared/youtube'
 import { create } from 'zustand'
 
 export type YoutubeJobFilter = 'all' | 'active' | 'finished' | 'failed'
+
+/** One link in the fetch queue: fetched in the background, waiting for the person to choose. */
+export interface YoutubeFetch {
+  id: string
+  url: string
+  offerId: string | null
+  state: 'fetching' | 'ready' | 'error'
+  meta: YoutubeVideoMeta | null
+  error: string | null
+}
+
+let fetchSeq = 0
+
+/** Tells the person a fetched video is ready to choose. Clicking the notice opens its quality choice. */
+const notifyReady = (id: string, title: string): void => {
+  try {
+    const note = new Notification('Ready to download', { body: title, silent: true })
+    note.onclick = () => useYoutubeStore.getState().openFetch(id)
+  } catch {
+    // The queue card still shows it.
+  }
+}
+
+/** The format for a quality, or the first one the video has. */
+const formatFor = (
+  meta: YoutubeVideoMeta,
+  quality: YoutubeOptions['quality']
+): YoutubeFormatOption | null => {
+  const wanted = formatForQuality(quality)
+  return meta.formats.find((format) => format.formatId === wanted) ?? meta.formats[0] ?? null
+}
 
 export const isActiveYoutubeJob = (job: YoutubeJob): boolean =>
   job.status === 'queued' || job.status === 'downloading' || job.status === 'paused'
@@ -21,6 +55,10 @@ interface YoutubeStore {
   status: YoutubeStatus | null
   jobFilter: YoutubeJobFilter
   search: string
+  options: YoutubeOptions
+  /** The add dialog, and the browser video it is confirming (if one came from the extension). */
+  addOpen: boolean
+  offerId: string | null
 
   // Video probe state
   inputUrl: string
@@ -28,8 +66,18 @@ interface YoutubeStore {
   currentProbe: YoutubeVideoMeta | null
   probeError: string | null
   selectedFormat: YoutubeFormatOption | null
+  /** Links being fetched in the background, shown as a list until the person decides. */
+  fetches: YoutubeFetch[]
+  /** The fetch whose quality the add dialog is showing, if any. */
+  activeFetchId: string | null
 
   setInputUrl: (url: string) => void
+  setAddOpen: (open: boolean) => void
+  openAdd: () => void
+  openOffer: (offer: { id: string; url: string; title: string }) => void
+  openLink: (url: string) => void
+  loadOptions: () => Promise<void>
+  setOptions: (change: Partial<YoutubeOptions>) => Promise<void>
   setJob: (job: YoutubeJob) => void
   loadJobs: () => Promise<void>
   refreshStatus: () => Promise<void>
@@ -38,7 +86,15 @@ interface YoutubeStore {
   setSearch: (search: string) => void
   setSelectedFormat: (format: YoutubeFormatOption | null) => void
 
-  probeUrl: (url: string) => Promise<void>
+  queueFetch: (url: string, offerId?: string | null) => Promise<void>
+  startJob: (
+    fetchId: string,
+    meta: YoutubeVideoMeta,
+    format: YoutubeFormatOption,
+    offerId: string | null
+  ) => Promise<void>
+  openFetch: (id: string) => void
+  dismissFetch: (id: string) => Promise<void>
   startDownload: (format?: YoutubeFormatOption) => Promise<void>
   pauseJob: (id: string) => Promise<void>
   resumeJob: (id: string) => Promise<void>
@@ -55,6 +111,27 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
   status: null,
   jobFilter: 'all',
   search: '',
+  options: DEFAULT_YOUTUBE_OPTIONS,
+  addOpen: false,
+  offerId: null,
+  fetches: [],
+  activeFetchId: null,
+
+  loadOptions: async () => {
+    try {
+      set({ options: await window.lightning.youtubeGetOptions() })
+    } catch {
+      // keep the defaults
+    }
+  },
+  setOptions: async (change) => {
+    set((state) => ({ options: { ...state.options, ...change } }))
+    try {
+      set({ options: await window.lightning.youtubeSetOptions(change) })
+    } catch {
+      // the local copy stays until the next load
+    }
+  },
 
   inputUrl: '',
   probeState: 'idle',
@@ -63,6 +140,29 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
   selectedFormat: null,
 
   setInputUrl: (inputUrl) => set({ inputUrl }),
+  openAdd: () => set({ addOpen: true }),
+  setAddOpen: (open) => {
+    if (open) {
+      set({ addOpen: true })
+      return
+    }
+    // Closing leaves a fetched video in the queue, so the person can still choose it later.
+    set({
+      addOpen: false,
+      offerId: null,
+      activeFetchId: null,
+      probeState: 'idle',
+      currentProbe: null,
+      probeError: null,
+      selectedFormat: null
+    })
+  },
+  openLink: (url) => {
+    void get().queueFetch(url)
+  },
+  openOffer: (offer) => {
+    void get().queueFetch(offer.url, offer.id)
+  },
   setJob: (job) => set((state) => ({ jobs: { ...state.jobs, [job.id]: job } })),
   loadJobs: async () => {
     try {
@@ -89,50 +189,105 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
   setSearch: (search) => set({ search }),
   setSelectedFormat: (selectedFormat) => set({ selectedFormat }),
 
-  probeUrl: async (url: string) => {
+  // Puts the link in the fetch queue and returns at once; the dialog closes and the person keeps
+  // working. When the fetch ends the link waits in the list, or starts on its own if Options says so.
+  queueFetch: async (url: string, offerId: string | null = null) => {
     const trimmed = url.trim()
     if (!trimmed) return
-    set({ probeState: 'loading', probeError: null, currentProbe: null, selectedFormat: null })
+    const id = `fetch-${Date.now()}-${++fetchSeq}`
+    set((state) => ({
+      fetches: [
+        ...state.fetches,
+        { id, url: trimmed, offerId, state: 'fetching', meta: null, error: null }
+      ],
+      addOpen: false,
+      inputUrl: ''
+    }))
+    const update = (change: Partial<YoutubeFetch>): void =>
+      set((state) => ({
+        fetches: state.fetches.map((item) => (item.id === id ? { ...item, ...change } : item))
+      }))
     try {
       const meta = await window.lightning.youtubeProbe(trimmed)
-      set({
-        probeState: 'ready',
-        currentProbe: meta,
-        selectedFormat: meta.formats[0] ?? null
-      })
+      // Dismissed while fetching: drop the result.
+      if (!get().fetches.some((item) => item.id === id)) return
+      if (get().options.autoStartDefault) {
+        const format = formatFor(meta, get().options.quality)
+        if (!format) throw new Error('No downloadable format for this video')
+        await get().startJob(id, meta, format, offerId)
+        return
+      }
+      update({ state: 'ready', meta })
+      notifyReady(id, meta.title)
     } catch (err: unknown) {
-      set({
-        probeState: 'error',
-        probeError: (err as Error)?.message || 'Failed to probe YouTube URL'
-      })
+      update({ state: 'error', error: (err as Error)?.message || 'Failed to fetch this link' })
     }
   },
 
-  startDownload: async (formatOverride?: YoutubeFormatOption) => {
-    const { currentProbe, selectedFormat } = get()
-    const format = formatOverride || selectedFormat
-    if (!currentProbe || !format) return
-
+  // Starts a download for a fetch and removes that fetch from the queue.
+  startJob: async (fetchId, meta, format, offerId) => {
     try {
       const job = await window.lightning.youtubeStart({
-        url: currentProbe.url,
-        title: currentProbe.title,
-        thumbnail: currentProbe.thumbnail,
+        url: meta.url,
+        title: meta.title,
+        thumbnail: meta.thumbnail,
         formatId: format.formatId,
-        resolution: format.resolution
+        resolution: format.resolution,
+        offerId: offerId ?? undefined
       })
       set((state) => ({
         jobs: { ...state.jobs, [job.id]: job },
+        fetches: state.fetches.filter((item) => item.id !== fetchId),
+        activeFetchId: state.activeFetchId === fetchId ? null : state.activeFetchId,
         probeState: 'idle',
         currentProbe: null,
-        inputUrl: '',
-        selectedFormat: null
+        selectedFormat: null,
+        offerId: null,
+        addOpen: false
       }))
     } catch (err: unknown) {
-      set({
-        probeError: (err as Error)?.message || 'Could not start YouTube download'
-      })
+      const message = (err as Error)?.message || 'Could not start YouTube download'
+      set((state) => ({
+        fetches: state.fetches.map((item) =>
+          item.id === fetchId ? { ...item, state: 'error', error: message } : item
+        ),
+        probeError: message
+      }))
     }
+  },
+
+  openFetch: (id) => {
+    const fetch = get().fetches.find((item) => item.id === id)
+    if (!fetch || fetch.state !== 'ready' || !fetch.meta) return
+    set({
+      addOpen: true,
+      activeFetchId: id,
+      offerId: fetch.offerId,
+      inputUrl: fetch.url,
+      probeState: 'ready',
+      currentProbe: fetch.meta,
+      probeError: null,
+      selectedFormat: formatFor(fetch.meta, get().options.quality)
+    })
+  },
+
+  dismissFetch: async (id) => {
+    const fetch = get().fetches.find((item) => item.id === id)
+    if (!fetch) return
+    set((state) => ({
+      fetches: state.fetches.filter((item) => item.id !== id),
+      activeFetchId: state.activeFetchId === id ? null : state.activeFetchId,
+      addOpen: state.activeFetchId === id ? false : state.addOpen
+    }))
+    // A browser video waiting for an answer is released when it is dismissed.
+    if (fetch.offerId) await window.lightning.youtubeCancelOffer(fetch.offerId)
+  },
+
+  startDownload: async (formatOverride?: YoutubeFormatOption) => {
+    const { currentProbe, selectedFormat, activeFetchId, offerId } = get()
+    const format = formatOverride || selectedFormat
+    if (!currentProbe || !format) return
+    await get().startJob(activeFetchId ?? '', currentProbe, format, offerId)
   },
 
   pauseJob: async (id) => {

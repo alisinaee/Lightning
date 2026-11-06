@@ -3,6 +3,8 @@ import { downloadableLink } from '../shared/clipboardLinks'
 import { redactUrl } from '../shared/urlTools'
 import { parseTelegramLinks } from '../shared/telegram'
 import { offerLink, offerTelegram } from './openLinks'
+import { isYoutubeUrl } from '../shared/youtube'
+import { IpcChannels } from '../shared/ipc-channels'
 
 const POLL_MS = 1000
 
@@ -57,8 +59,32 @@ export class ClipboardWatcher {
         return
       }
     }
+    // A YouTube video opens the YouTube add dialog, where its quality is chosen.
+    if (this.files && isYoutubeUrl(text)) {
+      this.offerYoutube(text.trim())
+      return
+    }
     const link = this.files ? downloadableLink(text) : null
     if (link) this.offer(link)
+  }
+
+  private offerYoutube(url: string): void {
+    this.active?.close()
+    const notification = new Notification({
+      title: 'Download this YouTube video?',
+      body: redactUrl(url),
+      silent: true
+    })
+    notification.on('click', () => {
+      const window = this.getWindow()
+      if (!window || window.isDestroyed()) return
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+      window.webContents.send(IpcChannels.appCommand, 'youtube-link', url)
+    })
+    notification.show()
+    this.active = notification
   }
 
   private offerMessages(links: string[]): void {

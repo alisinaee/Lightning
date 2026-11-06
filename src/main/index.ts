@@ -17,6 +17,8 @@ import icon from '../../resources/icon-dark.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerTelegramHandlers, type TelegramHandlers } from './ipc/telegramHandlers'
 import { registerYoutubeHandlers, type YoutubeHandlers } from './ipc/youtubeHandlers'
+import { getYoutubeStatus } from './youtube/binary'
+import { startYtDlpUpdater } from './youtube/updater'
 import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences, migrateVpnDefault } from './settings'
 import { log, logFilePath } from './logger'
@@ -275,6 +277,8 @@ app.whenReady().then(async () => {
   downloadManager = registerIpcHandlers(() => mainWindow)
   telegram = await registerTelegramHandlers(() => mainWindow)
   youtube = await registerYoutubeHandlers(() => mainWindow)
+  // Keep yt-dlp current with YouTube's changes without waiting for a new app build.
+  startYtDlpUpdater(async () => (await getYoutubeStatus()).version)
 
   nativeTheme.on('updated', () => {
     mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
@@ -298,7 +302,10 @@ app.whenReady().then(async () => {
     })
   }
   installClipboardWatcher(() => mainWindow)
-  installLocalApi(() => mainWindow)
+  installLocalApi(
+    () => mainWindow,
+    (body) => youtube?.fromBrowser(body) ?? Promise.resolve(false)
+  )
   await applyBehavior(await loadSettings())
   if (testKnobs.hideWindow) app.dock?.hide()
 

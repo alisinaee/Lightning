@@ -30,6 +30,8 @@ export interface LocalApiDeps {
   features: () => BrowserFeatures
   /** The links the extension collected from the page the person is on: for the several-links dialog. */
   onLinks: (urls: string[], extras: RequestExtras) => void
+  /** A video page the extension sent, for the YouTube downloader. False when the request is not valid. */
+  onVideo: (body: Record<string, unknown>) => Promise<boolean>
 }
 
 function digest(text: string): Buffer {
@@ -175,6 +177,22 @@ export class LocalApi {
       }
       log.info('action', 'link from the browser', { url: redactUrl(url) })
       this.deps.onAdd(url, sanitizeExtras(body))
+      return this.send(res, 200, { ok: true }, origin)
+    }
+    if (req.method === 'POST' && path === '/v1/video') {
+      if (!this.deps.features().menuDownload) return this.send(res, 403, { error: 'off' }, origin)
+      const text = await this.readBody(req)
+      let body: Record<string, unknown> | null = null
+      try {
+        const parsed: unknown = text === null ? null : JSON.parse(text)
+        body =
+          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
+      } catch {
+        body = null
+      }
+      if (!body) return this.send(res, 400, { error: 'video' }, origin)
+      if (!(await this.deps.onVideo(body))) return this.send(res, 400, { error: 'video' }, origin)
+      log.info('action', 'video page from the browser', { url: redactUrl(String(body.url ?? '')) })
       return this.send(res, 200, { ok: true }, origin)
     }
     if (req.method === 'POST' && path === '/v1/links') {

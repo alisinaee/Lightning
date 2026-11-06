@@ -8,6 +8,9 @@ import type { YoutubeStatus } from '../../shared/youtube'
 
 export function ytDlpExecutable(): string {
   const name = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  // A newer yt-dlp fetched by the updater (see updater.ts) wins over the one shipped with the app.
+  const updated = join(youtubeDataDir(), 'bin', name)
+  if (existsSync(updated)) return updated
   return app.isPackaged
     ? join(process.resourcesPath, 'yt-dlp', name)
     : join(app.getAppPath(), 'vendor', 'yt-dlp', `${process.platform}-${process.arch}`, name)
@@ -28,8 +31,11 @@ export function ffmpegExecutable(): string | undefined {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffmpegStatic = require('ffmpeg-static')
-    if (typeof ffmpegStatic === 'string' && existsSync(ffmpegStatic)) {
-      return ffmpegStatic
+    if (typeof ffmpegStatic === 'string') {
+      // Inside app.asar a binary can be found but not run, so yt-dlp could not merge with it.
+      // electron-builder unpacks ffmpeg next to the archive; use that copy.
+      const runnable = ffmpegStatic.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
+      if (existsSync(runnable)) return runnable
     }
   } catch {
     // ignore
@@ -176,4 +182,9 @@ export async function getYoutubeStatus(): Promise<YoutubeStatus> {
     }
     return { binary: false, ffmpeg: ffmpegExecutable() !== undefined }
   }
+}
+
+/** Forget the cached yt-dlp version so the next status check reads the binary again. */
+export function clearYoutubeStatusCache(): void {
+  cachedStatus = undefined
 }

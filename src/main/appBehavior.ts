@@ -24,11 +24,15 @@ export const integrationPort = (): number | null => localApi?.port ?? null
 
 /** Starts the server the browser extension talks to (when Settings has it on). A link it hands over
  * opens in the window, for the user to start. */
-export function installLocalApi(getWindow: () => BrowserWindow | null): void {
+export function installLocalApi(
+  getWindow: () => BrowserWindow | null,
+  onVideo: (body: Record<string, unknown>) => Promise<boolean>
+): void {
   localApi = new LocalApi({
     version: app.getVersion(),
     token: integrationToken,
     onAdd: (url, extras) => offerLink(url, getWindow(), extras),
+    onVideo,
     features: () => browserFeatures,
     onLinks: (urls, extras) => {
       const window = getWindow()

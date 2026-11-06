@@ -26,6 +26,7 @@ import { DownloadsScreen } from './screens/DownloadsScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
 import { TelegramScreen } from './screens/TelegramScreen'
 import { YouTubeScreen } from './screens/YouTubeScreen'
+import { useYoutubeStore } from './store/useYoutubeStore'
 import { useTelegramStore } from './store/useTelegramStore'
 import { useLogsStore } from './store/useLogsStore'
 import { useAppStore } from './store/useAppStore'
@@ -67,7 +68,7 @@ function CurrentScreen({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   const viewName = useAppStore((store) => store.view.name)
 
   if (viewName === 'telegram') return <TelegramScreen onOpenSettings={onOpenSettings} />
-  if (viewName === 'youtube') return <YouTubeScreen onOpenSettings={onOpenSettings} />
+  if (viewName === 'youtube') return <YouTubeScreen />
 
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
   return shown && !cancelled ? (
@@ -99,7 +100,30 @@ function App(): React.JSX.Element {
     return window.lightning.onAppCommand((command, argument) => {
       const store = useAppStore.getState()
       if (command === 'new-download') store.openNewDownload()
-      else if (command === 'several-links') {
+      else if (command === 'youtube-link') {
+        // From the clipboard: a YouTube link to choose a quality for in the add dialog.
+        store.setView({ name: 'youtube' })
+        if (argument) useYoutubeStore.getState().openLink(argument)
+      } else if (command === 'youtube-offer') {
+        // From the browser extension: a video to confirm in the YouTube add dialog before it downloads.
+        store.setView({ name: 'youtube' })
+        try {
+          const parsed = JSON.parse(argument ?? '') as {
+            id?: unknown
+            url?: unknown
+            title?: unknown
+          }
+          if (typeof parsed.id === 'string' && typeof parsed.url === 'string') {
+            useYoutubeStore.getState().openOffer({
+              id: parsed.id,
+              url: parsed.url,
+              title: typeof parsed.title === 'string' ? parsed.title : parsed.url
+            })
+          }
+        } catch {
+          // A malformed offer is ignored; the person can still paste the link.
+        }
+      } else if (command === 'several-links') {
         // From the browser extension: the links it found on the page, with its cookies.
         let seed: { links: string[]; extras?: RequestExtras } | undefined
         try {

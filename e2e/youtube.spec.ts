@@ -38,17 +38,14 @@ test.describe('YouTube screen UI & yt-dlp', () => {
     await expect(youtubeBtn).toBeVisible()
     await youtubeBtn.click()
 
-    await expect(page.getByText('YouTube Downloader')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'YouTube' })).toBeVisible()
     await expect(page.getByText(/yt-dlp 2026\.10\.26/)).toBeVisible()
-    await expect(page.getByText('ffmpeg active')).toBeVisible()
-    await expect(page.getByPlaceholder(/Paste YouTube video or shorts link/)).toBeVisible()
 
-    await page.screenshot({
-      path: '/Users/ali/.gemini/antigravity/brain/e797b6ad-d8dd-40b7-8ef9-833104ae11a2/scratch/youtube_screen.png'
-    })
-
-    // Test back button
-    await page.getByRole('button', { name: 'Back to downloads' }).click()
-    await expect(page.getByText('No downloads yet')).toBeVisible()
+    // Adding a video opens the dialog with the link box.
+    await page.getByRole('button', { name: 'Add video' }).first().click()
+    const link = page.getByRole('textbox', { name: 'Video link' })
+    await expect(link).toBeVisible()
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(link).toBeHidden()
   })
 })
