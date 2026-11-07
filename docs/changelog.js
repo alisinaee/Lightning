@@ -10,6 +10,41 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.38',
+      items: [
+        {
+          kind: 'new',
+          title: 'First-run intro and tour',
+          text: 'A short intro on first launch, then a tour of the main screens. It is shown once.'
+        },
+        {
+          kind: 'improved',
+          title: 'New look',
+          text: 'Refreshed icons and layout across the app, in the same place as before.'
+        },
+        {
+          kind: 'fixed',
+          title: 'One folder-access prompt on macOS',
+          text: 'When macOS blocks saving to your folder, Lightning asks once and opens Files and Folders for you.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Parallel downloads after redirects and on more servers',
+          text: 'Downloads that redirect ask for byte ranges again, so they keep their parallel streams, and hosts that report the file end in the range header download in parallel.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Clear messages for refusals during a download',
+          text: 'A server that refuses a download partway through (for example with a 429 or 5xx) shows a plain explanation instead of raw status text.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Accented folder names',
+          text: 'Folder names with accents show correctly in the home folder path on macOS.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.37',
       items: [
         {
