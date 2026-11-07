@@ -109,7 +109,7 @@ export const DownloadRow = memo(function DownloadRow({
             else if (event.metaKey || event.ctrlKey) handlers.click(item.id, 'toggle')
             else handlers.open(item.id)
           }}
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 flex-col gap-1 pb-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ClippedText
             text={name}
