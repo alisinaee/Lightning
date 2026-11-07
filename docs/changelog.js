@@ -10,6 +10,31 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.37',
+      items: [
+        {
+          kind: 'new',
+          title: 'YouTube downloader',
+          text: 'Download a YouTube video or its audio with yt-dlp. Pick the quality, start the queue on its own, and follow each row as it runs.'
+        },
+        {
+          kind: 'new',
+          title: 'One side panel for Downloads, Telegram and YouTube',
+          text: 'The three tools now share one sidebar, as sections you can open and close, with one top bar and one selection for all of them.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Dock icon and app icon',
+          text: 'On macOS the Dock icon stays visible and shows the app’s own icon.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Filenames and certificate messages',
+          text: 'Filenames keep their spaces, a file named from its link when the server sends an empty name, and a host name containing TLS or SSL is no longer reported as a certificate problem.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.36',
       items: [
         {
