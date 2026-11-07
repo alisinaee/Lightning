@@ -1,5 +1,5 @@
 import type { LabPlanInfo, LabPlanRun, LabRunStatus } from '@shared/lab'
-import { PlayIcon, ShieldCheckIcon } from 'lucide-react'
+import { Play as PlayIcon, ShieldCheck as ShieldCheckIcon } from '@phosphor-icons/react'
 import { cn } from 'cn'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'

@@ -1,18 +1,17 @@
 import { cn } from 'cn'
 import {
-  ArrowDownToLine,
+  ArrowLineDown as ArrowDownToLine,
   Archive,
-  ChevronDown,
-  CircleAlert,
-  CircleCheck,
-  Download,
-  EyeOff,
-  Layers,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Send,
-  type LucideIcon
-} from 'lucide-react'
+  CaretDown as ChevronDown,
+  WarningCircle as CircleAlert,
+  CheckCircle as CircleCheck,
+  DownloadSimple as Download,
+  EyeSlash as EyeOff,
+  Stack as Layers,
+  SidebarSimple as PanelLeftClose,
+  Sidebar as PanelLeftOpen,
+  type Icon
+} from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { useAppStore, type DownloadFilter } from '../store/useAppStore'
 import {
@@ -29,6 +28,7 @@ import {
   useYoutubeStore,
   type YoutubeJobFilter
 } from '../store/useYoutubeStore'
+import { TelegramIcon } from './telegram/TelegramIcon'
 import { YoutubeIcon } from './youtube/YoutubeIcon'
 import { STATUSES } from './downloads/statusEntries'
 import { FileKindIcon } from './downloads/FileKindIcon'
@@ -54,9 +54,6 @@ export const labelClass =
 
 // Every entry icon sits in the same 20px box, so labels line up whatever the icon.
 const ICON_BOX = 'flex size-5 shrink-0 items-center justify-center'
-
-// The indent that holds a section's entries, with a guide line down their left.
-const NESTED = 'ml-3 border-l-[0.5px] border-border pl-1.5'
 
 /** One entry in the side panel: an icon, a label and an optional count. Collapsed, only the icon shows.
  * `expanded` is for a section header: it says whether that section's entries are showing. */
@@ -92,8 +89,8 @@ export function Item({
       className={cn(
         // One weight in every state: a bolder active item is wider, so its row reflowed.
         collapsed
-          ? 'flex h-8 w-full items-center justify-center rounded-md'
-          : 'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[12.5px] font-medium outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
+          ? 'flex h-8 w-full items-center justify-center rounded-lg'
+          : 'flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors duration-150 text-[12.5px] font-medium outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'bg-primary/10 text-foreground hover:bg-primary/15'
           : 'text-[var(--text-secondary)]'
@@ -121,20 +118,10 @@ export function Item({
   )
 }
 
-/** The arrow on a section header: pointing down while its entries show, to the side when shut. */
-function Chevron({ open }: { open: boolean }): React.JSX.Element {
-  return (
-    <ChevronDown
-      aria-hidden
-      className={cn('size-3 shrink-0 text-muted-foreground', !open && '-rotate-90')}
-    />
-  )
-}
-
 const TELEGRAM_JOBS: {
   value: Exclude<TelegramJobFilter, 'all'>
   label: string
-  icon: LucideIcon
+  icon: Icon
   color: string
 }[] = [
   {
@@ -150,7 +137,7 @@ const TELEGRAM_JOBS: {
 const YOUTUBE_JOBS: {
   value: YoutubeJobFilter
   label: string
-  icon: LucideIcon
+  icon: Icon
   color: string
 }[] = [
   { value: 'all', label: 'All', icon: Layers, color: 'var(--text-secondary)' },
@@ -198,20 +185,34 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
     }),
     [jobList]
   )
+  // Media kinds and job states are one list: choosing either clears the other, so only one entry
+  // is ever lit.
   const setKind = (next: TgMediaKind | null): void => {
     setView({ name: 'telegram', kind: next })
+    setJobFilter('all')
+    useTelegramStore.getState().setSelected(new Set())
+  }
+  const chooseJob = (next: Exclude<TelegramJobFilter, 'all'>): void => {
+    const target = jobFilter === next ? 'all' : next
+    setView({ name: 'telegram', kind: null })
+    setJobFilter(target)
     useTelegramStore.getState().setSelected(new Set())
   }
   return (
-    <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
+    <div className="contents">
       <Item
         label="All"
         collapsed={collapsed}
-        active={kind === null}
+        active={kind === null && jobFilter === 'all'}
         count={kindCounts.all}
         onClick={() => setKind(null)}
       >
-        <FileKindIcon kind="other" icon={Layers} size="sm" className="size-5 [&>svg]:size-3" />
+        <FileKindIcon
+          kind="other"
+          icon={Layers}
+          size="sm"
+          className="-mx-0.5 size-6 [&>svg]:size-[14px]"
+        />
         {!collapsed && <span className="min-w-0 flex-1 truncate">All</span>}
       </Item>
       {MEDIA_KINDS.map((entry) => (
@@ -223,7 +224,11 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
           count={kindCounts[entry.kind]}
           onClick={() => setKind(kind === entry.kind ? null : entry.kind)}
         >
-          <FileKindIcon kind={entry.fileKind} size="sm" className="size-5 [&>svg]:size-3" />
+          <FileKindIcon
+            kind={entry.fileKind}
+            size="sm"
+            className="-mx-0.5 size-6 [&>svg]:size-[14px]"
+          />
           {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
         </Item>
       ))}
@@ -236,7 +241,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
             collapsed={collapsed}
             active={jobFilter === entry.value}
             count={jobCounts[entry.value]}
-            onClick={() => setJobFilter(jobFilter === entry.value ? 'all' : entry.value)}
+            onClick={() => chooseJob(entry.value)}
           >
             <span className={ICON_BOX}>
               <Icon aria-hidden className="size-4" style={{ color: entry.color }} />
@@ -262,7 +267,7 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
     failed: jobList.filter(isFailedYoutubeJob).length
   }
   return (
-    <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
+    <div className="contents">
       {YOUTUBE_JOBS.map((entry) => {
         const Icon = entry.icon
         return (
@@ -321,6 +326,8 @@ export function AppSidebar(): React.JSX.Element {
     return countEntries(buildEntries(downloads, history, groupInfos))
   }, [downloadsById, history, groupInfos])
 
+  const sectionName = view.name === 'telegram' || view.name === 'youtube' ? view.name : 'downloads'
+  const sectionIndex = sectionName === 'downloads' ? 0 : sectionName === 'telegram' ? 1 : 2
   const downloadsOpen = view.name !== 'telegram' && view.name !== 'youtube'
   const telegramOpen = view.name === 'telegram'
   const youtubeOpen = view.name === 'youtube'
@@ -333,11 +340,13 @@ export function AppSidebar(): React.JSX.Element {
   const chooseFilter = (next: DownloadFilter): void => {
     setView({ name: 'list' })
     setFilter(next)
+    setKindFilter(null)
     setSelected(new Set())
   }
   const chooseKind = (next: FileKind | null): void => {
     setView({ name: 'list' })
     setKindFilter(next)
+    setFilter('all')
     setSelected(new Set())
   }
   const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose
@@ -351,7 +360,8 @@ export function AppSidebar(): React.JSX.Element {
       <nav
         aria-label="Download categories"
         className={cn(
-          'flex shrink-0 flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r-[0.5px] border-border p-2',
+          'flex shrink-0 flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r-[0.5px] border-border bg-[var(--bg-secondary)] p-2.5',
+          'transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
           collapsed ? 'w-14' : 'w-[184px]'
         )}
       >
@@ -393,128 +403,174 @@ export function AppSidebar(): React.JSX.Element {
           </Tooltip>
         </div>
 
-        {/* Downloads: its status and file type entries show while it is open. */}
-        <Item
-          label="Downloads"
-          collapsed={collapsed}
-          active={downloadsOpen}
-          expanded={downloadsOpen}
-          onClick={() => {
-            if (view.name !== 'list') setView({ name: 'list' })
-          }}
+        {/* The three sections as a fixed row of icons; only the entries below change. */}
+        <div
+          role="tablist"
+          aria-label="Section"
+          aria-orientation={collapsed ? 'vertical' : 'horizontal'}
+          className={cn(
+            'relative flex shrink-0 gap-0.5 border-b-[0.5px] border-border pb-1.5',
+            collapsed ? 'flex-col' : 'flex-row'
+          )}
         >
-          <span className={ICON_BOX}>
-            <Download aria-hidden className="size-4 text-[var(--text-secondary)]" />
-          </span>
-          {!collapsed && <span className="min-w-0 flex-1 truncate">Downloads</span>}
-          {!collapsed && <Chevron open={downloadsOpen} />}
-        </Item>
-        {downloadsOpen && (
-          <div className={cn('flex flex-col gap-0.5', !collapsed && NESTED)}>
-            {STATUSES.map((entry) => {
-              const Icon = entry.icon
-              return (
-                <Item
-                  key={entry.value}
-                  active={view.name === 'list' && filter === entry.value}
-                  count={counts.statuses[entry.value] ?? 0}
-                  label={entry.label}
-                  collapsed={collapsed}
-                  title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
-                  onClick={() => chooseFilter(entry.value)}
-                >
-                  <span className={ICON_BOX}>
-                    <Icon
-                      aria-hidden
-                      className="size-4"
-                      style={{ color: entry.color ?? 'var(--text-secondary)' }}
-                    />
-                  </span>
-                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-                </Item>
-              )
-            })}
-
-            {collapsed ? (
-              <button
-                type="button"
-                aria-label="File type"
-                aria-expanded={kindsOpen}
-                onClick={() => setKindsOpen((open) => !open)}
-                className="mt-1 flex h-6 w-full items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ChevronDown aria-hidden className={cn('size-3.5', !kindsOpen && '-rotate-90')} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                aria-expanded={kindsOpen}
-                onClick={() => setKindsOpen((open) => !open)}
-                className={cn(
-                  labelClass,
-                  'flex w-full items-center justify-between rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
-                )}
-              >
-                File type
-                <ChevronDown aria-hidden className={cn('size-3', !kindsOpen && '-rotate-90')} />
-              </button>
-            )}
-            {kindsOpen &&
-              FILE_KINDS.map((entry) => (
-                <Item
-                  key={entry.kind}
-                  label={entry.label}
-                  collapsed={collapsed}
-                  active={view.name === 'list' && kindFilter === entry.kind}
-                  count={counts.kinds[entry.kind] ?? 0}
-                  onClick={() => chooseKind(kindFilter === entry.kind ? null : entry.kind)}
-                >
-                  <FileKindIcon kind={entry.kind} size="sm" className="size-5 [&>svg]:size-3" />
-                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-                </Item>
-              ))}
-          </div>
-        )}
-
-        <div className="mt-1.5">
-          <Item
-            label="Telegram"
-            collapsed={collapsed}
-            active={telegramOpen}
-            expanded={telegramOpen}
-            count={telegramActive}
-            title="Downloads from Telegram chats and links"
-            onClick={() => {
-              if (!telegramOpen) setView({ name: 'telegram', kind: null })
+          {/* The highlight glides to the chosen section instead of jumping. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-0 top-0 h-8 rounded-lg bg-primary/10 transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            style={{
+              width: collapsed ? '100%' : 'calc((100% - 4px) / 3)',
+              transform: collapsed
+                ? `translateY(${sectionIndex * 34}px)`
+                : `translateX(calc(${sectionIndex} * (100% + 2px)))`
             }}
-          >
-            <span className={ICON_BOX}>
-              <Send aria-hidden className="size-4 text-[var(--text-secondary)]" />
-            </span>
-            {!collapsed && <span className="min-w-0 flex-1 truncate">Telegram</span>}
-            {!collapsed && <Chevron open={telegramOpen} />}
-          </Item>
-          {telegramOpen && <TelegramEntries collapsed={collapsed} />}
+          />
+          {(
+            [
+              {
+                label: 'Downloads',
+                color: '#a65b04',
+                open: downloadsOpen,
+                count: counts.statuses.downloading ?? 0,
+                icon: <Download aria-hidden className="size-4 text-[#a65b04]" />,
+                go: () => view.name !== 'list' && setView({ name: 'list' })
+              },
+              {
+                label: 'Telegram',
+                color: '#229ed9',
+                open: telegramOpen,
+                count: telegramActive,
+                icon: <TelegramIcon className="size-4" />,
+                go: () => !telegramOpen && setView({ name: 'telegram', kind: null })
+              },
+              {
+                label: 'YouTube',
+                color: '#e53935',
+                open: youtubeOpen,
+                count: youtubeActive,
+                icon: <YoutubeIcon className="size-4 text-red-500" />,
+                go: () => !youtubeOpen && setView({ name: 'youtube' })
+              }
+            ] as const
+          ).map((tab) => (
+            <Tooltip key={tab.label}>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab.open}
+                    aria-label={tab.count > 0 ? `${tab.label}, ${tab.count} active` : tab.label}
+                    onClick={() => void tab.go()}
+                    className={cn(
+                      'relative flex h-8 shrink-0 items-center justify-center rounded-lg',
+                      collapsed ? 'w-full' : 'flex-1',
+                      'outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'transition-colors duration-200 active:scale-95',
+                      tab.open
+                        ? 'text-foreground'
+                        : 'text-[var(--text-secondary)] hover:bg-secondary hover:text-foreground'
+                    )}
+                  >
+                    {/* Narrow panel: the icon itself pulses. Wide: a dot beside it does. */}
+                    <span
+                      className={cn(
+                        'flex items-center justify-center',
+                        collapsed && tab.count > 0 && 'animate-pulse'
+                      )}
+                    >
+                      {tab.icon}
+                    </span>
+                    {!collapsed && tab.count > 0 && (
+                      <span
+                        aria-hidden
+                        className="ml-1 size-1.5 shrink-0 animate-pulse rounded-full"
+                        style={{ backgroundColor: tab.color }}
+                      />
+                    )}
+                  </button>
+                }
+              />
+              <TooltipContent side="right">{tab.label}</TooltipContent>
+            </Tooltip>
+          ))}
         </div>
 
-        <div className="mt-1.5">
-          <Item
-            label="YouTube"
-            collapsed={collapsed}
-            active={youtubeOpen}
-            expanded={youtubeOpen}
-            count={youtubeActive}
-            title="YouTube video & audio downloads (yt-dlp)"
-            onClick={() => {
-              if (!youtubeOpen) setView({ name: 'youtube' })
-            }}
-          >
-            <span className={ICON_BOX}>
-              <YoutubeIcon className="size-4 text-red-500" />
-            </span>
-            {!collapsed && <span className="min-w-0 flex-1 truncate">YouTube</span>}
-            {!collapsed && <Chevron open={youtubeOpen} />}
-          </Item>
+        <div key={sectionName} className="lightning-entries mt-1 flex flex-col gap-0.5">
+          {downloadsOpen && (
+            <>
+              {STATUSES.map((entry) => {
+                const Icon = entry.icon
+                return (
+                  <Item
+                    key={entry.value}
+                    active={
+                      view.name === 'list' &&
+                      filter === entry.value &&
+                      (entry.value !== 'all' || kindFilter === null)
+                    }
+                    count={counts.statuses[entry.value] ?? 0}
+                    label={entry.label}
+                    collapsed={collapsed}
+                    title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
+                    onClick={() => chooseFilter(entry.value)}
+                  >
+                    <span className={ICON_BOX}>
+                      <Icon
+                        aria-hidden
+                        className="size-4"
+                        style={{ color: entry.color ?? 'var(--text-secondary)' }}
+                      />
+                    </span>
+                    {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  </Item>
+                )
+              })}
+
+              {collapsed ? (
+                <button
+                  type="button"
+                  aria-label="File type"
+                  aria-expanded={kindsOpen}
+                  onClick={() => setKindsOpen((open) => !open)}
+                  className="mt-1 flex h-6 w-full items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ChevronDown aria-hidden className={cn('size-3.5', !kindsOpen && '-rotate-90')} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  aria-expanded={kindsOpen}
+                  onClick={() => setKindsOpen((open) => !open)}
+                  className={cn(
+                    labelClass,
+                    'flex w-full items-center justify-between rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+                  )}
+                >
+                  File type
+                  <ChevronDown aria-hidden className={cn('size-3', !kindsOpen && '-rotate-90')} />
+                </button>
+              )}
+              {kindsOpen &&
+                FILE_KINDS.map((entry) => (
+                  <Item
+                    key={entry.kind}
+                    label={entry.label}
+                    collapsed={collapsed}
+                    active={view.name === 'list' && kindFilter === entry.kind}
+                    count={counts.kinds[entry.kind] ?? 0}
+                    onClick={() => chooseKind(kindFilter === entry.kind ? null : entry.kind)}
+                  >
+                    <FileKindIcon
+                      kind={entry.kind}
+                      size="sm"
+                      className="-mx-0.5 size-6 [&>svg]:size-[14px]"
+                    />
+                    {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  </Item>
+                ))}
+            </>
+          )}
+          {telegramOpen && <TelegramEntries collapsed={collapsed} />}
           {youtubeOpen && <YoutubeEntries collapsed={collapsed} />}
         </div>
 

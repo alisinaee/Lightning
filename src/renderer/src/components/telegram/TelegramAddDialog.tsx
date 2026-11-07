@@ -1,5 +1,5 @@
 import { parseTelegramLinks } from '@shared/telegram'
-import { AlertTriangle, FolderOpen, X } from 'lucide-react'
+import { Warning as AlertTriangle, FolderOpen, X } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useTelegramStore } from '../../store/useTelegramStore'

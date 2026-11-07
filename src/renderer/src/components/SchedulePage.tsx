@@ -1,5 +1,5 @@
 import { DEFAULT_SCHEDULE, type ScheduleRule, type ScheduleSettings } from '@shared/schedule'
-import { Trash2 } from 'lucide-react'
+import { Trash as Trash2 } from '@phosphor-icons/react'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { SpeedInput } from './LimitFields'

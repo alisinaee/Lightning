@@ -1,5 +1,7 @@
 import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
-import { ListPlus, Plus, Send, TriangleAlert, User, X } from 'lucide-react'
+import { EmptyStatusIcon } from '../components/EmptyIcon'
+import { TelegramIcon } from '../components/telegram/TelegramIcon'
+import { ListPlus, Plus, Warning as TriangleAlert, User, X } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
@@ -300,9 +302,7 @@ export function TelegramScreen({
           </div>
         ) : !status.loggedIn ? (
           <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
-            <div className="flex size-14 items-center justify-center rounded-[14px] bg-primary/10 text-primary">
-              <Send aria-hidden className="size-7" />
-            </div>
+            <TelegramIcon className="size-14" />
             <div className="font-sans text-[16px] leading-[1.2] font-bold">Sign in to Telegram</div>
             <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
               Lightning downloads the files in messages you can see in your Telegram account. Choose
@@ -373,6 +373,7 @@ export function TelegramScreen({
                   <EmptyList
                     nothingAtAll={allJobs.length === 0}
                     message={EMPTY_FILTERED[jobFilter]}
+                    filter={jobFilter}
                     onAdd={() => openAdd()}
                     onExport={openExport}
                   />
@@ -414,22 +415,37 @@ export function TelegramScreen({
 function EmptyList({
   nothingAtAll,
   message,
+  filter,
   onAdd,
   onExport
 }: {
   nothingAtAll: boolean
   message: string
+  filter: TelegramJobFilter
   onAdd: () => void
   onExport: () => void
 }): React.JSX.Element {
   if (!nothingAtAll) {
-    return <div className="px-5 pt-16 text-center text-[13px] text-muted-foreground">{message}</div>
+    return (
+      <div className="flex flex-col items-center gap-2 px-5 pt-16 text-center text-[13px] text-muted-foreground">
+        <EmptyStatusIcon
+          status={
+            filter === 'active'
+              ? 'downloading'
+              : filter === 'finished'
+                ? 'completed'
+                : filter === 'failed'
+                  ? 'failed'
+                  : 'all'
+          }
+        />
+        {message}
+      </div>
+    )
   }
   return (
     <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
-      <div className="flex size-14 items-center justify-center rounded-[14px] bg-primary/10 text-primary">
-        <Send aria-hidden className="size-7" />
-      </div>
+      <TelegramIcon className="size-14" />
       <div className="font-sans text-[16px] leading-[1.2] font-bold">No Telegram downloads yet</div>
       <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
         Copy a link to a Telegram message and Lightning offers to download it, or add links and

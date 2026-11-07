@@ -1,4 +1,4 @@
-import { FlaskConicalIcon } from 'lucide-react'
+import { Flask as FlaskConicalIcon } from '@phosphor-icons/react'
 import { useLabStore } from '../../store/useLabStore'
 import { Button } from '../ui/button'
 

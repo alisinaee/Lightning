@@ -1,6 +1,6 @@
 import type { NetworkInterfaceKind, ProxyConfig, ProxyType } from '@shared/types'
 import { cn } from 'cn'
-import { Pencil } from 'lucide-react'
+import { PencilSimple as Pencil } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'

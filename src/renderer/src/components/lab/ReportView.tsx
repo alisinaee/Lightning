@@ -1,4 +1,4 @@
-import { CheckIcon, CopyIcon } from 'lucide-react'
+import { Check as CheckIcon, Copy as CopyIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Button } from '../ui/button'
 import { ScrollArea } from '../ui/scroll-area'

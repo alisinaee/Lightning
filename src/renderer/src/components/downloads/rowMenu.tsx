@@ -1,4 +1,4 @@
-import { Ellipsis, type LucideIcon } from 'lucide-react'
+import { DotsThree as Ellipsis, type Icon } from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import {
   ContextMenu,
@@ -18,7 +18,7 @@ import {
 export interface RowAction {
   id: string
   label: string
-  icon: LucideIcon
+  icon: Icon
   run: () => void
   danger?: boolean
   disabled?: boolean

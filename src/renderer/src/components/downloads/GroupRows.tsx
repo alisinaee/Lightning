@@ -2,17 +2,17 @@ import { RowProgressLine } from './RowProgressLine'
 import type { DownloadState } from '@shared/types'
 import { cn } from 'cn'
 import {
-  ChevronDown,
-  ChevronRight,
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
   Folder,
   FolderOpen,
   ListChecks,
   Pause,
-  Pencil,
+  PencilSimple as Pencil,
   Play,
-  RotateCw,
-  Trash2
-} from 'lucide-react'
+  ArrowClockwise as RotateCw,
+  Trash as Trash2
+} from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
@@ -360,7 +360,7 @@ export function GroupTableRow({
         />
       </div>
       {columns.map((column) => cells[column])}
-      <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
         {group.held && iconButton('Start', <Play />, () => void startAll())}
         {pausable.length > 0 && iconButton('Pause all in', <Pause />, () => void pauseAll())}
         {!group.held &&

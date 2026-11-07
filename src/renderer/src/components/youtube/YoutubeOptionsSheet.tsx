@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { FolderOpen, RotateCcw } from 'lucide-react'
+import { FolderOpen, ArrowCounterClockwise as RotateCcw } from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'

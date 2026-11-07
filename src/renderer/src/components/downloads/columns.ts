@@ -66,10 +66,10 @@ export const COLUMNS: ColumnDef[] = [
 export const columnOf = (id: ColumnId): ColumnDef | undefined =>
   COLUMNS.find((def) => def.id === id)
 
-export const SELECT_WIDTH = 30
+export const SELECT_WIDTH = 44
 /** Three icon buttons (say retry, fix link and the ⋯ menu): every action is an icon, so a row's
  * actions never need more, and the usual one or two leave little empty. */
-export const ACTIONS_WIDTH = 100
+export const ACTIONS_WIDTH = 112
 /** What the name column keeps at least, before columns start to drop out. */
 export const NAME_MIN = 220
 

@@ -1,13 +1,13 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import {
-  ArrowDownToLine,
-  CircleAlert,
-  CircleCheck,
+  ArrowLineDown as ArrowDownToLine,
+  WarningCircle as CircleAlert,
+  CheckCircle as CircleCheck,
   Clock,
   Pause,
-  TriangleAlert,
-  type LucideIcon
-} from 'lucide-react'
+  Warning as TriangleAlert,
+  type Icon
+} from '@phosphor-icons/react'
 import { describeError, linkExpired, wantedBytes, formatPercent } from './format'
 
 export type Item = DownloadState | FinishedDownload
@@ -15,7 +15,7 @@ export type Item = DownloadState | FinishedDownload
 /** One vocabulary for how a download is doing, used by the list and by each download's screen. */
 export type StatusKey = 'downloading' | 'queued' | 'paused' | 'completed' | 'failed' | 'attention'
 
-export const STATUS_STYLE: Record<StatusKey, { label: string; icon: LucideIcon; color: string }> = {
+export const STATUS_STYLE: Record<StatusKey, { label: string; icon: Icon; color: string }> = {
   downloading: { label: 'Downloading', icon: ArrowDownToLine, color: 'var(--status-downloading)' },
   queued: { label: 'Queued', icon: Clock, color: 'var(--status-queued)' },
   paused: { label: 'Paused', icon: Pause, color: 'var(--status-paused)' },

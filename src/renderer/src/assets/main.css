@@ -20,26 +20,26 @@
   color-scheme: light dark;
 
   --bg: #ffffff;
-  --bg-secondary: #fafafa;
-  --bg-tertiary: #f0f0f0;
+  --bg-secondary: #f8f8f9;
+  --bg-tertiary: #f1f1f3;
   --input-bg: #ffffff;
-  --track-bg: #e4e4e6;
+  --track-bg: #ebebed;
 
-  --text: #1d1d1f;
+  --text: #1c1c1e;
   --text-secondary: #6e6e73;
   /* #8a8a8e (the original design value) is only 3.45:1 against this screen's white/near-white
      backgrounds — fails WCAG AA (4.5:1) for the 9-13px text this token is used at throughout.
      Darkened to the lightest gray that still clears 4.5:1. */
   --text-tertiary: #737377;
 
-  --border: #e0e0e2;
-  --border-subtle: #ececee;
-  --border-strong: #b9b9bb;
-  --footer-border: #d8d8da;
+  --border: #ebebed;
+  --border-subtle: #f3f3f5;
+  --border-strong: #cdcdd0;
+  --footer-border: #ebebed;
 
   --icon-muted: #c2c2c6;
   --icon-muted-strong: #b0b0b2;
-  --scrollbar-thumb: #d0d0d2;
+  --scrollbar-thumb: #dcdcde;
 
   --checkbox-shadow: rgba(0, 0, 0, 0.15);
   --checkbox-inset-shadow: rgba(0, 0, 0, 0.04);
@@ -126,7 +126,7 @@
   --kind-other: #6b7280;
   --kind-other-bg: #eeeff1;
 
-  --color-accent: #d97706;
+  --color-accent: #c36b05;
   --color-accent-onsolid: #ffffff;
   --color-success: #1f8a70;
 
@@ -140,7 +140,7 @@
 
   /* Shared corner radius for shadcn/Base UI components — matches the 8px most hand-styled
      buttons/cards already use (see theme.ts), so new and existing components read as one system. */
-  --radius: 8px;
+  --radius: 10px;
 }
 
 /* Maps shadcn/Base UI's expected semantic tokens onto Lightning's existing palette above, instead of
@@ -192,10 +192,10 @@
     --text-secondary: #a9adb2;
     --text-tertiary: #8d9196;
 
-    --border: #2b2f33;
-    --border-subtle: #23262a;
+    --border: #272b2f;
+    --border-subtle: #212427;
     --border-strong: #33383c;
-    --footer-border: #2b2f33;
+    --footer-border: #272b2f;
 
     --icon-muted: #33383c;
     --icon-muted-strong: #3a3f44;
@@ -417,4 +417,356 @@
   box-shadow:
     inset 3px 0 0 var(--primary),
     inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+/* Panel and screen motion: entries slide in one after another when a section is chosen, the
+   screen fades up. All of it is off for people who ask for reduced motion. */
+@keyframes lightning-entry-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lightning-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lightning-entries > :not(.contents),
+.lightning-entries > .contents > * {
+  animation: lightning-entry-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.lightning-entries > :nth-child(2),
+.lightning-entries > .contents > :nth-child(2) {
+  animation-delay: 30ms;
+}
+.lightning-entries > :nth-child(3),
+.lightning-entries > .contents > :nth-child(3) {
+  animation-delay: 60ms;
+}
+.lightning-entries > :nth-child(4),
+.lightning-entries > .contents > :nth-child(4) {
+  animation-delay: 90ms;
+}
+.lightning-entries > :nth-child(5),
+.lightning-entries > .contents > :nth-child(5) {
+  animation-delay: 120ms;
+}
+.lightning-entries > :nth-child(6),
+.lightning-entries > .contents > :nth-child(6) {
+  animation-delay: 150ms;
+}
+.lightning-entries > :nth-child(n + 7),
+.lightning-entries > .contents > :nth-child(n + 7) {
+  animation-delay: 180ms;
+}
+.lightning-screen {
+  animation: lightning-screen-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightning-entries > :not(.contents),
+  .lightning-entries > .contents > *,
+  .lightning-screen {
+    animation: none;
+  }
+}
+
+/* Phosphor icons are filled outlines on a 256 grid: their regular stroke is 16 units. A hairline
+   stroke in the icon's own colour thickens it by 4.8 units, about 30%; the icons are also drawn 10% larger. Raw 24-grid svgs are left. */
+svg[viewBox='0 0 256 256'] :is(path, circle, rect, line, polyline, ellipse) {
+  stroke: currentColor;
+  stroke-width: 4.8px;
+  stroke-linejoin: round;
+}
+svg[viewBox='0 0 256 256'] {
+  scale: 1.1;
+}
+/* The empty 256x256 frame Phosphor includes in each icon must stay unstroked. */
+svg[viewBox='0 0 256 256'] [fill='none'] {
+  stroke: none;
+}
+
+/* The bar of a moving download: a band of light travels along it. */
+@keyframes lightning-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+.lightning-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: lightning-shimmer 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightning-shimmer {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* First-run intro, 5s: the connections run down as separate lines, join into one, the one turns
+   into a bolt with a flash, the name lands under it, then everything fades. Off for reduced
+   motion (the component is not rendered at all then). */
+.lightning-intro {
+  animation: lightning-intro-out 500ms ease-in 4500ms forwards;
+}
+@keyframes lightning-intro-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+.lightning-intro svg[viewBox='0 0 256 256'] {
+  scale: 1;
+}
+.lightning-intro-glow {
+  background:
+    radial-gradient(50% 42% at 50% 40%, rgba(99, 102, 241, 0.38), transparent 70%),
+    radial-gradient(36% 28% at 18% 25%, rgba(56, 189, 248, 0.14), transparent 70%);
+  opacity: 0;
+  animation: lightning-intro-fade-in 900ms ease-out 100ms forwards;
+}
+@keyframes lightning-intro-fade-in {
+  to {
+    opacity: 1;
+  }
+}
+.lightning-intro-badge {
+  opacity: 0;
+  animation: lightning-intro-pop 420ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+@keyframes lightning-intro-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lightning-intro-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: lightning-intro-draw 900ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes lightning-intro-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* A light runs down each line to the meeting point, over and over until the strike. */
+.lightning-intro-dot {
+  offset-distance: 0%;
+  opacity: 0;
+  animation: lightning-intro-travel 900ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes lightning-intro-travel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0.2;
+  }
+}
+/* The single line: drawn once the five meet, then it throbs and charges up. */
+.lightning-intro-stem {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 8px #7dd3fc) drop-shadow(0 0 20px #38bdf8);
+  animation:
+    lightning-intro-draw 500ms ease-out 1900ms both,
+    lightning-intro-charge 700ms ease-in-out 2400ms 1;
+}
+@keyframes lightning-intro-charge {
+  0%,
+  100% {
+    stroke-width: 9px;
+  }
+  40% {
+    stroke-width: 14px;
+  }
+  70% {
+    stroke-width: 11px;
+  }
+}
+/* At the strike everything that came before gives way to the bolt. */
+.lightning-intro-before {
+  animation: lightning-intro-before-out 320ms ease-in 3050ms forwards;
+}
+@keyframes lightning-intro-before-out {
+  to {
+    opacity: 0;
+  }
+}
+.lightning-intro-flash {
+  opacity: 0;
+  animation: lightning-intro-flash 620ms ease-out 3000ms both;
+}
+@keyframes lightning-intro-flash {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  28% {
+    opacity: 0.1;
+  }
+  42% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* The glow is a drop-shadow on the element, so it fades out round the shape and is not cut
+   to a box. */
+.lightning-intro-bolt {
+  opacity: 0;
+  filter: drop-shadow(0 0 6px #fde047) drop-shadow(0 0 22px #f59e0b) drop-shadow(0 0 48px #6366f1);
+  animation:
+    lightning-intro-bolt-in 1400ms ease-out 3000ms both,
+    lightning-intro-flicker 700ms steps(1, end) 3050ms 1;
+}
+@keyframes lightning-intro-bolt-in {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes lightning-intro-flicker {
+  0% {
+    opacity: 1;
+  }
+  18% {
+    opacity: 0.35;
+  }
+  30% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0.55;
+  }
+  58% {
+    opacity: 1;
+  }
+}
+.lightning-intro-bolt .lightning-intro-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: lightning-intro-draw 260ms ease-out 3020ms both;
+}
+.lightning-intro-branch {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: lightning-intro-draw 260ms ease-out 3200ms both;
+}
+.lightning-intro-branch + .lightning-intro-branch {
+  animation-delay: 3280ms;
+}
+.lightning-intro-fill {
+  opacity: 0;
+  animation: lightning-intro-fill 1500ms ease-out 3050ms both;
+}
+@keyframes lightning-intro-fill {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+.lightning-intro-letter {
+  opacity: 0;
+  animation: lightning-intro-letter 480ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  text-shadow:
+    0 0 18px rgba(250, 204, 21, 0.55),
+    0 0 42px rgba(56, 189, 248, 0.35);
+}
+@keyframes lightning-intro-letter {
+  0% {
+    opacity: 0;
+    transform: translateX(-36px) skewX(-18deg);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.lightning-intro-tagline {
+  opacity: 0;
+  animation: lightning-intro-tag 600ms ease-out 4100ms both;
+}
+@keyframes lightning-intro-tag {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The walkthrough: the card eases in at each step, and the ring round what it points at breathes. */
+.lightning-tour-card {
+  animation: lightning-tour-card-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes lightning-tour-card-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+.lightning-tour-ring::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--color-accent);
+  animation: lightning-tour-ring 1.8s ease-out infinite;
+}
+@keyframes lightning-tour-ring {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.12, 1.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightning-tour-card,
+  .lightning-tour-ring::after {
+    animation: none;
+  }
 }

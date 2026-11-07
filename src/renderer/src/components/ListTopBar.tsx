@@ -1,4 +1,13 @@
-import { ChevronDown, ChevronUp, Pause, Play, Plus, RotateCw, Search, Settings } from 'lucide-react'
+import {
+  CaretDown as ChevronDown,
+  CaretUp as ChevronUp,
+  Pause,
+  Play,
+  Plus,
+  ArrowClockwise as RotateCw,
+  MagnifyingGlass as Search,
+  Gear as Settings
+} from '@phosphor-icons/react'
 import type { ComponentType, RefObject } from 'react'
 import { Button } from './ui/button'
 import {

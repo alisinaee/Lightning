@@ -1,6 +1,8 @@
 import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
 import { useEffect, useState } from 'react'
 import { AppSidebar } from './components/AppSidebar'
+import { FirstRunIntro } from './components/FirstRunIntro'
+import { OnboardingTour } from './components/OnboardingTour'
 import { SimBanner } from './components/lab/SimBanner'
 import { TestLab } from './components/lab/TestLab'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
@@ -94,6 +96,21 @@ function App(): React.JSX.Element {
 
   const checkForUpdate = useAppStore((store) => store.checkForUpdate)
   const sidebarHidden = useAppStore((store) => store.sidebarHidden)
+  const sectionName = useAppStore((store) => store.view.name)
+  // Telegram and YouTube each take their own brand accent inside their tab. It is set on the
+  // root so dialogs, which render outside this tree, pick it up too.
+  const sectionAccent =
+    sectionName === 'telegram' ? '#229ed9' : sectionName === 'youtube' ? '#e53935' : undefined
+  useEffect(() => {
+    const root = document.documentElement.style
+    if (!sectionAccent) return
+    root.setProperty('--color-accent', sectionAccent)
+    root.setProperty('--color-accent-onsolid', '#ffffff')
+    return () => {
+      root.removeProperty('--color-accent')
+      root.removeProperty('--color-accent-onsolid')
+    }
+  }, [sectionAccent])
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Each open gets a new key, so the dialog starts on the page asked for (General by default).
   const [settingsRequest, setSettingsRequest] = useState<{ id: number; page?: SettingsPage }>({
@@ -208,10 +225,17 @@ function App(): React.JSX.Element {
     <TooltipProvider>
       <div className="flex h-full flex-col">
         <TitleBar />
+        <FirstRunIntro />
+        <OnboardingTour />
         <SimBanner />
         <div className="flex min-h-0 flex-1">
           {!sidebarHidden && <AppSidebar />}
-          <div className="min-h-0 min-w-0 flex-1">
+          <div
+            key={
+              sectionName === 'telegram' || sectionName === 'youtube' ? sectionName : 'downloads'
+            }
+            className="lightning-screen min-h-0 min-w-0 flex-1"
+          >
             <CurrentScreen onOpenSettings={openSettings} />
           </div>
         </div>

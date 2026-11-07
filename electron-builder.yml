@@ -93,6 +93,21 @@ mac:
   notarize: false
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
+  # The drag-to-install window: art behind the app and the Applications link, on the same 710x480
+  # canvas as build/dmg-background.png (build/dmg-background@2x.png is picked up for Retina).
+  background: build/dmg-background.png
+  window:
+    width: 710
+    height: 480
+  iconSize: 112
+  contents:
+    - x: 165
+      y: 246
+      type: file
+    - x: 545
+      y: 246
+      type: link
+      path: /Applications
 linux:
   # tdl (AGPL-3.0, a separate unmodified program): `npm run fetch-tdl all` puts every build under
   # vendor/tdl/<platform>-<arch>/. It lands next to the app as tdl/tdl[.exe], which

@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react'
+import { Warning as TriangleAlert } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import {

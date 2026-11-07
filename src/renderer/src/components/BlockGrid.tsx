@@ -1,6 +1,6 @@
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
 import { cn } from 'cn'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp } from '@phosphor-icons/react'
 import { useCallback, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'

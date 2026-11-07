@@ -22,7 +22,7 @@ export const FINDER = window.lightning.platform === 'darwin' ? 'Finder' : 'folde
 export const REVEAL_LABEL = `Show in ${FINDER}`
 
 export const ROW_CLASS =
-  'group/row relative grid h-11 items-center group-data-[wrap=true]/table:h-auto group-data-[wrap=true]/table:min-h-11 group-data-[wrap=true]/table:py-1.5 bg-[var(--row-tint,transparent)] border-b-[0.5px] border-border/70 text-[13px] [content-visibility:auto] [contain-intrinsic-size:auto_44px] [grid-template-columns:var(--cols)] hover:bg-secondary focus-within:bg-secondary data-[status=downloading]:bg-primary/[0.07] data-[status=downloading]:hover:bg-primary/[0.12] data-[status=downloading]:data-[selected]:bg-primary/15'
+  'group/row relative grid h-[52px] items-center group-data-[wrap=true]/table:h-auto group-data-[wrap=true]/table:min-h-[52px] group-data-[wrap=true]/table:py-1.5 bg-[var(--row-tint,transparent)] border-b-[0.5px] border-border/50 text-[13px] [content-visibility:auto] [contain-intrinsic-size:auto_52px] [grid-template-columns:var(--cols)] hover:bg-secondary focus-within:bg-secondary data-[status=downloading]:bg-primary/[0.07] data-[status=downloading]:hover:bg-primary/[0.12] data-[status=downloading]:data-[selected]:bg-primary/15'
 
 /** What is moving right now stands out from the rest of the list by a tint of its colour. (No
  * line down the row's edge: the progress line along the bottom and the Status cell say the rest.) */

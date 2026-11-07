@@ -1,5 +1,9 @@
 import type { TdlLoginEvent, TdlLoginMode } from '@shared/telegram'
-import { AlertTriangle, CircleCheck, FolderOpen } from 'lucide-react'
+import {
+  Warning as AlertTriangle,
+  CheckCircle as CircleCheck,
+  FolderOpen
+} from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store/useAppStore'

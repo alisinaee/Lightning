@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { ChevronLeft } from 'lucide-react'
+import { CaretLeft as ChevronLeft } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import {

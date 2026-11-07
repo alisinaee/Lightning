@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { PencilSimple as Pencil } from '@phosphor-icons/react'
 import { isVpn } from '@shared/networks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'

@@ -1,6 +1,6 @@
 import type { TdlItem, TdlJob } from '@shared/telegram'
 import { cn } from 'cn'
-import { ChevronDown, ChevronRight, Folder } from 'lucide-react'
+import { CaretDown as ChevronDown, CaretRight as ChevronRight, Folder } from '@phosphor-icons/react'
 import { memo } from 'react'
 import { toDisplayPath } from '../../utils/format'
 import { useAppStore } from '../../store/useAppStore'
@@ -107,7 +107,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
             <SpeedCell speed={info.speed} />
             {columns.eta && <EtaCell seconds={info.etaSeconds} />}
             {columns.added && <AddedCell at={info.addedAt} />}
-            <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+            <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
               <RowActionsMenu label={title} actions={actions} />
             </div>
           </div>

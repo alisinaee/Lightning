@@ -1,4 +1,4 @@
-import { CircleArrowUp } from 'lucide-react'
+import { ArrowCircleUp as CircleArrowUp } from '@phosphor-icons/react'
 import { useAppStore } from '../store/useAppStore'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -27,11 +27,7 @@ export function UpdateIndicator(): React.JSX.Element | null {
               aria-hidden
               className="absolute inset-0 rounded-[6px] bg-primary/30 motion-safe:animate-pulse"
             />
-            <CircleArrowUp
-              size={15}
-              strokeWidth={1.6}
-              className="relative motion-safe:animate-pulse"
-            />
+            <CircleArrowUp size={15} className="relative motion-safe:animate-pulse" />
           </a>
         }
       />

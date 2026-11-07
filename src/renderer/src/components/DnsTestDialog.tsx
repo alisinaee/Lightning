@@ -1,7 +1,7 @@
 import type { DnsTestEntry, DnsTestResult } from '@shared/dnsRecommend'
 import { describeDns } from '@shared/dnsPresets'
 import { SYSTEM_NAME } from '@shared/dnsRecommend'
-import { AlertTriangle, Check } from 'lucide-react'
+import { Warning as AlertTriangle, Check } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { describeError, formatBytes } from '../utils/format'
 import { useDns } from '../hooks/useDns'

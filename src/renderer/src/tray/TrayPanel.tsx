@@ -1,16 +1,16 @@
 import type { PanelAction, PanelDownload, PanelState } from '@shared/trayPanel'
 import type { NetworkInterfaceKind } from '@shared/types'
 import {
-  ArrowDownToLine,
-  ExternalLink,
-  FolderDown,
+  ArrowLineDown as ArrowDownToLine,
+  ArrowSquareOut as ExternalLink,
+  FolderSimple as FolderDown,
   ListPlus,
   Pause,
   Play,
   Plus,
   Power,
-  Settings
-} from 'lucide-react'
+  Gear as Settings
+} from '@phosphor-icons/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { SpeedGraph } from '../components/SpeedGraph'
 import { assignNetworkColors, resolveNetworkVisual } from '../theme'

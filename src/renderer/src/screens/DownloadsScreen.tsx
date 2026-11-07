@@ -1,5 +1,14 @@
 import type { DownloadState } from '@shared/types'
-import { Link2, ListFilter, ListPlus, Pause, RotateCw, Play, Plus, X } from 'lucide-react'
+import {
+  LinkSimple as Link2,
+  Funnel as ListFilter,
+  ListPlus,
+  Pause,
+  ArrowClockwise as RotateCw,
+  Play,
+  Plus,
+  X
+} from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { filterLabel } from '../components/downloadFilterLabels'
@@ -50,6 +59,7 @@ import { FILE_KINDS, type FileKind } from '../utils/fileKind'
 import { describeError, linkExpired } from '../utils/format'
 import { useKeptOrder } from '../utils/keepOrder'
 import { isFinished, type Item } from '../utils/status'
+import { EmptyStatusIcon } from '../components/EmptyIcon'
 
 const EMPTY_MESSAGES: Partial<Record<DownloadFilter, string>> = {
   progress: 'No downloads in progress',
@@ -696,6 +706,12 @@ export function DownloadsScreen({
                   role="status"
                   className="flex flex-col items-center gap-2 px-5 py-16 text-center"
                 >
+                  <EmptyStatusIcon
+                    searching={kindFilter !== null || search.trim() !== ''}
+                    status={
+                      filter === 'finished' ? 'completed' : filter === 'failed' ? 'failed' : filter
+                    }
+                  />
                   <p className="text-[16px] font-semibold">
                     {kindFilter !== null || search.trim() !== ''
                       ? 'No matching downloads'
@@ -841,7 +857,9 @@ function EmptyState(): React.JSX.Element {
           <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             New download
-            <span className="ml-1 font-mono text-[11px] opacity-70">{NEW_SHORTCUT}</span>
+            <span className="ml-1.5 rounded-[5px] bg-white/20 px-[7px] py-[3px] font-mono text-[12px] leading-none font-medium text-primary-foreground">
+              {NEW_SHORTCUT}
+            </span>
           </Button>
         </>
       )}

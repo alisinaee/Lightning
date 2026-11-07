@@ -219,5 +219,9 @@ export interface IpcContract {
   youtubeSetOptions: { args: [options: Partial<YoutubeOptions>]; result: YoutubeOptions }
   youtubeChooseFolder: { args: [defaultPath?: string]; result: string | null }
   youtubeChooseCookies: { args: []; result: string | null }
+  /** The browsers installed here that can lend their YouTube sign-in. */
+  youtubeBrowsers: { args: []; result: Exclude<YoutubeOptions['cookiesBrowser'], ''>[] }
+  /** macOS: opens System Settings at Full Disk Access (Safari's cookies need it). */
+  openFullDiskAccess: { args: []; result: void }
   youtubeCancelOffer: { args: [id: string]; result: void }
 }

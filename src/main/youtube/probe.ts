@@ -36,12 +36,17 @@ const COMMON_RESOLUTIONS = [
   { height: 360, label: 'Low (360p)' }
 ]
 
-export async function probeYoutube(url: string, proxy?: string): Promise<YoutubeVideoMeta> {
+export async function probeYoutube(
+  url: string,
+  proxy?: string,
+  signIn: string[] = []
+): Promise<YoutubeVideoMeta> {
   // A stalled connection fails after 20s with yt-dlp's own message, not after the whole wait.
   const args = ['--dump-single-json', '--no-warnings', '--no-playlist', '--socket-timeout', '20']
   if (proxy) {
     args.push('--proxy', proxy)
   }
+  args.push(...signIn)
   args.push(url)
 
   // Probing YouTube runs JavaScript challenge solving and can take well over 30s on

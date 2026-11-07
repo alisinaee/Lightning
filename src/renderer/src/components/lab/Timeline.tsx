@@ -1,12 +1,12 @@
 import type { LabStep, LabStepStatus } from '@shared/lab'
 import {
-  ChevronRightIcon,
-  CircleCheckIcon,
-  CircleDashedIcon,
-  CircleMinusIcon,
-  CircleXIcon,
-  LoaderCircleIcon
-} from 'lucide-react'
+  CaretRight as ChevronRightIcon,
+  CheckCircle as CircleCheckIcon,
+  CircleDashed as CircleDashedIcon,
+  MinusCircle as CircleMinusIcon,
+  XCircle as CircleXIcon,
+  CircleNotch as LoaderCircleIcon
+} from '@phosphor-icons/react'
 import { useState } from 'react'
 import { cn } from 'cn'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'

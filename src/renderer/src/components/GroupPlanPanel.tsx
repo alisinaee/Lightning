@@ -1,6 +1,6 @@
 import type { DownloadState, GroupInfo } from '@shared/types'
 import { cn } from 'cn'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react'
 import { useAppStore } from '../store/useAppStore'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import { formatBytes, formatSpeed } from '../utils/format'

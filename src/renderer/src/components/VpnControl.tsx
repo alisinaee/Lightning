@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldOff } from 'lucide-react'
+import { ShieldCheck, ShieldSlash as ShieldOff } from '@phosphor-icons/react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { Switch } from './ui/switch'

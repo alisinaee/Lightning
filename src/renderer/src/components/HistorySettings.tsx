@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
-import { FolderOpen, Pencil, Trash2 } from 'lucide-react'
+import { FolderOpen, PencilSimple as Pencil, Trash as Trash2 } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes } from '../utils/format'

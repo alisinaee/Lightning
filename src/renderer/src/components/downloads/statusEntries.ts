@@ -1,4 +1,4 @@
-import { Layers, type LucideIcon } from 'lucide-react'
+import { Stack as Layers, type Icon } from '@phosphor-icons/react'
 import type { DownloadFilter } from '../../store/useAppStore'
 import { statusStyle, type StatusKey } from '../../utils/status'
 
@@ -6,7 +6,7 @@ import { statusStyle, type StatusKey } from '../../utils/status'
 export const STATUSES: {
   value: DownloadFilter
   label: string
-  icon: LucideIcon
+  icon: Icon
   color?: string
   status?: StatusKey
 }[] = [

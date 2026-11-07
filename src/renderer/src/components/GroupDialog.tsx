@@ -1,6 +1,6 @@
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
-import { AlertTriangle, Plus, X } from 'lucide-react'
+import { Warning as AlertTriangle, Plus, X } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
 import { useAppStore } from '../store/useAppStore'

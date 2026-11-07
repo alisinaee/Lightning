@@ -1,6 +1,12 @@
 import type { DnsProfile } from '@shared/types'
 import { AUTO_DESCRIPTION, DNS_PRESETS, SYSTEM_DESCRIPTION, describeDns } from '@shared/dnsPresets'
-import { Check, ChevronDown, Gauge, Plus, Trash2 } from 'lucide-react'
+import {
+  Check,
+  CaretDown as ChevronDown,
+  Gauge,
+  Plus,
+  Trash as Trash2
+} from '@phosphor-icons/react'
 import { useState } from 'react'
 import { dnsLabel, useDns } from '../hooks/useDns'
 import { DnsTestDialog } from './DnsTestDialog'

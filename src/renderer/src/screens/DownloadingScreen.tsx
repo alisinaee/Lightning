@@ -1,5 +1,5 @@
 import type { DownloadState } from '@shared/types'
-import { Folder } from 'lucide-react'
+import { Folder } from '@phosphor-icons/react'
 import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'

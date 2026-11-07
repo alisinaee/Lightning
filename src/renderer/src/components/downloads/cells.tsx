@@ -116,12 +116,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
   const progressLine = useAppStore((store) => store.progressLine)
   const showBar = !info.reason && info.bar
   const icon = (
-    <Icon
-      aria-hidden
-      className="size-3.5 shrink-0"
-      style={{ color: style.color }}
-      strokeWidth={2.2}
-    />
+    <Icon aria-hidden className="size-3.5 shrink-0" style={{ color: style.color }} weight="bold" />
   )
   const word = (
     <span

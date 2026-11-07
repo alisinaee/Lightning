@@ -1,6 +1,12 @@
 import type { TdlChat, TdlItem, TdlRangeType, TgMediaKind } from '@shared/telegram'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen, ListChecks, ListX, Search } from 'lucide-react'
+import {
+  Warning as AlertTriangle,
+  FolderOpen,
+  ListChecks,
+  ListDashes as ListX,
+  MagnifyingGlass as Search
+} from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useTelegramStore } from '../../store/useTelegramStore'

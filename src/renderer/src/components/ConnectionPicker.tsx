@@ -1,4 +1,4 @@
-import { Cable, ChevronDown } from 'lucide-react'
+import { Plugs as Cable, CaretDown as ChevronDown } from '@phosphor-icons/react'
 import type { NetworkOption } from '../hooks/useNetworkOptions'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'

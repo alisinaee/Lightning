@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, SlidersHorizontal, Video, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, SlidersHorizontal, VideoCamera as Video, X } from '@phosphor-icons/react'
+import { EmptyStatusIcon } from '../components/EmptyIcon'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
@@ -8,8 +9,9 @@ import { YoutubeAddDialog } from '../components/youtube/YoutubeAddDialog'
 import { YoutubeOptionsSheet } from '../components/youtube/YoutubeOptionsSheet'
 import { YoutubeJobRow } from '../components/youtube/YoutubeJobRow'
 import { YoutubeGroupRow } from '../components/youtube/YoutubeGroupRow'
-import { YOUTUBE_COLUMNS } from '../components/youtube/youtubeRowModel'
+import { YoutubeColumnsContext, youtubeColumnsFor } from '../components/youtube/youtubeRowModel'
 import { YoutubeFetchQueue } from '../components/youtube/YoutubeFetchQueue'
+import { YoutubeSignInBanner } from '../components/youtube/YoutubeSignInFix'
 import {
   isActiveYoutubeJob,
   isFailedYoutubeJob,
@@ -46,6 +48,16 @@ export function YouTubeScreen({
   onOpenSettings: (page?: SettingsPage) => void
 }): React.JSX.Element {
   const jobs = useYoutubeStore((store) => store.jobs)
+  const [width, setWidth] = useState(1000)
+  const screenRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const element = screenRef.current
+    if (!element) return
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const columns = useMemo(() => youtubeColumnsFor(width), [width])
   const status = useYoutubeStore((store) => store.status)
   const jobFilter = useYoutubeStore((store) => store.jobFilter)
   const search = useYoutubeStore((store) => store.search)
@@ -208,7 +220,7 @@ export function YouTubeScreen({
 
   return (
     <div className="flex h-full min-w-0 flex-1 bg-background">
-      <div className="@container flex min-w-0 flex-1 flex-col">
+      <div ref={screenRef} className="@container flex min-w-0 flex-1 flex-col">
         {limitsDialog}
         {chosen.length === 0 ? (
           <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
@@ -346,7 +358,8 @@ export function YouTubeScreen({
           </div>
         )}
 
-        <YoutubeFetchQueue />
+        <YoutubeFetchQueue onOpenSettings={onOpenSettings} />
+        <YoutubeSignInBanner onOpenSettings={onOpenSettings} />
 
         {status && !status.binary && (
           <div
@@ -362,7 +375,7 @@ export function YouTubeScreen({
           <div
             role="row"
             className="sticky top-0 z-10 grid h-8 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium text-muted-foreground [grid-template-columns:var(--cols)]"
-            style={{ '--cols': YOUTUBE_COLUMNS } as React.CSSProperties}
+            style={{ '--cols': columns.template } as React.CSSProperties}
           >
             <div role="columnheader" className="flex items-center justify-center">
               <Checkbox
@@ -385,19 +398,25 @@ export function YouTubeScreen({
             <div role="columnheader" className="px-2 text-right">
               Speed
             </div>
-            <div role="columnheader" className="px-2 text-right">
-              Time left
-            </div>
-            <div role="columnheader" className="px-2">
-              Added
-            </div>
+            {columns.eta && (
+              <div role="columnheader" className="px-2 text-right">
+                Time left
+              </div>
+            )}
+            {columns.added && (
+              <div role="columnheader" className="px-2">
+                Added
+              </div>
+            )}
             <div role="columnheader" />
           </div>
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {visible.length > 0 ? (
-            entries
+            <YoutubeColumnsContext.Provider value={columns}>
+              {entries}
+            </YoutubeColumnsContext.Provider>
           ) : all.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <div className="flex size-12 items-center justify-center rounded-full bg-muted">
@@ -414,7 +433,19 @@ export function YouTubeScreen({
               </Button>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-[12.5px] text-muted-foreground">
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-[12.5px] text-muted-foreground">
+              <EmptyStatusIcon
+                searching={search.trim() !== ''}
+                status={
+                  jobFilter === 'active'
+                    ? 'downloading'
+                    : jobFilter === 'finished'
+                      ? 'completed'
+                      : jobFilter === 'failed'
+                        ? 'failed'
+                        : 'all'
+                }
+              />
               Nothing matches this filter.
             </div>
           )}

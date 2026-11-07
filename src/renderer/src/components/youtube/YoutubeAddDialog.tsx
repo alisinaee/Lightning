@@ -1,4 +1,9 @@
-import { ClipboardPaste, Download, Loader2, Search } from 'lucide-react'
+import {
+  Clipboard as ClipboardPaste,
+  DownloadSimple as Download,
+  CircleNotch as Loader2,
+  MagnifyingGlass as Search
+} from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import {

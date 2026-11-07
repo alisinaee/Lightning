@@ -51,6 +51,7 @@ export function ThemeToggle(): React.JSX.Element {
           <button
             type="button"
             aria-label={current.nextLabel}
+            data-tour="theme"
             onClick={toggle}
             className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-[0.5px] border-border bg-secondary text-[var(--text-secondary)] [-webkit-app-region:no-drag]"
           >

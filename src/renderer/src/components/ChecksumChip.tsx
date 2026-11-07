@@ -1,5 +1,9 @@
 import type { ChecksumResult } from '@shared/types'
-import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react'
+import {
+  CircleNotch as Loader2,
+  ShieldWarning as ShieldAlert,
+  ShieldCheck
+} from '@phosphor-icons/react'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 /** How the finished file compared with the hash the download was started with. */

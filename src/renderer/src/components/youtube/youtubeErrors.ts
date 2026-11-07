@@ -15,6 +15,14 @@ const cleanRaw = (raw: string): string =>
     .replace(/^(Error|ERROR):\s*/, '')
     .trim()
 
+/** The errors a sign-in can fix: YouTube asking for one, or the sign-in that was set up not being
+ * readable (a locked or protected browser store). */
+const SIGN_IN =
+  /sign in to confirm|confirm your age|age-restricted|members[- ]only|login required|cookies? (database|file)|could not (find|copy|decrypt)[^\n]*cookie|failed to (decrypt|read)[^\n]*cookie|operation not permitted[^\n]*cookie/i
+
+export const needsSignIn = (raw: string | null | undefined): boolean =>
+  SIGN_IN.test(cleanRaw((raw ?? '').trim()))
+
 const RULES: { match: RegExp; summary: string }[] = [
   {
     match: /timed out/i,
@@ -25,8 +33,13 @@ const RULES: { match: RegExp; summary: string }[] = [
     summary: 'YouTube is limiting requests right now. Wait a few minutes and try again.'
   },
   {
+    match:
+      /cookies? (database|file)|could not (find|copy|decrypt)[^\n]*cookie|failed to (decrypt|read)[^\n]*cookie|operation not permitted[^\n]*cookie/i,
+    summary: "Lightning couldn't read the browser sign-in. Choose how to sign in below."
+  },
+  {
     match: /sign in to confirm|confirm your age|age-restricted|members[- ]only|login required/i,
-    summary: 'YouTube wants you to sign in for this video. Sign-in is not set up in Lightning yet.'
+    summary: 'YouTube wants you to sign in for this video. Pick a way to sign in below.'
   },
   {
     match: /private video|video is private/i,

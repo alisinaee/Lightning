@@ -5,7 +5,7 @@ import {
   type DataLimitPeriod,
   type NetworkPreference
 } from '@shared/types'
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -628,7 +628,7 @@ function VpnSection(): React.JSX.Element | null {
   return (
     <section className={sectionClass}>
       <h4 className={headingClass}>VPN</h4>
-      <div className="-mx-4">
+      <div className="-mx-5">
         <VpnSwitch />
       </div>
     </section>

@@ -57,17 +57,20 @@ export function RowProgressLine({ info }: { info: RowInfo }): React.JSX.Element 
       aria-valuenow={Math.round(info.percent)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="pointer-events-none absolute bottom-0 right-0 z-[1] h-[2.5px] bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]"
+      className="pointer-events-none absolute bottom-1.5 right-4 z-[1] h-[4px] overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]"
       style={{ left }}
     >
       <span
-        className="block h-full rounded-r-full transition-[width] duration-500"
+        className="relative block h-full overflow-hidden rounded-r-full transition-[width] duration-500"
         style={{
           width: `${Math.max(1, info.percent)}%`,
           background: color,
           opacity: running ? 1 : 0.6
         }}
-      />
+      >
+        {/* A soft light sweeps along a moving download, so it reads as alive. */}
+        {running && <span className="lightning-shimmer absolute inset-y-0 w-[60%]" />}
+      </span>
     </span>
   )
 }

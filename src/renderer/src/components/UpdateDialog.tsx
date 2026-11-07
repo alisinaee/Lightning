@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { DownloadIcon } from 'lucide-react'
+import { DownloadSimple as DownloadIcon } from '@phosphor-icons/react'
 import { useAppStore } from '../store/useAppStore'
 import {
   AlertDialog,

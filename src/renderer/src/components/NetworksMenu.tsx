@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'

@@ -1,5 +1,12 @@
 import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
-import { ListX, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
+import {
+  ListDashes as ListX,
+  Pause,
+  Play,
+  ArrowClockwise as RotateCw,
+  Trash as Trash2,
+  X
+} from '@phosphor-icons/react'
 import { createContext, useContext } from 'react'
 import { useTelegramStore } from '../../store/useTelegramStore'
 import type { RowAction } from '../downloads/rowMenu'
@@ -26,14 +33,14 @@ export interface TelegramColumns {
   template: string
 }
 
-const FIXED = '30px minmax(180px,1fr) 124px 112px 96px'
+const FIXED = '44px minmax(180px,1fr) 124px 112px 96px'
 export function columnsFor(width: number): TelegramColumns {
   const eta = width >= 700
   const added = width >= 820
   return {
     eta,
     added,
-    template: `${FIXED}${eta ? ' 92px' : ''}${added ? ' 112px' : ''} 100px`
+    template: `${FIXED}${eta ? ' 92px' : ''}${added ? ' 112px' : ''} 112px`
   }
 }
 

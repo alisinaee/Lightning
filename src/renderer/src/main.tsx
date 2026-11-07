@@ -12,6 +12,7 @@ try {
   // Storage unavailable: preferences start fresh.
 }
 
+import { IconContext } from '@phosphor-icons/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
@@ -22,9 +23,12 @@ import './utils/clickGuard'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppBoundary>
-      <App />
-    </AppBoundary>
-    <LogsDialog />
+    {/* Default Phosphor weight for every icon; override per icon with the weight prop. */}
+    <IconContext.Provider value={{ weight: 'regular' }}>
+      <AppBoundary>
+        <App />
+      </AppBoundary>
+      <LogsDialog />
+    </IconContext.Provider>
   </StrictMode>
 )

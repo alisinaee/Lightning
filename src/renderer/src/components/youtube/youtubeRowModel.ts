@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react'
 import { ACTIONS_WIDTH, SELECT_WIDTH } from '../downloads/columns'
 import type { YoutubeJob } from '@shared/youtube'
 import type { RowInfo, StatusKey } from '../../utils/status'
@@ -89,3 +90,23 @@ export function describeYoutubeGroup(jobs: YoutubeJob[]): RowInfo {
     missing: false
   }
 }
+
+export interface YoutubeColumns {
+  /** The time-left and added columns drop out of a narrow window, the way they do on Downloads. */
+  eta: boolean
+  added: boolean
+  template: string
+}
+
+export function youtubeColumnsFor(width: number): YoutubeColumns {
+  const eta = width >= 820
+  const added = width >= 940
+  return {
+    eta,
+    added,
+    template: `${SELECT_WIDTH}px minmax(220px,1fr) 124px 112px 96px${eta ? ' 92px' : ''}${added ? ' 112px' : ''} ${ACTIONS_WIDTH}px`
+  }
+}
+
+export const YoutubeColumnsContext = createContext<YoutubeColumns>(youtubeColumnsFor(1000))
+export const useYoutubeColumns = (): YoutubeColumns => useContext(YoutubeColumnsContext)

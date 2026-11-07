@@ -1,4 +1,4 @@
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from '@phosphor-icons/react'
 import { formatBytes, formatSpeed } from '../utils/format'
 
 /** What travelled through the VPN tunnel, as one line below a download's connections. Rendered

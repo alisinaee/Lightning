@@ -1,7 +1,13 @@
 import type { ProbeResult } from '@shared/types'
 import type { DuplicateMatch } from '@shared/duplicates'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen, ListChecks, ListX, TriangleAlert } from 'lucide-react'
+import {
+  Warning as AlertTriangle,
+  FolderOpen,
+  ListChecks,
+  ListDashes as ListX,
+  Warning as TriangleAlert
+} from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { RequestOptions } from './RequestOptions'
 import {
@@ -500,7 +506,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               </div>
             )}
 
-            <div className="-mx-4 -my-2 shrink-0">
+            <div className="-mx-5 -my-2 shrink-0">
               <VpnSwitch />
             </div>
 

@@ -98,6 +98,8 @@ interface YoutubeStore {
   ) => Promise<void>
   openFetch: (id: string) => void
   dismissFetch: (id: string) => Promise<void>
+  /** Fetch a failed link again (after a sign-in was set up), keeping its place for a browser offer. */
+  retryFetch: (id: string) => Promise<void>
   startDownload: (format?: YoutubeFormatOption) => Promise<void>
   pauseJob: (id: string) => Promise<void>
   resumeJob: (id: string) => Promise<void>
@@ -275,6 +277,14 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
       probeError: null,
       selectedFormat: formatFor(fetch.meta, get().options.quality)
     })
+  },
+
+  retryFetch: async (id) => {
+    const fetch = get().fetches.find((item) => item.id === id)
+    if (!fetch) return
+    // Out of the queue without releasing a browser offer, then in again as a fresh fetch.
+    set((state) => ({ fetches: state.fetches.filter((item) => item.id !== id) }))
+    await get().queueFetch(fetch.url, fetch.offerId)
   },
 
   dismissFetch: async (id) => {

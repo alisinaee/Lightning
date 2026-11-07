@@ -1,11 +1,20 @@
-import { memo, type CSSProperties } from 'react'
-import { Copy, ExternalLink, FolderOpen, Pause, Play, RotateCw, Trash2, X } from 'lucide-react'
+import { memo, useState, type CSSProperties } from 'react'
+import {
+  Copy,
+  ArrowSquareOut as ExternalLink,
+  FolderOpen,
+  Pause,
+  Play,
+  ArrowClockwise as RotateCw,
+  Trash as Trash2,
+  X
+} from '@phosphor-icons/react'
 import type { YoutubeJob } from '@shared/youtube'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RowActionsMenu, RowContextMenu, type RowAction } from '../downloads/rowMenu'
-import { ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
+import { onControl, ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
 import { RowProgressLine } from '../downloads/RowProgressLine'
 import { FormatBadge } from '../downloads/FileKindIcon'
 import {
@@ -18,10 +27,11 @@ import {
   cellClass
 } from '../downloads/cells'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
-import { describeYoutubeJob, YOUTUBE_COLUMNS } from './youtubeRowModel'
+import { describeYoutubeJob, useYoutubeColumns } from './youtubeRowModel'
+import { YoutubeJobDetails } from './YoutubeJobDetails'
 import { explainYoutubeError } from './youtubeErrors'
 import { cn } from 'cn'
-import type { LucideIcon } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
 
 /** A row's main action as an icon, the same look as the Downloads rows. */
 function IconAction({
@@ -30,7 +40,7 @@ function IconAction({
   onClick
 }: {
   label: string
-  icon: LucideIcon
+  icon: Icon
   onClick: () => void
 }): React.JSX.Element {
   return (
@@ -74,13 +84,15 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
   const revealJob = useYoutubeStore((store) => store.revealJob)
   const openJob = useYoutubeStore((store) => store.openJob)
 
+  const columns = useYoutubeColumns()
+  const [expanded, setExpanded] = useState(false)
   const info = describeYoutubeJob(job)
   const active = job.status === 'queued' || job.status === 'downloading'
   const finished = job.status === 'completed'
   const fileName = `${job.title}.${job.resolution === 'Audio' ? 'm4a' : 'mp4'}`
 
   // The main action, as on a Downloads row: open when done, retry when failed, pause or resume otherwise.
-  const primary: { label: string; icon: LucideIcon; run: () => void } | null = finished
+  const primary: { label: string; icon: Icon; run: () => void } | null = finished
     ? { label: 'Open', icon: ExternalLink, run: () => openJob(job.id) }
     : job.status === 'downloading' || job.status === 'queued'
       ? { label: 'Pause', icon: Pause, run: () => void pauseJob(job.id) }
@@ -136,9 +148,13 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
     <div
       role="row"
       data-row-entry={job.id}
+      aria-expanded={expanded}
+      onClick={(event) => {
+        if (!onControl(event.target)) setExpanded((open) => !open)
+      }}
       data-status={info.status}
       className={cn(ROW_CLASS, selected && 'bg-primary/10 hover:bg-primary/15')}
-      style={{ '--cols': YOUTUBE_COLUMNS, ...stateEdge(info.status) } as CSSProperties}
+      style={{ '--cols': columns.template, ...stateEdge(info.status) } as CSSProperties}
     >
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center">
@@ -180,9 +196,11 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       <SizeCell received={info.received} total={info.total} running={active} done={finished} />
       <StatusCell info={info} />
       <SpeedCell speed={info.speed} />
-      <EtaCell seconds={info.etaSeconds} />
-      <AddedCell at={finished ? (job.finishedAt ?? job.createdAt) : job.createdAt} />
-      <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+      {columns.eta && <EtaCell seconds={info.etaSeconds} />}
+      {columns.added && (
+        <AddedCell at={finished ? (job.finishedAt ?? job.createdAt) : job.createdAt} />
+      )}
+      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
         {primary && <IconAction label={primary.label} icon={primary.icon} onClick={primary.run} />}
         {finished && (
           <IconAction label="Show in Folder" icon={FolderOpen} onClick={() => revealJob(job.id)} />
@@ -192,5 +210,10 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
     </div>
   )
 
-  return <RowContextMenu actions={actions} row={row} />
+  return (
+    <>
+      <RowContextMenu actions={actions} row={row} />
+      {expanded && <YoutubeJobDetails job={job} />}
+    </>
+  )
 })

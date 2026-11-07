@@ -3,7 +3,7 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { cn } from 'cn'
 
 import { Button } from '@renderer/components/ui/button'
-import { XIcon } from 'lucide-react'
+import { X as XIcon } from '@phosphor-icons/react'
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props): React.JSX.Element {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -26,7 +26,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props):
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        '[-webkit-app-region:no-drag] fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0',
+        '[-webkit-app-region:no-drag] fixed inset-0 isolate z-50 bg-black/20 duration-100 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0',
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          '[-webkit-app-region:no-drag] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          '[-webkit-app-region:no-drag] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl bg-popover p-5 text-sm text-popover-foreground shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)] ring-1 ring-foreground/[0.06] duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className
         )}
         {...props}
@@ -86,7 +86,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-4 -mb-4 mt-2 flex items-center justify-end gap-2 rounded-b-xl border-t-[0.5px] border-border bg-popover px-4 py-2',
+        '-mx-5 -mb-5 mt-2 flex items-center justify-end gap-2 rounded-b-2xl border-t-[0.5px] border-border bg-popover px-5 py-3',
         className
       )}
       {...props}

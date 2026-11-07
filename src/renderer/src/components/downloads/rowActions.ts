@@ -1,18 +1,18 @@
 import {
   Copy,
-  Download,
-  ExternalLink,
+  DownloadSimple as Download,
+  ArrowSquareOut as ExternalLink,
   FileText,
-  FolderInput,
+  FolderSimple as FolderInput,
   FolderOpen,
   Info,
-  Link2,
+  LinkSimple as Link2,
   Pause,
   Play,
-  RotateCw,
-  Trash2,
+  ArrowClockwise as RotateCw,
+  Trash as Trash2,
   X
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { isFinished, type Item, type RowInfo } from '../../utils/status'
 import { REVEAL_LABEL, type RowHandlers } from './rowHelpers'
 import type { RowAction } from './rowMenu'

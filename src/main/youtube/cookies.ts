@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
 import { chmod, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { YoutubeOptions } from '../../shared/youtube'
 import { youtubeDataDir } from './binary'
 
 /** One cookie as the browser extension reads it. */
@@ -85,4 +87,21 @@ export async function writeCookiesFile(file: string, cookies: BrowserCookie[]): 
   }
   await writeFile(file, lines.join('\n') + '\n', { encoding: 'utf-8', mode: 0o600 })
   await chmod(file, 0o600)
+}
+
+/** The yt-dlp arguments that sign it in, from what the person chose in the options: a cookies.txt
+ * file, the cookies Lightning keeps, or a browser to read them from. Empty: not signed in. */
+export function signInArgs(options: YoutubeOptions): string[] {
+  if (
+    options.cookieMode === 'manual' &&
+    options.manualCookiesFile &&
+    existsSync(options.manualCookiesFile)
+  ) {
+    return ['--cookies', options.manualCookiesFile]
+  }
+  if (options.cookieMode === 'saved' && existsSync(savedCookiesPath())) {
+    return ['--cookies', savedCookiesPath()]
+  }
+  if (options.cookiesBrowser) return ['--cookies-from-browser', options.cookiesBrowser]
+  return []
 }

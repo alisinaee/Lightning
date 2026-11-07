@@ -81,6 +81,8 @@ const lightningApi = {
   youtubeChooseFolder: (defaultPath?: string): Promise<string | null> =>
     invoke('youtubeChooseFolder', defaultPath),
   youtubeChooseCookies: (): Promise<string | null> => invoke('youtubeChooseCookies'),
+  youtubeBrowsers: () => invoke('youtubeBrowsers'),
+  openFullDiskAccess: (): Promise<void> => invoke('openFullDiskAccess'),
   youtubeCancelOffer: (id: string): Promise<void> => invoke('youtubeCancelOffer', id),
   getDns: () => invoke('getDns'),
   testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>

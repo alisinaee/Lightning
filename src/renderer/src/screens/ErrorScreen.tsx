@@ -1,5 +1,5 @@
 import type { DownloadState } from '@shared/types'
-import { Folder } from 'lucide-react'
+import { Folder } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { DetailHeader } from '../components/DetailHeader'

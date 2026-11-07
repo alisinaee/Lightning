@@ -106,6 +106,8 @@ export const IpcChannels = {
   youtubeSetOptions: 'youtube:set-options',
   youtubeChooseFolder: 'youtube:choose-folder',
   youtubeChooseCookies: 'youtube:choose-cookies',
+  youtubeBrowsers: 'youtube:browsers',
+  openFullDiskAccess: 'app:open-full-disk-access',
   youtubeCancelOffer: 'youtube:cancel-offer',
   youtubeJobUpdated: 'youtube:job-updated'
 } as const

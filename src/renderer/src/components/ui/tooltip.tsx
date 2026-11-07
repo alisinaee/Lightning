@@ -3,10 +3,20 @@ import { cn } from 'cn'
 import { TITLE_BAR_HEIGHT } from '../../theme'
 
 function TooltipProvider({
-  delay = 0,
+  // Hints only appear once the pointer has rested on an item; passing over it shows nothing.
+  delay = 1500,
+  // No grace window either: moving to the next item waits the full delay again.
+  timeout = 0,
   ...props
 }: TooltipPrimitive.Provider.Props): React.JSX.Element {
-  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delay} {...props} />
+  return (
+    <TooltipPrimitive.Provider
+      data-slot="tooltip-provider"
+      delay={delay}
+      timeout={timeout}
+      {...props}
+    />
+  )
 }
 
 function Tooltip({ ...props }: TooltipPrimitive.Root.Props): React.JSX.Element {

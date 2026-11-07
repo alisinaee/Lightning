@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns3 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns as Columns3 } from '@phosphor-icons/react'
 import { cn } from 'cn'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore, type ColumnId } from '../../store/useAppStore'
@@ -210,7 +210,7 @@ export function DownloadsTable({
   const header = (
     <div
       role="row"
-      className="sticky top-0 z-10 grid h-8 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium text-muted-foreground [grid-template-columns:var(--cols)]"
+      className="sticky top-0 z-10 grid h-9 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium tracking-wide text-muted-foreground [grid-template-columns:var(--cols)]"
     >
       <div role="columnheader" className="flex items-center justify-center">
         <Checkbox

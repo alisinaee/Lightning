@@ -1,7 +1,15 @@
 import { RowProgressLine } from './downloads/RowProgressLine'
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
-import { Copy, Download, FileText, Pause, Play, RotateCw, X } from 'lucide-react'
+import {
+  Copy,
+  DownloadSimple as Download,
+  FileText,
+  Pause,
+  Play,
+  ArrowClockwise as RotateCw,
+  X
+} from '@phosphor-icons/react'
 import { memo } from 'react'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
@@ -301,7 +309,7 @@ export const GroupFileRow = memo(
           )}
         </div>
         {columns.map((column) => cells[column])}
-        <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+        <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
           {file && (
             <ConnectionPicker
               iconOnly

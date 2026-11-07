@@ -1,20 +1,20 @@
 import {
-  Disc3,
+  Disc as Disc3,
   File,
-  FileArchive,
+  FileZip as FileArchive,
   FileText,
-  Film,
+  FilmStrip as Film,
   Image,
   Magnet,
-  Music,
+  MusicNote as Music,
   Package,
-  type LucideIcon
-} from 'lucide-react'
+  type Icon
+} from '@phosphor-icons/react'
 import { cn } from 'cn'
 import { fileKind, type FileKind } from '../../utils/fileKind'
 import { fileExtensionBadge } from '../../utils/format'
 
-const ICONS: Record<FileKind, LucideIcon> = {
+const ICONS: Record<FileKind, Icon> = {
   video: Film,
   audio: Music,
   archive: FileArchive,
@@ -37,7 +37,7 @@ export function FileKindIcon({
   size?: 'sm' | 'md' | 'lg'
   className?: string
   /** Another glyph on the same tint (a group's folder). */
-  icon?: LucideIcon
+  icon?: Icon
 }): React.JSX.Element {
   const Icon = icon ?? ICONS[kind]
   return (
@@ -51,9 +51,13 @@ export function FileKindIcon({
         size === 'lg' && 'size-11 rounded-[10px] [&>svg]:size-5',
         className
       )}
-      style={{ background: `var(--kind-${kind}-bg)`, color: `var(--kind-${kind})` }}
+      style={{
+        background: `var(--kind-${kind}-bg)`,
+        color: `var(--kind-${kind})`,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, var(--kind-${kind}) 28%, transparent)`
+      }}
     >
-      <Icon strokeWidth={2} />
+      <Icon />
     </span>
   )
 }
@@ -85,7 +89,11 @@ export function FormatBadge({
         size === 'lg' && 'size-11 rounded-[10px] text-[10.5px]',
         className
       )}
-      style={{ background: `var(--kind-${resolved}-bg)`, color: `var(--kind-${resolved})` }}
+      style={{
+        background: `var(--kind-${resolved}-bg)`,
+        color: `var(--kind-${resolved})`,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, var(--kind-${resolved}) 28%, transparent)`
+      }}
     >
       {children ?? fileExtensionBadge(name)}
     </span>

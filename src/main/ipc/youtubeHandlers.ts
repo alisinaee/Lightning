@@ -6,6 +6,7 @@ import {
   dialog,
   ipcMain,
   Notification,
+  shell,
   type BrowserWindow,
   type IpcMainInvokeEvent
 } from 'electron'
@@ -18,7 +19,8 @@ import { loadSettings, prefsOf } from '../settings'
 import { testKnobs } from '../testKnobs'
 import { getYoutubeStatus, proxyArg, youtubeDataDir } from '../youtube/binary'
 import { loadYoutubeOptions, saveYoutubeOptions } from '../youtube/options'
-import { savedCookiesPath, sanitizeCookies, writeCookiesFile } from '../youtube/cookies'
+import { savedCookiesPath, sanitizeCookies, signInArgs, writeCookiesFile } from '../youtube/cookies'
+import { installedBrowsers } from '../youtube/browsers'
 import { YoutubeJobManager, type CookieFile } from '../youtube/jobs'
 import { probeYoutube } from '../youtube/probe'
 
@@ -104,7 +106,18 @@ export async function registerYoutubeHandlers(
   handle('youtubeProbe', async (_event, url) => {
     const currentPreferences = await prefs()
     const proxy = proxyArg(currentPreferences)
-    return probeYoutube(url, proxy)
+    // Signed in the way the person set up in Options, so a sign-in wall can be got past.
+    return probeYoutube(url, proxy, signInArgs(await loadYoutubeOptions()))
+  })
+
+  handle('youtubeBrowsers', async () => installedBrowsers())
+
+  handle('openFullDiskAccess', async () => {
+    if (process.platform === 'darwin') {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+      )
+    }
   })
 
   handle('youtubeStart', async (_event, request) => {

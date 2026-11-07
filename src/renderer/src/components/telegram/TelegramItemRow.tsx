@@ -1,6 +1,6 @@
 import type { TdlItem, TdlJob } from '@shared/telegram'
 import { cn } from 'cn'
-import { Copy, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
+import { Copy, FolderOpen, ArrowSquareOut as SquareArrowOutUpRight } from '@phosphor-icons/react'
 import { memo } from 'react'
 import { Checkbox } from '../ui/checkbox'
 import {
@@ -132,7 +132,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
           {columns.added && (
             <AddedCell at={finished ? (info.completedAt ?? info.addedAt) : info.addedAt} />
           )}
-          <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+          <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
             {actions.length > 0 && <RowActionsMenu label={item.fileName} actions={actions} />}
           </div>
         </div>

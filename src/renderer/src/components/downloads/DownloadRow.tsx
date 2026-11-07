@@ -2,7 +2,7 @@ import { RowProgressLine } from './RowProgressLine'
 import { describeItem, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
 import { useAppStore } from '../../store/useAppStore'
-import { Download, FolderOpen, Link2 } from 'lucide-react'
+import { DownloadSimple as Download, FolderOpen, LinkSimple as Link2 } from '@phosphor-icons/react'
 import { cn } from 'cn'
 import { memo } from 'react'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
@@ -181,7 +181,7 @@ export const DownloadRow = memo(function DownloadRow({
             />
           </div>
           {columns.map((id) => cells[id])}
-          <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+          <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
             {primary && (
               <IconAction
                 label={primary.label}

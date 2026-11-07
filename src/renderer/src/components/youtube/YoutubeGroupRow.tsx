@@ -1,5 +1,10 @@
 import { memo, type CSSProperties } from 'react'
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react'
+import {
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
+  Folder,
+  FolderOpen
+} from '@phosphor-icons/react'
 import type { YoutubeJob } from '@shared/youtube'
 import { ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
 import { RowProgressLine } from '../downloads/RowProgressLine'
@@ -14,7 +19,7 @@ import {
 } from '../downloads/cells'
 import { Button } from '../ui/button'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
-import { describeYoutubeGroup, YOUTUBE_COLUMNS } from './youtubeRowModel'
+import { describeYoutubeGroup, useYoutubeColumns } from './youtubeRowModel'
 import { cn } from 'cn'
 
 /** A playlist's header row, like a Downloads group: its title, its counts and overall progress,
@@ -31,6 +36,7 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
   onToggle: () => void
 }): React.JSX.Element {
   const revealJob = useYoutubeStore((store) => store.revealJob)
+  const columns = useYoutubeColumns()
   const info = describeYoutubeGroup(jobs)
   const finished = info.status === 'completed'
   const first = jobs.find((job) => job.status === 'completed') ?? jobs[0]
@@ -43,7 +49,7 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
       aria-expanded={expanded}
       data-status={info.status}
       className={cn(ROW_CLASS, 'bg-muted/30 font-medium')}
-      style={{ '--cols': YOUTUBE_COLUMNS, ...stateEdge(info.status) } as CSSProperties}
+      style={{ '--cols': columns.template, ...stateEdge(info.status) } as CSSProperties}
     >
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center" />
@@ -68,9 +74,9 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
       <SizeCell received={info.received} total={info.total} running={!finished} done={finished} />
       <StatusCell info={info} />
       <SpeedCell speed={info.speed} />
-      <EtaCell seconds={info.etaSeconds} />
-      <AddedCell at={info.addedAt} />
-      <div role="cell" className="flex items-center justify-end gap-0.5 px-1.5">
+      {columns.eta && <EtaCell seconds={info.etaSeconds} />}
+      {columns.added && <AddedCell at={info.addedAt} />}
+      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
         {first && (
           <Button
             type="button"

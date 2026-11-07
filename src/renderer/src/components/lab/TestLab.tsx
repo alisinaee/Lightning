@@ -1,4 +1,4 @@
-import { PlayIcon, SquareIcon } from 'lucide-react'
+import { Play as PlayIcon, Square as SquareIcon } from '@phosphor-icons/react'
 import { useCallback, useEffect } from 'react'
 import { useLabStore } from '../../store/useLabStore'
 import { TITLE_BAR_HEIGHT } from '../../theme'

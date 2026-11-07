@@ -1,4 +1,4 @@
-import { BugIcon, ScrollTextIcon } from 'lucide-react'
+import { Bug as BugIcon, Scroll as ScrollTextIcon } from '@phosphor-icons/react'
 import { useAppStore } from '../store/useAppStore'
 import { useLogsStore } from '../store/useLogsStore'
 import { useLabStore } from '../store/useLabStore'

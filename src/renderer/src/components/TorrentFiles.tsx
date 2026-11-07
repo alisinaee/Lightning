@@ -1,6 +1,6 @@
 import type { TorrentFileEntry, TorrentInfo, TorrentPieceState } from '@shared/types'
 import { cn } from 'cn'
-import { Folder } from 'lucide-react'
+import { Folder } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { describeError, formatBytes, formatPercent, pathInTorrent } from '../utils/format'
 import { Checkbox } from './ui/checkbox'

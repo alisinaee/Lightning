@@ -986,6 +986,38 @@ export function SettingsDialog({
                   onChange={(showSourceHost) => save({ showSourceHost })}
                   label="Show the website under file names"
                 />
+                <div className="mt-2 text-[12px] font-medium text-muted-foreground">Help</div>
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      onOpenChange(false)
+                      window.setTimeout(
+                        () => window.dispatchEvent(new Event('lightning:start-tour')),
+                        400
+                      )
+                    }}
+                  >
+                    Show the quick tour again
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="ml-2"
+                    onClick={() => {
+                      onOpenChange(false)
+                      window.setTimeout(
+                        () => window.dispatchEvent(new Event('lightning:start-intro')),
+                        400
+                      )
+                    }}
+                  >
+                    Play the intro again
+                  </Button>
+                </div>
               </>
             )}
           </div>

@@ -4,7 +4,12 @@ import { DnsPicker } from './DnsPicker'
 import { VpnSwitch } from './VpnSwitch'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
-import { AlertTriangle, FolderOpen, TriangleAlert, X } from 'lucide-react'
+import {
+  Warning as AlertTriangle,
+  FolderOpen,
+  Warning as TriangleAlert,
+  X
+} from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { defaultNetworkIds, withVpnLayer } from '@shared/networks'
@@ -505,7 +510,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         </div>
 
         {/* The same switch as when adding several links; shown only while a VPN is detected. */}
-        <div className="-mx-4 -my-2 shrink-0">
+        <div className="-mx-5 -my-2 shrink-0">
           <VpnSwitch />
         </div>
 
