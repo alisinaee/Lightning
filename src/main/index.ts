@@ -10,6 +10,7 @@ import {
   startedAtLogin
 } from './appBehavior'
 import { loadSettings } from './settings'
+import { askForFolderAccess } from './folderAccess'
 import { loadWindowState, trackWindowState } from './windowState'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -286,6 +287,11 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
+  if (!testKnobs.hideWindow) {
+    askForFolderAccess(mainWindow).catch((error) =>
+      console.error('[lightning] folder access check failed', error)
+    )
+  }
   installAppMenu(() => mainWindow)
   if (testKnobs.trayPanel) {
     createTrayPanel({
