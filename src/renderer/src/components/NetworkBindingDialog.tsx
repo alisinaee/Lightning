@@ -1,6 +1,7 @@
 import { Warning as TriangleAlert } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { useFirstRunBusy } from '../utils/firstRun'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,8 @@ function hiddenForGood(): boolean {
  * default route — only worth saying once there's a second network that won't get used. */
 export function NetworkBindingDialog(): React.JSX.Element {
   const networkCount = useAppStore((store) => store.interfaces.length)
+  // Not over the first-run intro or tour: it shows once they are done.
+  const firstRunBusy = useFirstRunBusy()
   const [supported, setSupported] = useState(true)
   const [dismissed, setDismissed] = useState(hiddenForGood)
   const [neverAgain, setNeverAgain] = useState(false)
@@ -47,7 +50,7 @@ export function NetworkBindingDialog(): React.JSX.Element {
 
   return (
     <AlertDialog
-      open={!supported && !dismissed && networkCount > 1}
+      open={!supported && !dismissed && networkCount > 1 && !firstRunBusy}
       onOpenChange={(open) => {
         if (!open) close()
       }}

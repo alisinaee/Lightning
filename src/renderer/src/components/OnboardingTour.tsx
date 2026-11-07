@@ -12,9 +12,11 @@ import {
   type Icon
 } from '@phosphor-icons/react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { setFirstRunBusy } from '../utils/firstRun'
 import { Button } from './ui/button'
 
-const STORAGE_KEY = 'lightning.tour'
+// Versioned: raising it shows the walkthrough once more to everyone, after it has changed a lot.
+const STORAGE_KEY = 'lightning.tour.v2'
 const CARD_WIDTH = 320
 const GAP = 14
 
@@ -207,6 +209,18 @@ function place(rect: Rect | null, cardHeight: number): { top: number; left: numb
  * Back and Next; Escape closes it too. It starts after the intro, once, and is not shown again. */
 export function OnboardingTour(): React.JSX.Element | null {
   const [active, setActive] = useState(false)
+  // Waiting to start (after the intro) counts as busy too, so nothing pops up in between.
+  const [pending, setPending] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === null
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    setFirstRunBusy('tour', active || pending)
+    return () => setFirstRunBusy('tour', false)
+  }, [active, pending])
   const [index, setIndex] = useState(0)
   const [rect, setRect] = useState<Rect | null>(null)
   const [cardHeight, setCardHeight] = useState(170)
@@ -232,7 +246,10 @@ export function OnboardingTour(): React.JSX.Element | null {
     }
     let timer = 0
     const begin = (): void => {
-      timer = window.setTimeout(() => setActive(true), 500)
+      timer = window.setTimeout(() => {
+        setPending(false)
+        setActive(true)
+      }, 500)
     }
     const waitFor = window.setTimeout(() => {
       if (document.querySelector('.lightning-intro')) {

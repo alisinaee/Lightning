@@ -7,9 +7,11 @@ import {
   type Icon
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
+import { setFirstRunBusy } from '../utils/firstRun'
+
+const DURATION_MS = 5000
 
 const STORAGE_KEY = 'lightning.intro'
-const DURATION_MS = 5000
 
 const NAME = 'Lightning'
 const BOLT = 'M98 2 L44 100 L78 108 L34 236 L136 90 L96 82 L126 14 Z'
@@ -34,6 +36,7 @@ const lineFrom = (x: number): string => `M${x} 62 C${x} 120 ${MERGE_X} 110 ${MER
  * motion. */
 export function FirstRunIntro(): React.JSX.Element | null {
   const [run, setRun] = useState(0)
+  // Only the first time the app opens, and not at all when the system asks for reduced motion.
   const [visible, setVisible] = useState(() => {
     try {
       if (localStorage.getItem(STORAGE_KEY) !== null) return false
@@ -66,6 +69,11 @@ export function FirstRunIntro(): React.JSX.Element | null {
     window.addEventListener('lightning:start-intro', replay)
     return () => window.removeEventListener('lightning:start-intro', replay)
   }, [])
+
+  useEffect(() => {
+    setFirstRunBusy('intro', visible)
+    return () => setFirstRunBusy('intro', false)
+  }, [visible])
 
   if (!visible) return null
   return (
