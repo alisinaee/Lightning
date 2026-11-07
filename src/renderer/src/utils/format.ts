@@ -1,3 +1,4 @@
+import { describeError, linkRefused } from '@shared/errors'
 import type {
   DownloadNetwork,
   DownloadState,
@@ -190,34 +191,29 @@ export function networksInPlay<T extends DownloadNetwork>(networks: T[]): T[] {
 
 /** Shortens an absolute path under the user's home directory to a "~/..." form for display. */
 export function toDisplayPath(path: string, homeDir: string): string {
-  const normalize = (value: string): string => {
-    const normalized = value.replace(/\\/g, '/').replace(/\/$/, '')
-    return /^[a-z]:/i.test(normalized) || normalized.startsWith('//')
-      ? normalized.toLowerCase()
-      : normalized
-  }
-  const home = normalize(homeDir)
-  const target = normalize(path)
-  if (home && (target === home || target.startsWith(`${home}/`))) {
-    return `~${path.slice(home.length)}`
+  // NFC first: the same folder name can arrive with its accents composed (é) or decomposed
+  // (e + ◌́), and those differ in length, so the home part is cut from the normalized path.
+  const canonical = (value: string): string =>
+    value.normalize('NFC').replace(/\\/g, '/').replace(/\/$/, '')
+  const fold = (value: string): string =>
+    /^[a-z]:/i.test(value) || value.startsWith('//') ? value.toLowerCase() : value
+  const home = canonical(homeDir)
+  const target = fold(canonical(path))
+  const homeKey = fold(home)
+  if (home && (target === homeKey || target.startsWith(`${homeKey}/`))) {
+    return `~${path.normalize('NFC').slice(home.length)}`
   }
   return path
 }
 
-export { describeError } from '@shared/errors'
-
-const LINK_REFUSED = /status (401|403|404|410|416) for range request/
+export { describeError }
 
 /** A download whose link the server now refuses: a fresh link to the same file picks it up.
  * 416 (Range Not Satisfiable) belongs here too: the server is saying the byte range this
  * download was resuming no longer exists, same as a 404/410 — retrying the same range would
  * just repeat the same 416 forever. */
 export function linkExpired(download: DownloadState): boolean {
-  return (
-    download.kind === 'http' &&
-    download.status === 'error' &&
-    LINK_REFUSED.test(download.error ?? '')
-  )
+  return download.kind === 'http' && download.status === 'error' && linkRefused(download.error)
 }
 
 /** "2m 5s" from a number of seconds, as formatEta shows it; "—" when there isn't one. */

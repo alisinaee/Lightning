@@ -88,8 +88,15 @@ the commits that were skipped on purpose with the reason.
 - Ported from Plexo in the last sync (all clean, all verified with the e2e specs above):
   `fd22a88`, `3eba463`, `481e529`, `022ef29`, `3f4c908`, `6c72334`, `899d99b`, `da179d6`
   (landed as `033536f`, `f509663`, `35da209`, `464066e`, `d743b11`, `19dccbf`, `1a1fa86`, `c32c8b7`)
-- Still to review, conflicting with our code (port by hand): `884683f`, `7a9b1b4`, `131c143`,
-  `7a06ad1`, `e65fc4c`, `ef81b53`, `f928dac`, `b258555`, `7795d03`, `3947503`, `96e7ef1`,
-  `2ffd681`, `9ce20c7`, `e184f75`, `a101497`, `4397c76`, `f060843`, `7cc640e`, `3f1133b`, `2d2132f`
+- Ported by hand in the sync after that (2026-11-07): `4397c76` (ranges after a redirect),
+  `2d2132f` (range-reporting hosts), `7cc640e` (translated refusals during a transfer), `a101497`
+  (NFC home path, smaller than upstream: no separator rewrite), and `b6b263a` (E2E count, cherry-picked).
+- Already in our code, nothing to port: `884683f`, `7a9b1b4`, `7795d03`, `b258555`, `1b805b8`,
+  `4995e05`, `c2e8a39`, `3947503`, `96e7ef1`, `e65fc4c`, `f928dac`, `7a06ad1`, `2ffd681`, `9ce20c7`,
+  `e184f75`, `8cc15e4`, `f140129`, `5366a8c`, `84752c3`, `873cef9`.
+- Skipped on purpose: `f060843` (new empty-network message is UI, not ported), `3f1133b`
+  (tray and reveal features we never took), `ef81b53` (`calendar.tsx` deleted in our tree),
+  `131c143` and `3272d6b` and `aac0b97` (test-only), `d4d3168` and `e8b84b6` rest and `746ccd5`
+  (need the user's decision).
 - Plexo features since the last sync, not taken: Usenet, Telegram Saved Messages, NZB, landing and
   website work.
