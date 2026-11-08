@@ -5,6 +5,13 @@ import {
   ResolvedPrefs,
   DEFAULT_PREFS,
   DEFAULT_STATUS_BAR,
+  TRAY_BUTTONS,
+  GLASS_BLURS,
+  type GlassBlur,
+  TRAY_BUTTONS_MAX,
+  SPEED_UNITS,
+  type TrayButton,
+  type SpeedUnit,
   type StatusBarPrefs,
   DOWNLOADS_AT_ONCE,
   type AppPrefs,
@@ -167,6 +174,19 @@ export function sanitizeStatusBar(parsed: unknown): Partial<StatusBarPrefs> {
       if (typeof rows === 'number' && Number.isInteger(rows) && rows >= 1 && rows <= most) {
         kept[key] = rows
       }
+    } else if (key === 'trayButtons') {
+      const list = parsed[key]
+      if (Array.isArray(list)) {
+        // The person's order, each button once, no more than the panel holds.
+        const chosen = list.filter(
+          (button, at) =>
+            TRAY_BUTTONS.some((known) => known === button) && list.indexOf(button) === at
+        )
+        kept[key] = chosen.slice(0, TRAY_BUTTONS_MAX) as TrayButton[]
+      }
+    } else if (key === 'trayUnit') {
+      const unit = parsed[key]
+      if (SPEED_UNITS.some((known) => known === unit)) kept[key] = unit as SpeedUnit
     } else {
       const value = flag(parsed[key])
       if (value !== undefined) kept[key] = value
@@ -179,6 +199,13 @@ export function sanitizeStatusBar(parsed: unknown): Partial<StatusBarPrefs> {
 export function sanitizePrefs(parsed: unknown): AppPrefs {
   if (!isRecord(parsed)) return {}
   const prefs: AppPrefs = {}
+  const glass = parsed.glassTransparency
+  if (typeof glass === 'number' && Number.isFinite(glass)) {
+    prefs.glassTransparency = Math.min(90, Math.max(0, Math.round(glass)))
+  }
+  if (GLASS_BLURS.some((known) => known === parsed.glassBlur)) {
+    prefs.glassBlur = parsed.glassBlur as GlassBlur
+  }
   const scale = parsed.uiScale
   if (typeof scale === 'number' && scale >= 0.8 && scale <= 1.4) prefs.uiScale = scale
   if (['amber', 'blue', 'teal', 'green', 'violet', 'rose'].includes(parsed.accent as string)) {

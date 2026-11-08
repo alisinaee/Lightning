@@ -1,5 +1,12 @@
 import { readFileSync } from 'fs'
-import { app, Menu, Tray, nativeImage, type BrowserWindow } from 'electron'
+import { app, Menu, Tray, nativeImage, shell, type BrowserWindow } from 'electron'
+import { loadSettings } from './settings'
+import { getDefaultDownloadsDir } from './download/paths'
+import { iconWithLabel } from './trayLabel'
+
+/** The icon and the speed while something downloads. */
+const DOWNLOADING_YELLOW = '#FFC20A'
+import { toggleSetting } from './settingsToggle'
 import trayTemplate from '../../resources/trayTemplate.png?asset'
 import { IpcChannels } from '../shared/ipc-channels'
 import { buildTrayModel } from '../shared/trayModel'
@@ -18,6 +25,7 @@ export type AppCommand =
   | 'logs'
   /** Opens the Telegram section. */
   | 'open-telegram'
+  | 'open-youtube'
   /** Opens the Add dialog of the Telegram section; the links go with it as JSON. */
   | 'telegram-links'
   /** Opens one download's page; the id goes with it. */
@@ -119,6 +127,11 @@ export function installAppMenu(getWindow: () => BrowserWindow | null): void {
 }
 
 /** What a click in the panel does: the commands open the main window as the menu's do. */
+async function openDownloadsFolder(): Promise<void> {
+  const { destinationDir } = await loadSettings()
+  await shell.openPath(destinationDir ?? getDefaultDownloadsDir())
+}
+
 function runPanelAction(
   getWindow: () => BrowserWindow | null,
   pause: (id: string) => void,
@@ -126,6 +139,9 @@ function runPanelAction(
 ): void {
   switch (action.type) {
     case 'open-download':
+      // YouTube and Telegram downloads have no page of their own: open their section.
+      if (action.id.startsWith('yt:')) return send(getWindow, 'open-youtube')
+      if (action.id.startsWith('tg:')) return send(getWindow, 'open-telegram')
       return send(getWindow, 'open-download', action.id)
     case 'pause':
       return pause(action.id)
@@ -133,6 +149,12 @@ function runPanelAction(
       return show(getWindow)
     case 'quit':
       return app.quit()
+    case 'toggle-vpn':
+      return void toggleSetting('useVpn')
+    case 'toggle-slow-mode':
+      return void toggleSetting('slowMode')
+    case 'open-folder':
+      return void openDownloadsFolder()
     default:
       return send(getWindow, action.type)
   }
@@ -147,7 +169,8 @@ export function installTray(
   source: { downloads: () => readonly DownloadState[]; pause: (id: string) => void }
 ): Tray {
   // 36px artwork at scale 2, so the menu bar shows an 18pt filled bolt and stays sharp.
-  const image = nativeImage.createFromBuffer(readFileSync(trayTemplate), { scaleFactor: 2 })
+  const iconPng = readFileSync(trayTemplate)
+  const image = nativeImage.createFromBuffer(iconPng, { scaleFactor: 2 })
   image.setTemplateImage(true)
   const tray = new Tray(image)
   tray.setToolTip(app.name)
@@ -157,6 +180,7 @@ export function installTray(
     act: (action) => runPanelAction(getWindow, source.pause, action)
   })
   let shown = ''
+  let labelTurn = 0
   let menu: Menu | null = null
 
   const rebuild = (): void => {
@@ -164,7 +188,31 @@ export function installTray(
     const model = buildTrayModel(source.downloads(), config.names, config.prefs)
     if (model.signature === shown) return
     shown = model.signature
-    if (process.platform === 'darwin') tray.setTitle(model.title)
+    if (process.platform === 'darwin') {
+      // The speed is drawn to the left of the bolt, small, as part of the icon. While something
+      // downloads, the icon and the number are yellow.
+      const label = model.title.trim()
+      const downloading = model.running > 0
+      const turn = ++labelTurn
+      tray.setTitle('')
+      if (!label && !downloading) tray.setImage(image)
+      else {
+        const [value = '', ...rest] = label.split(' ')
+        void iconWithLabel(
+          iconPng,
+          value,
+          rest.join(' '),
+          downloading ? DOWNLOADING_YELLOW : null
+        ).then(
+          (made) => {
+            if (turn === labelTurn) tray.setImage(made)
+          },
+          () => {
+            if (turn === labelTurn) tray.setTitle(model.title)
+          }
+        )
+      }
+    }
     const status: Electron.MenuItemConstructorOptions[] = model.lines.map((line) =>
       line.kind === 'separator'
         ? { type: 'separator' }

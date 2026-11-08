@@ -42,6 +42,16 @@ const lightningApi = {
   deviceBindingSupported: () => invoke('deviceBindingSupported'),
   openNetworkSettings: () => invoke('openNetworkSettings'),
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
+  openSettingsWindow: (page?: string) => invoke('openSettingsWindow', page),
+  runMainCommand: (command: 'limits' | 'tour' | 'intro') => invoke('runMainCommand', command),
+  /** The saved state as it is now (initialState is the one read at start). */
+  readInitialState: () => ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
+  /** Settings were saved from some window: read them again. */
+  onSettingsRefresh: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.settingsRefresh, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.settingsRefresh, listener)
+  },
   tdlStatus: () => invoke('tdlStatus'),
   tdlLoginStart: (...args: IpcContract['tdlLoginStart']['args']) =>
     invoke('tdlLoginStart', ...args),

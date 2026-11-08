@@ -1,3 +1,4 @@
+import { reportTelegram } from '../externalActivity'
 import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { ipcMain, Notification, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
@@ -61,6 +62,7 @@ export async function registerTelegramHandlers(
   // Progress goes to the window at the rate its visibility allows, the latest job state only.
   const pending = new Map<string, { job: TdlJob; timer?: NodeJS.Timeout; last: number }>()
   const push = (job: TdlJob): void => {
+    reportTelegram(job)
     const entry = pending.get(job.id) ?? { job, last: 0 }
     entry.job = job
     pending.set(job.id, entry)
@@ -82,6 +84,7 @@ export async function registerTelegramHandlers(
   }
   /** A finished job's last state goes out at once, so a status change is never late. */
   const flush = (job: TdlJob): void => {
+    reportTelegram(job)
     const entry = pending.get(job.id)
     if (entry?.timer) clearTimeout(entry.timer)
     pending.set(job.id, { job, last: Date.now() })

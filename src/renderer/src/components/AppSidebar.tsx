@@ -50,7 +50,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 export const labelClass =
-  'px-2 pt-3 pb-1 font-mono text-[10px] leading-none tracking-[0.16em] text-muted-foreground uppercase'
+  'px-2 pt-3 pb-1 font-sans text-[10.5px] leading-none font-semibold tracking-[0.1em] text-muted-foreground uppercase'
 
 // Every entry icon sits in the same 20px box, so labels line up whatever the icon.
 const ICON_BOX = 'flex size-5 shrink-0 items-center justify-center'

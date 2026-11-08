@@ -7,6 +7,10 @@ declare global {
       onState: (callback: (state: PanelState) => void) => () => void
       act: (action: PanelAction) => void
       resize: (height: number) => void
+      /** Keeps the panel open (true) or lets a click elsewhere close it again. */
+      setPinned: (on: boolean) => void
+      /** The buttons the panel holds, in order. */
+      setButtons: (list: string[]) => void
     }
   }
 }

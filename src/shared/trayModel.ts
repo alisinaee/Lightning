@@ -36,6 +36,15 @@ export function formatBytes(bytes: number): string {
 
 export const formatSpeed = (bytesPerSec: number): string => `${formatBytes(bytesPerSec)}/s`
 
+/** A speed in the unit the person chose: "auto" picks one that fits, KB/s and MB/s are fixed. */
+export function formatSpeedIn(bytesPerSec: number, unit: 'auto' | 'kb' | 'mb'): string {
+  if (unit === 'auto') return formatSpeed(bytesPerSec)
+  const bytes = Number.isFinite(bytesPerSec) && bytesPerSec > 0 ? bytesPerSec : 0
+  if (unit === 'kb') return `${Math.round(bytes / 1024).toLocaleString('en-US')} KB/s`
+  const mb = bytes / 1024 ** 2
+  return `${mb.toFixed(mb >= 10 ? 1 : 2)} MB/s`
+}
+
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return ''
   const total = Math.round(seconds)
@@ -232,7 +241,10 @@ export function buildTrayModel(
     })
   }
 
-  const title = prefs.trayTitle && speed > 0 ? ` ${formatSpeed(speed)}` : ''
+  const title =
+    prefs.trayText && (running.length > 0 || paused > 0)
+      ? ` ${formatSpeedIn(speed, prefs.trayUnit)}`
+      : ''
   const model: Omit<TrayModel, 'signature'> = {
     title,
     lines,

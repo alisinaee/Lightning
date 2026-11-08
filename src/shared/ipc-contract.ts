@@ -32,7 +32,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged, linkReceived, tdlJobUpdated and tdlLoginEvent) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged, settingsRefresh, linkReceived, tdlJobUpdated and tdlLoginEvent) — one source of truth for
  * both lightningApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -41,6 +41,10 @@ export interface IpcContract {
   deviceBindingSupported: { args: []; result: boolean }
   openNetworkSettings: { args: []; result: void }
   updateSettings: { args: [patch: AppSettings]; result: void }
+  /** Settings in its own window, on a page when one is named. */
+  openSettingsWindow: { args: [page?: string]; result: void }
+  /** Something Settings can only do in the main window: its dialogs and the guided tour. */
+  runMainCommand: { args: [command: 'limits' | 'tour' | 'intro']; result: void }
   /** The saved DNS profiles and the app's default. */
   getDns: { args: []; result: DnsConfig }
   /** Looks the link's host up with every DNS (the system's, saved and well-known ones), measures

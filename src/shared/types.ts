@@ -368,7 +368,7 @@ export interface StatusBarPrefs {
   /** How many running downloads the menu lists at most. */
   menuRows: number
   /** The menu of the icon in the menu bar (the system tray). */
-  trayTitle: boolean
+  trayText: boolean
   trayTotals: boolean
   trayNetworks: boolean
   trayDownloads: boolean
@@ -379,7 +379,41 @@ export interface StatusBarPrefs {
   trayPanel: boolean
   trayGraph: boolean
   trayActions: boolean
+  /** Which buttons the panel shows, in the order of TRAY_BUTTONS. */
+  trayButtons: TrayButton[]
+  /** The unit of the speed beside the menu-bar icon and in the panel. */
+  trayUnit: SpeedUnit
 }
+
+/** The buttons the menu-bar panel can hold; the person picks which in Settings → Status bar. */
+export const TRAY_BUTTONS = [
+  'new-download',
+  'several-links',
+  'pause-all',
+  'resume-all',
+  'show',
+  'settings',
+  'vpn',
+  'slow-mode',
+  'open-folder',
+  'telegram',
+  'check-update',
+  'logs'
+] as const
+export type TrayButton = (typeof TRAY_BUTTONS)[number]
+/** At most this many buttons fit the panel. */
+export const TRAY_BUTTONS_MAX = 6
+export const SPEED_UNITS = ['auto', 'kb', 'mb'] as const
+export type SpeedUnit = (typeof SPEED_UNITS)[number]
+
+export const DEFAULT_TRAY_BUTTONS: TrayButton[] = [
+  'new-download',
+  'pause-all',
+  'resume-all',
+  'vpn',
+  'slow-mode',
+  'settings'
+]
 
 export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   showCount: true,
@@ -398,7 +432,7 @@ export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   menuQueue: true,
   menuDisk: true,
   menuRows: 5,
-  trayTitle: false,
+  trayText: true,
   trayTotals: true,
   trayNetworks: true,
   trayDownloads: true,
@@ -406,13 +440,22 @@ export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   trayRows: 4,
   trayPanel: true,
   trayGraph: true,
-  trayActions: true
+  trayActions: true,
+  trayButtons: DEFAULT_TRAY_BUTTONS,
+  trayUnit: 'auto'
 }
 
 /** Choices from Settings. Absent fields mean the defaults in DEFAULT_PREFS. */
 export type AccentId = 'amber' | 'blue' | 'teal' | 'green' | 'violet' | 'rose'
 
+/** How strongly the window blurs what is behind it (macOS). */
+export const GLASS_BLURS = ['off', 'standard', 'strong'] as const
+export type GlassBlur = (typeof GLASS_BLURS)[number]
+
 export interface AppPrefs {
+  /** How see-through the window's surfaces are, 0 (solid) to 90 (nearly clear). */
+  glassTransparency?: number
+  glassBlur?: GlassBlur
   uiScale?: number
   accent?: AccentId
   notifyAdded?: boolean
@@ -487,6 +530,8 @@ export interface AppPrefs {
 export type ResolvedPrefs = Omit<Required<AppPrefs>, 'statusBar'> & { statusBar: StatusBarPrefs }
 
 export const DEFAULT_PREFS: ResolvedPrefs = {
+  glassTransparency: 56,
+  glassBlur: 'standard',
   uiScale: 1,
   accent: 'amber',
   notifyAdded: true,

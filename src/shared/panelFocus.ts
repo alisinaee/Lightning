@@ -1,6 +1,6 @@
 /** How long after opening the panel may go without focus before it counts as clicked away from:
  * macOS gives a window its focus a moment after it is shown. */
-export const PANEL_FOCUS_GRACE_MS = 600
+export const PANEL_FOCUS_GRACE_MS = 1200
 
 /** Whether the panel under the menu-bar icon should close because the person went elsewhere. It
  * normally hears that as a "blur", but a window of an app that is not the active one never had the
@@ -10,6 +10,13 @@ export function shouldClosePanel(state: {
   focused: boolean
   shownAt: number
   now: number
+  /** Pinned open (or being edited): it stays until the icon, Esc or Quit. */
+  pinned?: boolean
 }): boolean {
-  return state.visible && !state.focused && state.now - state.shownAt > PANEL_FOCUS_GRACE_MS
+  return (
+    !state.pinned &&
+    state.visible &&
+    !state.focused &&
+    state.now - state.shownAt > PANEL_FOCUS_GRACE_MS
+  )
 }

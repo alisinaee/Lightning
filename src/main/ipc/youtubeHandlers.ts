@@ -1,3 +1,4 @@
+import { reportYoutube } from '../externalActivity'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
@@ -66,6 +67,7 @@ export async function registerYoutubeHandlers(
   const pending = new Map<string, { job: YoutubeJob; timer?: NodeJS.Timeout; last: number }>()
 
   const push = (job: YoutubeJob): void => {
+    reportYoutube(job)
     const entry = pending.get(job.id) ?? { job, last: 0 }
     entry.job = job
     pending.set(job.id, entry)
@@ -89,6 +91,7 @@ export async function registerYoutubeHandlers(
   }
 
   const flush = (job: YoutubeJob): void => {
+    reportYoutube(job)
     const entry = pending.get(job.id)
     if (entry?.timer) clearTimeout(entry.timer)
     pending.set(job.id, { job, last: Date.now() })

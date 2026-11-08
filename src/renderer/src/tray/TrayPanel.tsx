@@ -1,14 +1,29 @@
 import type { PanelAction, PanelDownload, PanelState } from '@shared/trayPanel'
-import type { NetworkInterfaceKind } from '@shared/types'
+import {
+  TRAY_BUTTONS,
+  TRAY_BUTTONS_MAX,
+  type NetworkInterfaceKind,
+  type TrayButton
+} from '@shared/types'
+import { formatSpeedIn } from '@shared/trayModel'
 import {
   ArrowLineDown as ArrowDownToLine,
   ArrowSquareOut as ExternalLink,
   FolderSimple as FolderDown,
+  ArrowsClockwise,
+  Article,
+  Gauge,
+  PaperPlaneTilt,
   ListPlus,
+  Check,
+  Minus,
   Pause,
+  PencilSimple,
   Play,
   Plus,
   Power,
+  PushPin,
+  ShieldCheck,
   Gear as Settings
 } from '@phosphor-icons/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -26,7 +41,7 @@ function Section({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-2 border-t-[0.5px] border-border/70 px-4 py-3 first:border-t-0">
+    <section className="flex flex-col gap-2 border-t-[0.5px] border-foreground/10 px-4 py-2.5 first:border-t-0">
       {title && (
         <h2 className="text-[10.5px] font-semibold tracking-wider text-muted-foreground uppercase">
           {title}
@@ -100,30 +115,249 @@ function DownloadRow({ download }: { download: PanelDownload }): React.JSX.Eleme
   )
 }
 
+const BUTTONS: Record<
+  TrayButton,
+  { label: string; icon: typeof Plus; action: PanelAction; toggle?: 'vpn' | 'slowMode' }
+> = {
+  'new-download': { label: 'New', icon: Plus, action: { type: 'new-download' } },
+  'several-links': { label: 'Links', icon: ListPlus, action: { type: 'several-links' } },
+  'pause-all': { label: 'Pause all', icon: Pause, action: { type: 'pause-all' } },
+  'resume-all': { label: 'Resume all', icon: Play, action: { type: 'resume-all' } },
+  show: { label: 'Open', icon: ExternalLink, action: { type: 'show' } },
+  settings: { label: 'Settings', icon: Settings, action: { type: 'settings' } },
+  vpn: { label: 'VPN', icon: ShieldCheck, action: { type: 'toggle-vpn' }, toggle: 'vpn' },
+  'slow-mode': {
+    label: 'Slow mode',
+    icon: Gauge,
+    action: { type: 'toggle-slow-mode' },
+    toggle: 'slowMode'
+  },
+  'open-folder': { label: 'Folder', icon: FolderDown, action: { type: 'open-folder' } },
+  telegram: { label: 'Telegram', icon: PaperPlaneTilt, action: { type: 'open-telegram' } },
+  'check-update': { label: 'Update', icon: ArrowsClockwise, action: { type: 'check-update' } },
+  logs: { label: 'Logs', icon: Article, action: { type: 'logs' } }
+}
+
 function Action({
   label,
   icon: Icon,
   onClick,
-  primary
+  primary,
+  on,
+  tall,
+  dashed
 }: {
   label: string
   icon: typeof Plus
   onClick: () => void
   primary?: boolean
+  /** Fewer buttons: each is bigger. */
+  tall?: boolean
+  dashed?: boolean
+  /** A switch button: whether it is on. Undefined for a plain button. */
+  on?: boolean
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      aria-pressed={on}
+      title={label}
+      className={`flex w-full ${tall ? 'h-[58px]' : 'h-[46px]'} flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10.5px] leading-none font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         primary
           ? 'bg-primary text-primary-foreground hover:opacity-90'
-          : 'bg-secondary/80 text-foreground hover:bg-secondary'
+          : on
+            ? 'bg-primary/20 text-primary hover:bg-primary/25'
+            : dashed
+              ? 'border border-dashed border-foreground/25 text-muted-foreground hover:bg-foreground/[0.06]'
+              : 'bg-foreground/[0.06] text-foreground hover:bg-foreground/[0.11]'
       }`}
     >
-      <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{label}</span>
+      <Icon className={`${tall ? 'size-5' : 'size-[17px]'} shrink-0`} />
+      <span className="max-w-full truncate">{label}</span>
     </button>
+  )
+}
+
+/** The buttons and the foot of the panel. "Edit" lets the person drag the buttons into order, take
+ * some away and add others (at most six, and each is as big as the room allows). While editing, or
+ * pinned, the panel stays open instead of closing when a click lands elsewhere. */
+function Dock({ state }: { state: PanelState }): React.JSX.Element {
+  const [editing, setEditing] = useState(false)
+  const [pinned, setPinned] = useState(false)
+  const [draft, setDraft] = useState<TrayButton[]>(state.buttons)
+  const [dragging, setDragging] = useState<{ id: TrayButton; from: 'grid' | 'pool' } | null>(null)
+  const list = editing ? draft : state.buttons
+  const keepOpen = pinned || editing
+
+  useEffect(() => window.trayPanel.setPinned(keepOpen), [keepOpen])
+
+  const commit = (next: TrayButton[]): void => {
+    setDraft(next)
+    window.trayPanel.setButtons(next)
+  }
+  const room = list.length < TRAY_BUTTONS_MAX
+  const spare = TRAY_BUTTONS.filter((id) => !list.includes(id))
+  const tiles = list.length
+  const columns = tiles <= 4 ? Math.max(1, tiles) : 3
+  const tall = tiles <= 3
+
+  return (
+    <>
+      {tiles > 0 && (
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
+          {list.map((id) => {
+            const button = BUTTONS[id]
+            const tile = (
+              <Action
+                primary={id === 'new-download'}
+                tall={tall}
+                label={button.label}
+                icon={button.icon}
+                on={button.toggle ? state.toggles[button.toggle] : undefined}
+                onClick={() => {
+                  if (!editing) act(button.action)
+                }}
+              />
+            )
+            if (!editing) return <div key={id}>{tile}</div>
+            return (
+              <div
+                key={id}
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', id)
+                  setDragging({ id, from: 'grid' })
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  if (!dragging || dragging.from !== 'grid' || dragging.id === id) return
+                  const next = draft.filter((entry) => entry !== dragging.id)
+                  next.splice(draft.indexOf(id), 0, dragging.id)
+                  setDraft(next)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  // From the shelf: put it here, or in place of this one when all six are taken.
+                  if (dragging?.from !== 'pool') return
+                  const next = [...draft]
+                  next.splice(draft.indexOf(id), room ? 0 : 1, dragging.id)
+                  commit(next)
+                  // The shelf button is gone from the shelf, so it never reports the drag's end.
+                  setDragging(null)
+                }}
+                onDragEnd={() => {
+                  if (dragging?.from === 'grid') commit(draft)
+                  setDragging(null)
+                }}
+                className={`relative animate-[lightning-wiggle_0.5s_ease-in-out_infinite_alternate] cursor-grab ${
+                  dragging?.id === id ? 'opacity-40' : ''
+                }`}
+              >
+                {tile}
+                <button
+                  type="button"
+                  aria-label={`Remove ${button.label}`}
+                  onClick={() => commit(list.filter((entry) => entry !== id))}
+                  className="absolute -top-1 -left-1 flex size-4 items-center justify-center rounded-full bg-foreground/70 text-background outline-none hover:bg-foreground"
+                >
+                  <Minus weight="bold" className="size-2.5" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {editing && (
+        <div
+          className="flex flex-col gap-1.5 rounded-xl bg-foreground/[0.04] p-2"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            // A button dropped on the shelf goes back to it.
+            if (dragging?.from === 'grid') commit(list.filter((entry) => entry !== dragging.id))
+            setDragging(null)
+          }}
+        >
+          <div className="text-[10.5px] text-muted-foreground">
+            {room
+              ? 'More buttons: drag one up, or tap it.'
+              : `${TRAY_BUTTONS_MAX} is the most: drop one on a button to swap it.`}
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {spare.map((id) => (
+              <div
+                key={id}
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', id)
+                  setDragging({ id, from: 'pool' })
+                }}
+                onDragEnd={() => setDragging(null)}
+                className="cursor-grab"
+              >
+                <Action
+                  label={BUTTONS[id].label}
+                  icon={BUTTONS[id].icon}
+                  onClick={() => {
+                    if (room) commit([...list, id])
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex items-center justify-between pt-0.5 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <FolderDown aria-hidden className="size-3" />
+          Lightning {state.version}
+        </span>
+        <span className="flex items-center gap-0.5">
+          <button
+            type="button"
+            aria-pressed={pinned}
+            title={
+              pinned
+                ? 'Pinned: stays open until you unpin it'
+                : 'Pin: keep this panel open while you click elsewhere'
+            }
+            onClick={() => setPinned((on) => !on)}
+            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${
+              pinned ? 'text-primary' : ''
+            }`}
+          >
+            <PushPin weight={pinned ? 'fill' : 'regular'} aria-hidden className="size-3" />
+            {pinned ? 'Pinned' : 'Pin'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!editing) setDraft(state.buttons)
+              setEditing((on) => !on)
+            }}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {editing ? (
+              <Check aria-hidden className="size-3" />
+            ) : (
+              <PencilSimple aria-hidden className="size-3" />
+            )}
+            {editing ? 'Done' : 'Edit'}
+          </button>
+          <button
+            type="button"
+            onClick={() => act({ type: 'quit' })}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Power aria-hidden className="size-3" />
+            Quit
+          </button>
+        </span>
+      </div>
+    </>
   )
 }
 
@@ -171,7 +405,7 @@ export function TrayPanel(): React.JSX.Element {
       ref={root}
       role="region"
       aria-label="Lightning status"
-      className="flex w-full flex-col bg-background/70 font-sans text-foreground"
+      className="flex w-full flex-col bg-background/25 font-sans text-foreground"
     >
       {show.trayTotals && (
         <Section>
@@ -189,7 +423,7 @@ export function TrayPanel(): React.JSX.Element {
                   aria-label="Total speed"
                   className="font-mono text-[24px] leading-none font-semibold tabular-nums"
                 >
-                  {formatSpeed(state.speed)}
+                  {formatSpeedIn(state.speed, state.unit)}
                 </span>
               </span>
             </div>
@@ -267,41 +501,7 @@ export function TrayPanel(): React.JSX.Element {
 
       {show.trayActions && (
         <Section>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Action
-              primary
-              label="New download"
-              icon={Plus}
-              onClick={() => act({ type: 'new-download' })}
-            />
-            <Action
-              label="Several links"
-              icon={ListPlus}
-              onClick={() => act({ type: 'several-links' })}
-            />
-            <Action label="Pause all" icon={Pause} onClick={() => act({ type: 'pause-all' })} />
-            <Action label="Resume all" icon={Play} onClick={() => act({ type: 'resume-all' })} />
-            <Action
-              label="Open Lightning"
-              icon={ExternalLink}
-              onClick={() => act({ type: 'show' })}
-            />
-            <Action label="Settings" icon={Settings} onClick={() => act({ type: 'settings' })} />
-          </div>
-          <div className="flex items-center justify-between pt-0.5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <FolderDown aria-hidden className="size-3" />
-              Lightning {state.version}
-            </span>
-            <button
-              type="button"
-              onClick={() => act({ type: 'quit' })}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Power aria-hidden className="size-3" />
-              Quit
-            </button>
-          </div>
+          <Dock state={state} />
         </Section>
       )}
     </div>

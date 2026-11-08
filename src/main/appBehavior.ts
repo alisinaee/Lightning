@@ -1,3 +1,4 @@
+import { setGlassBlur } from './glass'
 import { setTrayConfig } from './trayConfig'
 import { app, clipboard, session, type BrowserWindow } from 'electron'
 import type { AppSettings } from '../shared/types'
@@ -89,7 +90,11 @@ function applyLoginItem(enabled: boolean): void {
 export async function applyBehavior(settings: AppSettings): Promise<void> {
   const prefs = prefsOf(settings)
   behavior.closeHides = prefs.closeToBackground
-  setTrayConfig(prefs.statusBar, settings.networkPreferences, prefs.accent)
+  setGlassBlur(prefs.glassBlur)
+  setTrayConfig(prefs.statusBar, settings.networkPreferences, prefs.accent, {
+    vpn: settings.useVpn ?? true,
+    slowMode: settings.slowMode ?? false
+  })
   applyLoginItem(prefs.openAtLogin)
   clipboardWatcher?.setEnabled({
     files: prefs.watchClipboard,

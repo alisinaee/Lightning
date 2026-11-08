@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('trayPanel', {
     return () => ipcRenderer.removeListener('tray:state', listener)
   },
   act: (action: unknown): void => ipcRenderer.send('tray:action', action),
+  setPinned: (on: boolean): void => ipcRenderer.send('tray:pin', on),
+  setButtons: (list: string[]): void => ipcRenderer.send('tray:set-buttons', list),
   resize: (height: number): void => ipcRenderer.send('tray:resize', height)
 })

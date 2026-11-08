@@ -105,11 +105,17 @@ test.describe('menu bar icon menu @smoke', () => {
     expect(model.canResume).toBe(false)
   })
 
-  test('the speed beside the icon is off until asked for', () => {
-    expect(buildTrayModel(running, {}, DEFAULT_STATUS_BAR).title).toBe('')
-    expect(buildTrayModel(running, {}, { ...DEFAULT_STATUS_BAR, trayTitle: true }).title).toBe(
-      ` ${formatSpeed(3_500_000)}`
+  test('the speed beside the icon shows by default, in the unit chosen, and can be turned off', () => {
+    expect(buildTrayModel(running, {}, DEFAULT_STATUS_BAR).title).toBe(` ${formatSpeed(3_500_000)}`)
+    expect(buildTrayModel(running, {}, { ...DEFAULT_STATUS_BAR, trayUnit: 'mb' }).title).toBe(
+      ' 3.34 MB/s'
     )
+    expect(buildTrayModel(running, {}, { ...DEFAULT_STATUS_BAR, trayText: false }).title).toBe('')
+    // Paused with nothing running: the speed is zero, shown as such.
+    expect(buildTrayModel([download({ status: 'paused' })], {}, DEFAULT_STATUS_BAR).title).toBe(
+      ' 0 B/s'
+    )
+    expect(buildTrayModel([], {}, DEFAULT_STATUS_BAR).title).toBe('')
   })
 
   test('an unchanged menu has an unchanged signature', () => {

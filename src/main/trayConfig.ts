@@ -7,13 +7,16 @@ export interface TrayConfig {
   names: Record<string, string>
   networkPreferences: NetworkPreferences
   accent: string
+  /** Whether the VPN and Slow mode switches are on. */
+  toggles: { vpn: boolean; slowMode: boolean }
 }
 
 let config: TrayConfig = {
   prefs: DEFAULT_STATUS_BAR,
   names: {},
   networkPreferences: {},
-  accent: 'amber'
+  accent: 'amber',
+  toggles: { vpn: true, slowMode: false }
 }
 const listeners = new Set<() => void>()
 
@@ -22,13 +25,14 @@ export const getTrayConfig = (): TrayConfig => config
 export function setTrayConfig(
   prefs: StatusBarPrefs,
   networkPreferences: NetworkPreferences | undefined,
-  accent: string
+  accent: string,
+  toggles: { vpn: boolean; slowMode: boolean }
 ): void {
   const names: Record<string, string> = {}
   for (const [id, preference] of Object.entries(networkPreferences ?? {})) {
     if (preference.customName) names[id] = preference.customName
   }
-  config = { prefs, names, networkPreferences: networkPreferences ?? {}, accent }
+  config = { prefs, names, networkPreferences: networkPreferences ?? {}, accent, toggles }
   for (const listener of listeners) listener()
 }
 

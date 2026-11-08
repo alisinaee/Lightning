@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, screen, type Tray } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { saveTrayButtons } from './settingsToggle'
 import { shouldClosePanel } from '../shared/panelFocus'
 import { buildPanelState, type PanelAction } from '../shared/trayPanel'
 import type { DownloadState } from '../shared/types'
@@ -21,7 +22,13 @@ const ACTIONS = new Set([
   'resume-all',
   'settings',
   'show',
-  'quit'
+  'quit',
+  'toggle-vpn',
+  'toggle-slow-mode',
+  'open-folder',
+  'open-telegram',
+  'check-update',
+  'logs'
 ])
 
 function validAction(value: unknown): value is PanelAction {
@@ -50,6 +57,8 @@ export function createTrayPanel(deps: {
   let current: BrowserWindow | null = null
   let hiddenAt = 0
   let shownAt = 0
+  // Kept open while the person works in it: pinned, or editing the buttons.
+  let pinned = false
   let watch: NodeJS.Timeout | null = null
 
   /** The window, made the first time it is wanted. */
@@ -98,7 +107,7 @@ export function createTrayPanel(deps: {
     }
 
     window.on('blur', () => {
-      if (!window.isVisible()) return
+      if (pinned || !window.isVisible()) return
       hiddenAt = Date.now()
       window.hide()
     })
@@ -140,7 +149,8 @@ export function createTrayPanel(deps: {
         names: config.names,
         networkPreferences: config.networkPreferences,
         accent: config.accent,
-        version: deps.version
+        version: deps.version,
+        toggles: config.toggles
       })
     )
   }
@@ -155,6 +165,13 @@ export function createTrayPanel(deps: {
     if (!fromPanel(event) || typeof height !== 'number' || !current) return
     const next = Math.round(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height)))
     if (next !== current.getSize()[1]) current.setSize(WIDTH, next, false)
+  })
+  ipcMain.on('tray:pin', (event, on: unknown) => {
+    if (fromPanel(event) && typeof on === 'boolean') pinned = on
+  })
+  ipcMain.on('tray:set-buttons', (event, list: unknown) => {
+    if (!fromPanel(event) || !Array.isArray(list)) return
+    void saveTrayButtons(list)
   })
   ipcMain.on('tray:action', (event, action: unknown) => {
     if (!fromPanel(event) || !validAction(action) || !current) return
@@ -204,7 +221,8 @@ export function createTrayPanel(deps: {
             visible: window.isVisible(),
             focused: window.isFocused(),
             shownAt,
-            now: Date.now()
+            now: Date.now(),
+            pinned
           })
         ) {
           window.hide()

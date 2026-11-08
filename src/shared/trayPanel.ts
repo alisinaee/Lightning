@@ -1,4 +1,4 @@
-import type { DownloadState, NetworkPreferences, StatusBarPrefs } from './types'
+import type { DownloadState, NetworkPreferences, StatusBarPrefs, TrayButton } from './types'
 import { percentOf, summarizeActivity, type NetworkActivity } from './trayModel'
 
 /** Everything the panel under the menu-bar icon draws, as one snapshot the main process sends it
@@ -12,6 +12,12 @@ export interface PanelState {
     StatusBarPrefs,
     'trayTotals' | 'trayGraph' | 'trayNetworks' | 'trayDownloads' | 'trayQueue' | 'trayActions'
   >
+  /** The buttons to draw, in order. */
+  buttons: TrayButton[]
+  /** The unit for the total speed. */
+  unit: 'auto' | 'kb' | 'mb'
+  /** Whether the VPN and Slow mode switches are on, for their buttons. */
+  toggles: { vpn: boolean; slowMode: boolean }
   speed: number
   running: number
   received: number
@@ -46,6 +52,7 @@ export function buildPanelState(input: {
   networkPreferences: NetworkPreferences
   accent: string
   version: string
+  toggles: { vpn: boolean; slowMode: boolean }
 }): PanelState {
   const activity = summarizeActivity(input.downloads, input.names)
   const ranked = [...activity.running].sort((a, b) => b.speedBytesPerSec - a.speedBytesPerSec)
@@ -61,6 +68,9 @@ export function buildPanelState(input: {
       trayQueue: input.prefs.trayQueue,
       trayActions: input.prefs.trayActions
     },
+    buttons: input.prefs.trayButtons,
+    unit: input.prefs.trayUnit,
+    toggles: input.toggles,
     speed: activity.speed,
     running: activity.running.length,
     received: activity.received,
@@ -90,5 +100,17 @@ export type PanelAction =
   | { type: 'pause'; id: string }
   | {
       type:
-        'new-download' | 'several-links' | 'pause-all' | 'resume-all' | 'settings' | 'show' | 'quit'
+        | 'new-download'
+        | 'several-links'
+        | 'pause-all'
+        | 'resume-all'
+        | 'settings'
+        | 'show'
+        | 'quit'
+        | 'toggle-vpn'
+        | 'toggle-slow-mode'
+        | 'open-folder'
+        | 'open-telegram'
+        | 'check-update'
+        | 'logs'
     }

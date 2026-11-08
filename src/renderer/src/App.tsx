@@ -1,5 +1,5 @@
 import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { AppSidebar } from './components/AppSidebar'
 import { FirstRunIntro } from './components/FirstRunIntro'
 import { OnboardingTour } from './components/OnboardingTour'
@@ -9,7 +9,8 @@ import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { GroupDialog } from './components/GroupDialog'
 import { MultiLinkDialog } from './components/MultiLinkDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
-import { SettingsDialog, type SettingsPage } from './components/SettingsDialog'
+import type { SettingsPage } from './components/SettingsDialog'
+import { reloadSavedSettings } from './utils/syncSettings'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { UpdateDialog } from './components/UpdateDialog'
@@ -111,15 +112,12 @@ function App(): React.JSX.Element {
       root.removeProperty('--color-accent-onsolid')
     }
   }, [sectionAccent])
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  // Each open gets a new key, so the dialog starts on the page asked for (General by default).
-  const [settingsRequest, setSettingsRequest] = useState<{ id: number; page?: SettingsPage }>({
-    id: 0
-  })
   const openSettings = (page?: SettingsPage): void => {
-    setSettingsRequest((previous) => ({ id: previous.id + 1, page }))
-    setSettingsOpen(true)
+    void window.lightning.openSettingsWindow(page)
   }
+
+  // Settings saved in its window: read them again.
+  useEffect(() => window.lightning.onSettingsRefresh(reloadSavedSettings), [])
 
   useEffect(() => {
     window.lightning.setZoom(window.lightning.initialState.prefs.uiScale)
@@ -183,7 +181,11 @@ function App(): React.JSX.Element {
         store.setView({ name: 'telegram', kind: null })
         useTelegramStore.getState().openAdd(links)
       } else if (command === 'open-telegram') store.setView({ name: 'telegram', kind: null })
+      else if (command === 'open-youtube') store.setView({ name: 'youtube' })
       else if (command === 'settings') openSettings()
+      else if (command === 'limits') store.openLimitsDialog()
+      else if (command === 'tour') window.dispatchEvent(new Event('lightning:start-tour'))
+      else if (command === 'intro') window.dispatchEvent(new Event('lightning:start-intro'))
       else if (command === 'open-download' && argument)
         store.setView({ name: 'download', id: argument })
       else if (command === 'check-update') {
@@ -247,12 +249,6 @@ function App(): React.JSX.Element {
         <TelegramExportDialog />
         <TelegramLoginDialog />
         <UpdateDialog />
-        <SettingsDialog
-          key={settingsRequest.id}
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialPage={settingsRequest.page}
-        />
         <NetworkBindingDialog />
         {window.lightning.initialState.labEnabled && <TestLab />}
       </div>

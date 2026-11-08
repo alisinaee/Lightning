@@ -149,14 +149,14 @@
    property *values* (e.g. --color-accent) without colliding with their names, since only the
    left-hand names below become Tailwind tokens. */
 @theme inline {
-  --font-sans: 'Manrope', -apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica, sans-serif;
   --font-mono: 'Roboto Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 
   --color-background: var(--bg);
   --color-foreground: var(--text);
   --color-card: var(--bg-secondary);
   --color-card-foreground: var(--text);
-  --color-popover: var(--bg-secondary);
+  --color-popover: var(--bg-popover, var(--bg-secondary));
   --color-popover-foreground: var(--text);
   --color-primary: var(--color-accent);
   --color-primary-foreground: var(--color-accent-onsolid);
@@ -297,6 +297,13 @@
    they are not repeated here. Body, html and root element sizing now live as utility classes
    in index.html instead. */
 @layer base {
+  /* iOS-like text: the system font, a touch heavier than regular so it never looks thin. */
+  html,
+  body {
+    font-weight: 500;
+    -webkit-font-smoothing: auto;
+  }
+
   input,
   [contenteditable] {
     user-select: text;
@@ -768,5 +775,162 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
   .lightning-tour-card,
   .lightning-tour-ring::after {
     animation: none;
+  }
+}
+
+/* ---- Settings: iOS-style grouped lists ---------------------------------------------------- */
+.settings-ios {
+  --ios-card: color-mix(in srgb, var(--color-foreground, #000) 5%, var(--bg));
+  --ios-line: rgb(60 60 67 / 0.14);
+  --ios-green: #34c759;
+}
+.dark .settings-ios {
+  --ios-line: rgb(84 84 88 / 0.5);
+}
+.settings-ios .ios-title {
+  margin: 10px 0 -4px 14px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.settings-ios .ios-note {
+  margin: -4px 14px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.settings-ios .ios-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.3;
+  background: var(--ios-card);
+  border-radius: 12px;
+}
+.settings-ios .ios-row + .ios-row {
+  margin-top: -12px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.settings-ios .ios-row:has(+ .ios-row) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.settings-ios .ios-row + .ios-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 0;
+  height: 0.5px;
+  background: var(--ios-line);
+}
+.settings-ios .ios-row > .ios-label {
+  min-width: 0;
+  flex: 1;
+}
+.settings-ios .ios-row .ios-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.settings-ios .ios-input {
+  height: 30px;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(120 120 128 / 0.12);
+  padding: 0 10px;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+.settings-ios .ios-input:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #c36b05) 45%, transparent);
+}
+.settings-ios .ios-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  border-radius: 9px;
+  padding: 0 8px;
+  font-size: 13.5px;
+  text-align: left;
+  transition: background 0.15s;
+}
+.settings-ios .ios-nav:hover {
+  background: rgb(120 120 128 / 0.1);
+}
+.settings-ios .ios-nav[aria-current='page'] {
+  background: rgb(120 120 128 / 0.18);
+  font-weight: 500;
+}
+.settings-ios .ios-tile {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: inherit;
+}
+.settings-ios .ios-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgb(120 120 128 / 0.14);
+}
+.settings-ios .ios-seg > button {
+  height: 28px;
+  min-width: 56px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+.settings-ios .ios-seg > button[aria-pressed='true'] {
+  background: var(--bg);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+}
+
+@keyframes lightning-wiggle {
+  from {
+    transform: rotate(-1.2deg);
+  }
+  to {
+    transform: rotate(1.2deg);
+  }
+}
+
+/* ---- Frosted glass (macOS): the window is vibrant, the app's surfaces let it show ----------- */
+html[data-vibrancy],
+html[data-vibrancy] body {
+  background: transparent !important;
+}
+html[data-vibrancy] {
+  --bg: color-mix(in srgb, #ffffff calc(var(--glass-a, 44) * 1%), transparent);
+  --bg-secondary: color-mix(in srgb, #ffffff calc(var(--glass-a, 44) * 0.75%), transparent);
+  --bg-tertiary: color-mix(in srgb, #000000 5%, transparent);
+  --input-bg: color-mix(in srgb, #ffffff 60%, transparent);
+  --track-bg: color-mix(in srgb, #000000 8%, transparent);
+  --border: color-mix(in srgb, #000000 9%, transparent);
+  --bg-popover: #fbfbfc;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-vibrancy] {
+    --bg: color-mix(in srgb, #1b1e20 calc(var(--glass-a, 44) * 1.05%), transparent);
+    --bg-secondary: color-mix(in srgb, #202325 calc(var(--glass-a, 44) * 0.9%), transparent);
+    --bg-tertiary: color-mix(in srgb, #ffffff 7%, transparent);
+    --input-bg: color-mix(in srgb, #ffffff 8%, transparent);
+    --track-bg: color-mix(in srgb, #ffffff 10%, transparent);
+    --border: color-mix(in srgb, #ffffff 9%, transparent);
+    --bg-popover: #26292c;
   }
 }

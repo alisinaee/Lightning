@@ -1,3 +1,5 @@
+import { registerGlassWindow } from './glass'
+import { externalStates } from './externalActivity'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
@@ -15,6 +17,7 @@ import { loadWindowState, trackWindowState } from './windowState'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
+import dockIcon from '../../resources/icon-mac.png?asset'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerTelegramHandlers, type TelegramHandlers } from './ipc/telegramHandlers'
 import { registerYoutubeHandlers, type YoutubeHandlers } from './ipc/youtubeHandlers'
@@ -103,7 +106,16 @@ function createWindow(): void {
     title: appVariant().name,
     // Matches the renderer's dark-mode background so a live window resize
     // (which briefly exposes the raw window background) doesn't flash white.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
+    // On macOS the window is frosted glass the page's translucent surfaces show through.
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'under-window' as const, visualEffectState: 'active' as const }
+      : {}),
+    backgroundColor:
+      process.platform === 'darwin'
+        ? '#00000000'
+        : nativeTheme.shouldUseDarkColors
+          ? '#1c1c1e'
+          : '#ffffff',
     ...(process.platform !== 'darwin' ? { icon } : {}),
     // One title bar on every OS: the renderer's own strip (see TitleBar.tsx), with the OS's
     // window controls over it — macOS's traffic lights, or the minimize/maximize/close that
@@ -124,6 +136,7 @@ function createWindow(): void {
     }
   })
 
+  registerGlassWindow(mainWindow)
   if (saved?.maximized) mainWindow.maximize()
   trackWindowState(mainWindow)
   mainWindow.on('ready-to-show', () => {
@@ -245,7 +258,7 @@ app.whenReady().then(async () => {
   // running app and its launcher icon are one. A runtime setIcon would replace it with a copy that
   // stays stale after an update. Only a dev run (no bundle icon) sets the image.
   if (process.platform === 'darwin' && app.dock && !app.isPackaged) {
-    app.dock.setIcon(nativeImage.createFromPath(icon))
+    app.dock.setIcon(nativeImage.createFromPath(dockIcon))
   }
   log.info(
     'app',
@@ -282,7 +295,9 @@ app.whenReady().then(async () => {
   startYtDlpUpdater(async () => (await getYoutubeStatus()).version)
 
   nativeTheme.on('updated', () => {
-    mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
+    if (process.platform !== 'darwin') {
+      mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff')
+    }
     if (process.platform !== 'darwin') mainWindow?.setTitleBarOverlay(titleBarOverlay())
   })
 
@@ -295,7 +310,7 @@ app.whenReady().then(async () => {
   installAppMenu(() => mainWindow)
   if (testKnobs.trayPanel) {
     createTrayPanel({
-      downloads: () => downloadManager?.liveStates() ?? [],
+      downloads: () => [...(downloadManager?.liveStates() ?? []), ...externalStates()],
       version: app.getVersion(),
       act: () => {},
       always: true
@@ -303,7 +318,7 @@ app.whenReady().then(async () => {
   }
   if (!testKnobs.hideWindow) {
     installTray(() => mainWindow, {
-      downloads: () => downloadManager?.liveStates() ?? [],
+      downloads: () => [...(downloadManager?.liveStates() ?? []), ...externalStates()],
       pause: (id) => void downloadManager?.pause(id)
     })
   }

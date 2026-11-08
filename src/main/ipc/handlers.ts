@@ -1,3 +1,5 @@
+import { setSettingsApplier } from '../settingsToggle'
+import { broadcastSettingsRefresh, openSettingsWindow } from '../settingsWindow'
 import { rmdir, stat, statfs } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import {
@@ -317,8 +319,18 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         useVpn: saved.useVpn ?? true
       } satisfies SettingsPush)
     }
+    broadcastSettingsRefresh()
   }
+  setSettingsApplier(applySettings)
   handle('updateSettings', async (_event, patch) => applySettings(patch))
+  handle('openSettingsWindow', async (_event, page) => openSettingsWindow(page))
+  handle('runMainCommand', async (_event, command) => {
+    const window = getWindow()
+    if (!window || window.isDestroyed()) return
+    if (!window.isVisible()) window.show()
+    window.focus()
+    window.webContents.send(IpcChannels.appCommand, command)
+  })
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
   // throw here must still reply (with no saved values) rather than leave the window never showing.
