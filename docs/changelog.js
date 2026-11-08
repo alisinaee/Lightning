@@ -29,6 +29,16 @@
         },
         {
           kind: 'improved',
+          title: 'VPN switch always in view',
+          text: 'The VPN switch stays beside the + button. With no VPN connected it is dimmed and off, instead of disappearing.'
+        },
+        {
+          kind: 'improved',
+          title: 'Network icons',
+          text: 'Wi-Fi, Ethernet and a phone tethered over USB each get their own icon in the networks menu, which is now cleaner and more minimal.'
+        },
+        {
+          kind: 'improved',
           title: 'YouTube and Telegram count too',
           text: 'Their downloads are included in the menu-bar speed and counts.'
         },
