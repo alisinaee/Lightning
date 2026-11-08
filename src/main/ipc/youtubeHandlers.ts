@@ -198,6 +198,8 @@ export async function registerYoutubeHandlers(
         : savedCookiesPath()
       await writeCookiesFile(file, sanitizeCookies(body.cookies))
       cookies = { file, temporary }
+      // Saved cookies are the app-wide sign-in: pasted links and probes read them from options too.
+      if (!temporary) await saveYoutubeOptions({ cookieMode: 'saved' })
     } else if (mode === 'saved') {
       if (existsSync(savedCookiesPath())) cookies = { file: savedCookiesPath(), temporary: false }
     } else if (mode !== 'none') {

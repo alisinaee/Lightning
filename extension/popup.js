@@ -1,5 +1,5 @@
 const api = typeof browser !== 'undefined' ? browser : chrome
-const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'send' }
+const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'save' }
 const $ = (id) => document.getElementById(id)
 
 async function load() {
@@ -8,7 +8,8 @@ async function load() {
   $('key').value = saved.key
   $('minSizeMB').value = saved.minSizeMB
   $('excluded').value = saved.excluded
-  $('videoCookies').value = saved.videoCookies
+  // Downloads always save the sign-in in Lightning now; an older 'send' setting shows as 'save'.
+  $('videoCookies').value = saved.videoCookies === 'send' ? 'save' : saved.videoCookies
 }
 
 async function refresh() {

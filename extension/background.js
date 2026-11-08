@@ -3,7 +3,7 @@
 const api = typeof browser !== 'undefined' ? browser : chrome
 
 const PORTS = [17891, 17892, 17893, 17894, 17895, 17896, 17897, 17898, 17899, 17900]
-const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'send' }
+const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'save' }
 
 let cachedPort = null
 // Links the browser is allowed to download itself (the app was not there to take them).
@@ -139,9 +139,11 @@ function isYoutubeHost(url) {
 
 /** The cookies a YouTube page needs, as the Video cookies setting in the popup allows them. */
 async function youtubeCookies(url) {
+  // Downloads from the browser always keep the sign-in in Lightning, so pasted links work too.
+  // An older 'send' setting counts as 'save'.
   const { videoCookies } = await settings()
-  const mode = ['send', 'save', 'saved', 'none'].includes(videoCookies) ? videoCookies : 'send'
-  if (mode !== 'send' && mode !== 'save') return { cookieMode: mode }
+  const mode = videoCookies === 'none' || videoCookies === 'saved' ? videoCookies : 'save'
+  if (mode !== 'save') return { cookieMode: mode }
   try {
     const cookies = (await api.cookies.getAll({ url })).map((cookie) => ({
       domain: cookie.domain,
