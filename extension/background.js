@@ -56,10 +56,10 @@ async function refreshMenus() {
   const on = await features()
   const update = (id, visible) => api.contextMenus.update(id, { visible }).catch(() => {})
   update('lightning-download', on.menuDownload)
-  update('lightning-scan', on.menuScan)
+  update('lightning-youtube', on.menuDownload)
   update('lightning-select', on.menuScan)
-  update('lightning-clipboard', on.menuScan)
   update('lightning-near', on.menuScan)
+  update('lightning-clipboard', on.menuScan)
   return on
 }
 refreshMenus()
@@ -206,55 +206,40 @@ api.downloads.onCreated.addListener(async (item) => {
   if (result !== 'down') notify(problem(result))
 })
 
-// Right-click → one download item for links, media and YouTube pages (the app picks the downloader),
-// plus select mode for picking several links on any page.
+// Right-click menu, five items (Scan was merged into Select; see the select mode in page-select.js).
 api.runtime.onInstalled.addListener(() => {
+  // A link, video, audio or image: the app takes it (a YouTube link goes to the YouTube downloader).
   api.contextMenus.create({
     id: 'lightning-download',
     title: 'Download with Lightning',
-    contexts: ['link', 'video', 'audio', 'image', 'page']
+    contexts: ['link', 'video', 'audio', 'image']
   })
+  // A YouTube page: the app sends it to the YouTube downloader.
+  api.contextMenus.create({
+    id: 'lightning-youtube',
+    title: 'Download this video with Lightning',
+    contexts: ['page'],
+    documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*', 'https://youtu.be/*']
+  })
+  // Pick several links and videos on any page.
   api.contextMenus.create({
     id: 'lightning-select',
     title: 'Select links with Lightning',
     contexts: ['page', 'frame']
   })
-  api.contextMenus.create({
-    id: 'lightning-scan',
-    title: 'Scan this page with Lightning',
-    contexts: ['page', 'frame', 'selection']
-  })
-  api.contextMenus.create({
-    id: 'lightning-clipboard',
-    title: 'Download copied links with Lightning',
-    contexts: ['all']
-  })
+  // The selected links, or the link group around the spot right-clicked.
   api.contextMenus.create({
     id: 'lightning-near',
     title: 'Download the links here with Lightning',
-    contexts: ['all']
+    contexts: ['page', 'frame', 'selection']
+  })
+  // Whatever links the person copied (a separate group: it does not depend on the spot clicked).
+  api.contextMenus.create({
+    id: 'lightning-clipboard',
+    title: 'Download copied links with Lightning',
+    contexts: ['page', 'frame', 'editable']
   })
 })
-
-/** Every link and media address on the page the person is looking at, as the browser sees it
- * (so pages that build their links with JavaScript work too). Runs inside the page. */
-function collectLinks() {
-  const found = new Set()
-  for (const element of document.querySelectorAll(
-    'a[href], source[src], video[src], audio[src], [data-href], [data-url], [data-download]'
-  )) {
-    for (const name of ['href', 'src', 'data-href', 'data-url', 'data-download']) {
-      const value = element.getAttribute(name)
-      if (!value) continue
-      try {
-        found.add(new URL(value, document.baseURI).href)
-      } catch {
-        // Not an address.
-      }
-    }
-  }
-  return [...found]
-}
 
 /** The links inside what the person has selected on the page (several files selected in a
  * listing, say). Runs inside the page. */
@@ -287,24 +272,6 @@ async function selectedLinks(tab, frameId) {
   }
 }
 
-async function scanPage(tab, frameId) {
-  if (!tab?.id) return
-  let links = []
-  try {
-    const results = await api.scripting.executeScript({
-      target: frameId ? { tabId: tab.id, frameIds: [frameId] } : { tabId: tab.id },
-      func: collectLinks
-    })
-    links = results.flatMap((entry) => entry.result ?? [])
-  } catch {
-    notify('Lightning cannot read this page.')
-    return
-  }
-  const pageUrl = tab.url
-  const result = await sendLinksToLightning(links, pageUrl)
-  if (result !== 'ok') notify(problem(result))
-}
-
 /** Sends the links of a page to Lightning's several-links dialog. */
 async function sendLinksToLightning(links, pageUrl) {
   const { key } = await settings()
@@ -331,10 +298,6 @@ async function sendLinksToLightning(links, pageUrl) {
 
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   const on = await refreshMenus()
-  if (info.menuItemId === 'lightning-scan') {
-    if (on.menuScan) await scanPage(tab, info.frameId)
-    return
-  }
   if (info.menuItemId === 'lightning-select') {
     if (on.menuScan) await startSelect(tab, info.frameId)
     return
@@ -347,17 +310,32 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     return
   }
   if (info.menuItemId === 'lightning-near') {
-    if (on.menuScan) await linksNearClick(tab, info.frameId)
+    if (!on.menuScan) return
+    // Text selected on the page: its links. Otherwise the group around the spot right-clicked.
+    if (info.selectionText) {
+      const chosen = await selectedLinks(tab, info.frameId)
+      if (chosen.length > 0) {
+        const sent = await sendLinksToLightning(chosen, tab?.url)
+        if (sent !== 'ok') notify(problem(sent))
+        return
+      }
+    }
+    await linksNearClick(tab, info.frameId)
+    return
+  }
+  if (info.menuItemId === 'lightning-youtube') {
+    if (!on.menuDownload || !info.pageUrl) return
+    const result = await handOver(info.pageUrl, tab?.url)
+    if (result !== 'ok') notify(problem(result))
     return
   }
   if (!on.menuDownload) return
   // A link, video or image under the mouse. On a bare page only a YouTube page is taken: the app then
   // sends it to the YouTube downloader; other pages say what to right-click.
   const isAddress = (value) => !!value && /^(https?:|magnet:)/i.test(value)
-  let url = [info.linkUrl, info.srcUrl].find(isAddress)
-  if (!url && info.pageUrl && isYoutubeHost(info.pageUrl)) url = info.pageUrl
+  const url = [info.linkUrl, info.srcUrl].find(isAddress)
   if (!url) {
-    notify('Right-click a link or video on the page, or use this on a YouTube page.')
+    notify('Right-click a link or video to download it.')
     return
   }
   // Several links selected, and the click is on one of them: all of them are offered together.

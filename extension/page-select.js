@@ -33,11 +33,13 @@
   bar.innerHTML =
     '<span class="lightning-count"></span>' +
     '<button class="lightning-primary" type="button">Send to Lightning</button>' +
-    '<button class="lightning-secondary" type="button">Cancel</button>'
+    '<button class="lightning-secondary lightning-all" type="button">Select all</button>' +
+    '<button class="lightning-secondary lightning-cancel" type="button">Cancel</button>'
   document.documentElement.appendChild(bar)
   const countLabel = bar.querySelector('.lightning-count')
   const sendButton = bar.querySelector('.lightning-primary')
-  const cancelButton = bar.querySelector('.lightning-secondary')
+  const allButton = bar.querySelector('.lightning-all')
+  const cancelButton = bar.querySelector('.lightning-cancel')
 
   function refresh(message) {
     countLabel.textContent = message || `${picked.size} selected. Click links or videos to pick them.`
@@ -124,6 +126,18 @@
     sendButton.disabled = picked.size === 0
   })
   cancelButton.addEventListener('click', stop)
+
+  // Picks every link and media address on the page (the old "Scan this page" job).
+  allButton.addEventListener('click', () => {
+    for (const element of document.querySelectorAll('a[href], video, audio')) {
+      const url = addressOf(element)
+      if (!url || picked.has(url)) continue
+      element.classList.add('lightning-pick-on')
+      picked.set(url, element)
+      if (picked.size >= 2000) break
+    }
+    refresh()
+  })
 
   document.addEventListener('mouseover', onOver, true)
   document.addEventListener('click', onClick, true)
