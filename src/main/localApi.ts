@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { RequestExtras } from '../shared/types'
 import { sanitizeExtras } from '../shared/requestHeaders'
 import { redactUrl } from '../shared/urlTools'
+import { isYoutubeUrl } from '../shared/youtube'
 import { log } from './logger'
 
 /** The ports Lightning tries, in order; the extension looks for it on the same ones. */
@@ -176,6 +177,12 @@ export class LocalApi {
       const url = typeof body?.url === 'string' ? body.url.trim() : ''
       if (!body || !/^(https?:\/\/[^\s]+|magnet:\?[^\s]+)$/i.test(url) || url.length > 8192) {
         return this.send(res, 400, { error: 'url' }, origin)
+      }
+      // One browser action for every link: a YouTube page goes to the YouTube downloader by itself,
+      // anything else lands in the Add dialog for the person to start.
+      if (isYoutubeUrl(url) && (await this.deps.onVideo({ ...body, url }))) {
+        log.info('action', 'youtube page from the browser', { url: redactUrl(url) })
+        return this.send(res, 200, { ok: true, route: 'youtube' }, origin)
       }
       log.info('action', 'link from the browser', { url: redactUrl(url) })
       this.deps.onAdd(url, sanitizeExtras(body))

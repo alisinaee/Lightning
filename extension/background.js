@@ -57,6 +57,7 @@ async function refreshMenus() {
   const update = (id, visible) => api.contextMenus.update(id, { visible }).catch(() => {})
   update('lightning-download', on.menuDownload)
   update('lightning-scan', on.menuScan)
+  update('lightning-select', on.menuScan)
   return on
 }
 refreshMenus()
@@ -123,6 +124,37 @@ function notify(message) {
   })
 }
 
+/** Whether the address is a YouTube page (the app also checks; this only decides what is sent along). */
+function isYoutubeHost(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')
+  } catch {
+    return false
+  }
+}
+
+/** The cookies a YouTube page needs, as the Video cookies setting in the popup allows them. */
+async function youtubeCookies(url) {
+  const { videoCookies } = await settings()
+  const mode = ['send', 'save', 'saved', 'none'].includes(videoCookies) ? videoCookies : 'send'
+  if (mode !== 'send' && mode !== 'save') return { cookieMode: mode }
+  try {
+    const cookies = (await api.cookies.getAll({ url })).map((cookie) => ({
+      domain: cookie.domain,
+      path: cookie.path,
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+      expirationDate: cookie.expirationDate,
+      name: cookie.name,
+      value: cookie.value
+    }))
+    return { cookieMode: mode, cookies }
+  } catch {
+    return { cookieMode: mode, cookies: [] }
+  }
+}
+
 /** Hands one link over, with the page it came from and the cookies the browser holds for it. */
 async function handOver(url, referrer, extra = {}) {
   const payload = {
@@ -130,6 +162,7 @@ async function handOver(url, referrer, extra = {}) {
     referer: referrer || undefined,
     cookie: (await cookieHeader(url)) || undefined,
     userAgent: navigator.userAgent,
+    ...(isYoutubeHost(url) ? await youtubeCookies(url) : {}),
     ...extra
   }
   return sendToLightning(payload)
@@ -170,17 +203,18 @@ api.downloads.onCreated.addListener(async (item) => {
   if (result !== 'down') notify(problem(result))
 })
 
-// Right-click → Download with Lightning.
+// Right-click → one download item for links, media and YouTube pages (the app picks the downloader),
+// plus select mode for picking several links on any page.
 api.runtime.onInstalled.addListener(() => {
   api.contextMenus.create({
     id: 'lightning-download',
     title: 'Download with Lightning',
-    contexts: ['link', 'video', 'audio', 'image']
+    contexts: ['link', 'video', 'audio', 'image', 'page']
   })
   api.contextMenus.create({
-    id: 'lightning-video',
-    title: 'Download video with Lightning',
-    contexts: ['page', 'video', 'link', 'frame']
+    id: 'lightning-select',
+    title: 'Select links with Lightning',
+    contexts: ['page', 'frame']
   })
   api.contextMenus.create({
     id: 'lightning-scan',
@@ -288,17 +322,20 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     if (on.menuScan) await scanPage(tab, info.frameId)
     return
   }
-  if (info.menuItemId === 'lightning-video') {
-    // The page the video is on, or the link it points at (the page is used when the video has no address).
-    const url = info.linkUrl || info.pageUrl || tab?.url
-    if (!url || !/^https?:/i.test(url)) return
-    const result = await sendVideo(url, tab?.title)
-    if (result !== 'ok') notify(problem(result))
+  if (info.menuItemId === 'lightning-select') {
+    if (on.menuScan) await startSelect(tab, info.frameId)
     return
   }
   if (!on.menuDownload) return
-  const url = info.linkUrl || info.srcUrl
-  if (!url || !/^(https?:|magnet:)/i.test(url)) return
+  // A link, video or image under the mouse. On a bare page only a YouTube page is taken: the app then
+  // sends it to the YouTube downloader; other pages say what to right-click.
+  const isAddress = (value) => !!value && /^(https?:|magnet:)/i.test(value)
+  let url = [info.linkUrl, info.srcUrl].find(isAddress)
+  if (!url && info.pageUrl && isYoutubeHost(info.pageUrl)) url = info.pageUrl
+  if (!url) {
+    notify('Right-click a link or video on the page, or use this on a YouTube page.')
+    return
+  }
   // Several links selected, and the click is on one of them: all of them are offered together.
   if (info.linkUrl) {
     const chosen = await selectedLinks(tab, info.frameId)
@@ -312,41 +349,16 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   if (result !== 'ok') notify(problem(result))
 })
 
-/** Sends a video page to the YouTube downloader in Lightning, with the cookies the chosen mode allows
- * (see the Video cookies setting in the popup). Returns the same results as sendToLightning. */
-async function sendVideo(url, title) {
-  const { key, videoCookies } = await settings()
-  const port = await findPort()
-  if (!port) return 'down'
-  const mode = ['send', 'save', 'saved', 'none'].includes(videoCookies) ? videoCookies : 'send'
-  let cookies = []
-  if (mode === 'send' || mode === 'save') {
-    try {
-      cookies = (await api.cookies.getAll({ url })).map((cookie) => ({
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        expirationDate: cookie.expirationDate,
-        name: cookie.name,
-        value: cookie.value
-      }))
-    } catch {
-      cookies = []
-    }
-  }
+/** Turns select mode on in the page (any site). The page script is injected only when asked. */
+async function startSelect(tab, frameId) {
+  if (!tab?.id) return
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/video`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ url, title: title || undefined, cookieMode: mode, cookies })
+    await api.scripting.executeScript({
+      target: frameId ? { tabId: tab.id, frameIds: [frameId] } : { tabId: tab.id },
+      files: ['page-select.js']
     })
-    if (response.status === 401) return 'key'
-    if (response.status === 403) return 'off'
-    return response.ok ? 'ok' : 'error'
   } catch {
-    cachedPort = null
-    return 'down'
+    notify('Lightning cannot select on this page.')
   }
 }
 
@@ -387,6 +399,14 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
   }
   if (message?.type === 'test') {
     checkKey().then((result) => respond({ result }))
+    return true
+  }
+  // The select mode on a page sends its picked links here (the page cannot reach the app itself).
+  if (message?.type === 'send-links') {
+    const links = Array.isArray(message.links) ? message.links.filter((link) => /^https?:/i.test(link)) : []
+    sendLinksToLightning(links, _sender?.tab?.url).then((result) =>
+      respond({ result, message: problem(result) })
+    )
     return true
   }
   return false
