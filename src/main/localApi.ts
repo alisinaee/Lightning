@@ -35,6 +35,22 @@ export interface LocalApiDeps {
   onVideo: (body: Record<string, unknown>) => Promise<boolean>
   /** Video pages the extension's select mode picked: each starts a YouTube download. */
   onVideoBatch: (body: Record<string, unknown>) => Promise<number>
+  /** The text on the system clipboard (the links the person copied). */
+  readClipboard: () => Promise<string>
+}
+
+const LINK_PATTERN = /(?:https?:\/\/|magnet:\?)[^\s<>"'`]+/gi
+
+/** Every link in a block of text, once each, in the order they appear. Trailing punctuation that
+ * ends a sentence or a list (a comma, a full stop, a closing bracket) is not part of the link. */
+export function linksIn(text: string): string[] {
+  const found = new Set<string>()
+  for (const match of text.matchAll(LINK_PATTERN)) {
+    const link = match[0].replace(/[.,;:!?)\]]+$/, '')
+    if (link.length > 0 && link.length <= 8192) found.add(link)
+    if (found.size >= 5000) break
+  }
+  return [...found]
 }
 
 function digest(text: string): Buffer {
@@ -226,6 +242,16 @@ export class LocalApi {
         log.error('action', 'youtube batch from the browser failed', { error: String(error) })
         return this.send(res, 500, { error: 'batch' }, origin)
       }
+    }
+    // The links the person copied: one goes to the Add dialog, several to the several-links dialog.
+    if (req.method === 'POST' && path === '/v1/clipboard') {
+      if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)
+      const urls = linksIn(await this.deps.readClipboard())
+      if (urls.length === 0) return this.send(res, 400, { error: 'clipboard' }, origin)
+      log.info('action', 'copied links from the clipboard', { count: urls.length })
+      if (urls.length === 1) this.deps.onAdd(urls[0], {})
+      else this.deps.onLinks(urls, {})
+      return this.send(res, 200, { ok: true, count: urls.length }, origin)
     }
     if (req.method === 'POST' && path === '/v1/links') {
       if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)

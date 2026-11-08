@@ -1,5 +1,5 @@
 import { setTrayConfig } from './trayConfig'
-import { app, session, type BrowserWindow } from 'electron'
+import { app, clipboard, session, type BrowserWindow } from 'electron'
 import type { AppSettings } from '../shared/types'
 import { isProxyAddress } from '../shared/networks'
 import { ClipboardWatcher } from './clipboardWatcher'
@@ -35,6 +35,7 @@ export function installLocalApi(
     onAdd: (url, extras) => offerLink(url, getWindow(), extras),
     onVideo,
     onVideoBatch,
+    readClipboard: () => clipboard.readText(),
     features: () => browserFeatures,
     onLinks: (urls, extras) => {
       const window = getWindow()

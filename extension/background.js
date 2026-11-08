@@ -58,6 +58,8 @@ async function refreshMenus() {
   update('lightning-download', on.menuDownload)
   update('lightning-scan', on.menuScan)
   update('lightning-select', on.menuScan)
+  update('lightning-clipboard', on.menuScan)
+  update('lightning-near', on.menuScan)
   return on
 }
 refreshMenus()
@@ -112,6 +114,7 @@ function problem(result) {
   if (result === 'key')
     return 'Pair the extension with Lightning: open its popup and paste the key.'
   if (result === 'off') return 'Turn on browser downloads in Lightning: Settings → Browser.'
+  if (result === 'nothing') return 'No links on the clipboard.'
   return 'Lightning could not take the link.'
 }
 
@@ -221,6 +224,16 @@ api.runtime.onInstalled.addListener(() => {
     title: 'Scan this page with Lightning',
     contexts: ['page', 'frame', 'selection']
   })
+  api.contextMenus.create({
+    id: 'lightning-clipboard',
+    title: 'Download copied links with Lightning',
+    contexts: ['all']
+  })
+  api.contextMenus.create({
+    id: 'lightning-near',
+    title: 'Download the links here with Lightning',
+    contexts: ['all']
+  })
 })
 
 /** Every link and media address on the page the person is looking at, as the browser sees it
@@ -326,6 +339,17 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     if (on.menuScan) await startSelect(tab, info.frameId)
     return
   }
+  if (info.menuItemId === 'lightning-clipboard') {
+    if (on.menuScan) {
+      const result = await sendClipboard()
+      if (result !== 'ok') notify(problem(result))
+    }
+    return
+  }
+  if (info.menuItemId === 'lightning-near') {
+    if (on.menuScan) await linksNearClick(tab, info.frameId)
+    return
+  }
   if (!on.menuDownload) return
   // A link, video or image under the mouse. On a bare page only a YouTube page is taken: the app then
   // sends it to the YouTube downloader; other pages say what to right-click.
@@ -348,6 +372,53 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   const result = await handOver(url, info.pageUrl || tab?.url)
   if (result !== 'ok') notify(problem(result))
 })
+
+/** Asks the app to take the links on the clipboard: one goes to the Add dialog, several to the list. */
+async function sendClipboard() {
+  const { key } = await settings()
+  const port = await findPort()
+  if (!port) return 'down'
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/clipboard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: '{}'
+    })
+    if (response.status === 401) return 'key'
+    if (response.status === 403) return 'off'
+    if (response.status === 400) return 'nothing'
+    return response.ok ? 'ok' : 'error'
+  } catch {
+    cachedPort = null
+    return 'down'
+  }
+}
+
+/** Downloads the links of the group the person right-clicked (a "copy links" button's list). */
+async function linksNearClick(tab, frameId) {
+  if (!tab?.id) return
+  let links = []
+  try {
+    const reply = await api.tabs.sendMessage(
+      tab.id,
+      { type: 'links-near' },
+      frameId != null ? { frameId } : undefined
+    )
+    links = Array.isArray(reply?.links) ? reply.links : []
+  } catch {
+    notify('Lightning cannot read this page.')
+    return
+  }
+  if (links.length === 0) {
+    notify('No links near that spot.')
+    return
+  }
+  const result =
+    links.length === 1
+      ? await handOver(links[0], tab.url)
+      : await sendLinksToLightning(links, tab.url)
+  if (result !== 'ok') notify(problem(result))
+}
 
 /** Turns select mode on in the page (any site). The page script is injected only when asked. */
 async function startSelect(tab, frameId) {

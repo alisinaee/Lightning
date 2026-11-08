@@ -18,6 +18,11 @@
       "matches": ["https://www.youtube.com/*"],
       "js": ["youtube-select.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["context-capture.js"],
+      "run_at": "document_start"
     }
   ],
   "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications", "scripting"],
