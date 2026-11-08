@@ -13,6 +13,13 @@
     "service_worker": "background.js",
     "scripts": ["background.js"]
   },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["youtube-select.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "browser_specific_settings": {

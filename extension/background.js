@@ -350,8 +350,36 @@ async function sendVideo(url, title) {
   }
 }
 
+/** Sends the videos the select mode picked to Lightning's YouTube downloader, as one batch. */
+async function sendYoutubeBatch(videos) {
+  const { key } = await settings()
+  const port = await findPort()
+  if (!port) return { result: 'down' }
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/youtube-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ videos: videos.slice(0, 200) })
+    })
+    if (response.status === 401) return { result: 'key' }
+    if (response.status === 403) return { result: 'off' }
+    if (!response.ok) return { result: 'error' }
+    const body = await response.json().catch(() => ({}))
+    return { result: 'ok', started: body.started ?? videos.length }
+  } catch {
+    cachedPort = null
+    return { result: 'down' }
+  }
+}
+
 // The popup asks for the app's state.
 api.runtime.onMessage.addListener((message, _sender, respond) => {
+  if (message?.type === 'youtube-batch') {
+    sendYoutubeBatch(Array.isArray(message.videos) ? message.videos : []).then((outcome) =>
+      respond({ ...outcome, message: problem(outcome.result) })
+    )
+    return true
+  }
   if (message?.type === 'status') {
     refreshMenus()
     findPort(true).then(async (port) => respond({ port, paired: !!(await settings()).key }))

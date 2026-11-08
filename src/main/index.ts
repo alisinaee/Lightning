@@ -310,7 +310,8 @@ app.whenReady().then(async () => {
   installClipboardWatcher(() => mainWindow)
   installLocalApi(
     () => mainWindow,
-    (body) => youtube?.fromBrowser(body) ?? Promise.resolve(false)
+    (body) => youtube?.fromBrowser(body) ?? Promise.resolve(false),
+    (body) => youtube?.fromBrowserBatch(body) ?? Promise.resolve(0)
   )
   await applyBehavior(await loadSettings())
   if (testKnobs.hideWindow) app.dock?.hide()

@@ -32,6 +32,8 @@ export interface LocalApiDeps {
   onLinks: (urls: string[], extras: RequestExtras) => void
   /** A video page the extension sent, for the YouTube downloader. False when the request is not valid. */
   onVideo: (body: Record<string, unknown>) => Promise<boolean>
+  /** Video pages the extension's select mode picked: each starts a YouTube download. */
+  onVideoBatch: (body: Record<string, unknown>) => Promise<number>
 }
 
 function digest(text: string): Buffer {
@@ -194,6 +196,29 @@ export class LocalApi {
       if (!(await this.deps.onVideo(body))) return this.send(res, 400, { error: 'video' }, origin)
       log.info('action', 'video page from the browser', { url: redactUrl(String(body.url ?? '')) })
       return this.send(res, 200, { ok: true }, origin)
+    }
+    if (req.method === 'POST' && path === '/v1/youtube-batch') {
+      if (!this.deps.features().menuDownload) return this.send(res, 403, { error: 'off' }, origin)
+      const text = await this.readBody(req)
+      let body: Record<string, unknown> | null = null
+      try {
+        const parsed: unknown = text === null ? null : JSON.parse(text)
+        body =
+          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
+      } catch {
+        body = null
+      }
+      if (!body || !Array.isArray(body.videos)) {
+        return this.send(res, 400, { error: 'videos' }, origin)
+      }
+      try {
+        const started = await this.deps.onVideoBatch(body)
+        log.info('action', 'youtube batch from the browser', { started })
+        return this.send(res, 200, { ok: true, started }, origin)
+      } catch (error) {
+        log.error('action', 'youtube batch from the browser failed', { error: String(error) })
+        return this.send(res, 500, { error: 'batch' }, origin)
+      }
     }
     if (req.method === 'POST' && path === '/v1/links') {
       if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)

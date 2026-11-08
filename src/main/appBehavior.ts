@@ -26,13 +26,15 @@ export const integrationPort = (): number | null => localApi?.port ?? null
  * opens in the window, for the user to start. */
 export function installLocalApi(
   getWindow: () => BrowserWindow | null,
-  onVideo: (body: Record<string, unknown>) => Promise<boolean>
+  onVideo: (body: Record<string, unknown>) => Promise<boolean>,
+  onVideoBatch: (body: Record<string, unknown>) => Promise<number>
 ): void {
   localApi = new LocalApi({
     version: app.getVersion(),
     token: integrationToken,
     onAdd: (url, extras) => offerLink(url, getWindow(), extras),
     onVideo,
+    onVideoBatch,
     features: () => browserFeatures,
     onLinks: (urls, extras) => {
       const window = getWindow()

@@ -13,7 +13,7 @@ import {
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { IpcContract } from '../../shared/ipc-contract'
 import type { ResolvedPrefs } from '../../shared/types'
-import type { YoutubeJob } from '../../shared/youtube'
+import { isYoutubeUrl, type YoutubeJob } from '../../shared/youtube'
 import { uiUpdateDelay } from '../../shared/uiThrottle'
 import { loadSettings, prefsOf } from '../settings'
 import { testKnobs } from '../testKnobs'
@@ -30,7 +30,13 @@ export interface YoutubeHandlers {
   dispose(): Promise<void>
   /** A video the browser extension sent. False when the request is not valid. */
   fromBrowser(body: Record<string, unknown>): Promise<boolean>
+  /** Video pages the browser's select mode picked. Returns how many downloads started. */
+  fromBrowserBatch(body: Record<string, unknown>): Promise<number>
 }
+
+const MAX_BATCH = 200
+// Best video and audio, merged; the same default a single download uses when no quality is picked.
+const BATCH_FORMAT = 'bv*+ba/b'
 
 function handle<K extends keyof IpcContract>(
   channel: K,
@@ -212,6 +218,24 @@ export async function registerYoutubeHandlers(
     }
     return true
   }
+  // The select mode picked several videos: each starts with the default quality, no dialog.
+  const fromBrowserBatch = async (body: Record<string, unknown>): Promise<number> => {
+    const entries = Array.isArray(body.videos) ? body.videos.slice(0, MAX_BATCH) : []
+    const seen = new Set<string>()
+    let started = 0
+    for (const entry of entries) {
+      if (typeof entry !== 'object' || entry === null) continue
+      const item = entry as Record<string, unknown>
+      const url = typeof item.url === 'string' ? item.url.trim() : ''
+      // Only YouTube addresses: the batch starts downloads with no dialog, so it must not take any site.
+      if (!isYoutubeUrl(url) || url.length > 8192 || seen.has(url)) continue
+      seen.add(url)
+      const title = typeof item.title === 'string' ? item.title.trim().slice(0, 300) : ''
+      await jobs.startJob({ url, title: title || url, formatId: BATCH_FORMAT, resolution: 'best' })
+      started++
+    }
+    return started
+  }
   handle('youtubeListJobs', async () => jobs.listJobs())
   handle('youtubePauseJob', async (_event, id) => jobs.pauseJob(id))
   handle('youtubeResumeJob', async (_event, id) => jobs.resumeJob(id))
@@ -227,7 +251,8 @@ export async function registerYoutubeHandlers(
         if (entry.timer) clearTimeout(entry.timer)
       }
     },
-    fromBrowser
+    fromBrowser,
+    fromBrowserBatch
   }
 }
 
