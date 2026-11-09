@@ -1,4 +1,4 @@
-import type { IntegrationInfo } from '@shared/types'
+import type { BrowserInfo, IntegrationInfo } from '@shared/types'
 import { useEffect, useState } from 'react'
 import { describeError } from '../utils/format'
 import { Button } from './ui/button'
@@ -25,6 +25,24 @@ export function BrowserPage({
   const [info, setInfo] = useState<IntegrationInfo | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [browsers, setBrowsers] = useState<BrowserInfo[] | null>(null)
+  // The browser whose extensions page was just opened: its steps show below the buttons.
+  const [opened, setOpened] = useState<BrowserInfo | null>(null)
+
+  useEffect(() => {
+    void window.lightning
+      .listBrowsers()
+      .then(setBrowsers)
+      .catch(() => setBrowsers([]))
+  }, [])
+
+  const addTo = (browser: BrowserInfo): void => {
+    setError(null)
+    void window.lightning
+      .addExtensionToBrowser(browser.id)
+      .then(() => setOpened(browser))
+      .catch((cause) => setError(describeError(cause)))
+  }
 
   useEffect(() => {
     // The server starts a moment after it is switched on: asked again once it has had it.
@@ -54,8 +72,49 @@ export function BrowserPage({
       </label>
       <p className="text-[12px] leading-snug text-muted-foreground">
         Lightning listens on this computer only (127.0.0.1) and answers only the extension, and only
-        with the key below. Install the extension from the folder, then paste the key into it once.
+        with the key below. The extension Lightning sets up already has the key: nothing to paste.
       </p>
+      <div className="mt-1 flex flex-col gap-2.5 rounded-xl border-[0.5px] border-border p-3">
+        <div className="text-[12px] font-medium text-muted-foreground">Add the extension</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {browsers?.map((browser) => (
+            <Button key={browser.id} type="button" variant="outline" onClick={() => addTo(browser)}>
+              {browser.icon && (
+                <img src={browser.icon} alt="" className="size-4" draggable={false} />
+              )}
+              Add to {browser.name}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+            onClick={() =>
+              void window.lightning
+                .openExtensionFolder()
+                .then(() => setOpened(null))
+                .catch((cause) => setError(describeError(cause)))
+            }
+          >
+            Show the extension folder
+          </Button>
+        </div>
+        {opened && <BrowserSteps guide={guideFor(opened.id)} />}
+        <div className="text-[12px] text-muted-foreground">
+          The extension is kept in Documents → Lightning Extension, updated with the app, and pairs
+          by itself.
+        </div>
+        <details className="group text-[12px]">
+          <summary className="cursor-default list-none text-muted-foreground select-none hover:text-foreground">
+            <span className="inline-block transition-transform group-open:rotate-90">›</span> Steps
+            for every browser
+          </summary>
+          <div className="mt-2 flex flex-col gap-3">
+            {GUIDES.map((guide) => (
+              <BrowserSteps key={guide.id} guide={guide} titled />
+            ))}
+          </div>
+        </details>
+      </div>
       <div className="mt-1 text-[12px] font-medium text-muted-foreground">
         What the extension may do
       </div>
@@ -124,24 +183,74 @@ export function BrowserPage({
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            void window.lightning
-              .openExtensionFolder()
-              .catch((cause) => setError(describeError(cause)))
-          }
-        >
-          Open the extension folder
-        </Button>
-        <span className="text-[12px] text-muted-foreground">
-          Chrome, Edge, Brave: Extensions → Developer mode → Load unpacked. Firefox: about:debugging
-          → Load Temporary Add-on → manifest.json.
-        </span>
-      </div>
       {error && <div className="text-[12px] text-destructive">{error}</div>}
+    </div>
+  )
+}
+
+interface BrowserGuide {
+  id: string
+  name: string
+  steps: string[]
+  note?: string
+}
+
+const CHROMIUM_STEPS = (page: string): string[] => [
+  `Open ${page} (the Add button does this for you).`,
+  'Turn on Developer mode (a switch on that page).',
+  'Drag the “Lightning Extension” folder from Finder onto the page, or click Load unpacked and choose it.'
+]
+
+/** How to add the extension in each widely used browser. */
+const GUIDES: BrowserGuide[] = [
+  { id: 'chrome', name: 'Chrome', steps: CHROMIUM_STEPS('chrome://extensions') },
+  { id: 'edge', name: 'Edge', steps: CHROMIUM_STEPS('edge://extensions') },
+  { id: 'brave', name: 'Brave', steps: CHROMIUM_STEPS('brave://extensions') },
+  { id: 'arc', name: 'Arc', steps: CHROMIUM_STEPS('arc://extensions') },
+  { id: 'opera', name: 'Opera', steps: CHROMIUM_STEPS('opera://extensions') },
+  { id: 'vivaldi', name: 'Vivaldi', steps: CHROMIUM_STEPS('vivaldi://extensions') },
+  {
+    id: 'firefox',
+    name: 'Firefox',
+    steps: [
+      'Open about:debugging (the Add button does this for you) and click “This Firefox”.',
+      'Click “Load Temporary Add-on…” and choose manifest.json inside “Lightning Extension”.'
+    ],
+    note: 'Firefox removes it when it quits: add it again after a restart.'
+  },
+  {
+    id: 'safari',
+    name: 'Safari',
+    steps: [
+      'Safari → Settings → Advanced: turn on “Show features for web developers”.',
+      'Safari → Settings → Developer: turn on “Allow unsigned extensions”.',
+      'On the same tab, click “Add Temporary Extension…” and choose the “Lightning Extension” folder.',
+      'Safari → Settings → Extensions: switch Lightning on and allow it on all websites.'
+    ],
+    note: 'Needs Safari 18 or later. Safari removes it when it quits.'
+  }
+]
+
+function guideFor(id: string): BrowserGuide {
+  return GUIDES.find((guide) => guide.id === id) ?? GUIDES[0]
+}
+
+function BrowserSteps({
+  guide,
+  titled = false
+}: {
+  guide: BrowserGuide
+  titled?: boolean
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-1">
+      {titled && <div className="font-medium text-foreground">{guide.name}</div>}
+      <ol className="list-decimal pl-5 leading-relaxed text-muted-foreground">
+        {guide.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {guide.note && <div className="pl-5 text-muted-foreground">{guide.note}</div>}
     </div>
   )
 }

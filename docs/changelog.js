@@ -14,6 +14,11 @@
       items: [
         {
           kind: 'new',
+          title: 'Add the extension in a click',
+          text: 'Settings → Browser has a button for each browser on your Mac, with its icon. The extension is set up in Documents and pairs by itself — no key to paste. Steps for Chrome, Edge, Brave, Arc, Opera, Vivaldi, Firefox and Safari are listed there.'
+        },
+        {
+          kind: 'new',
           title: 'Settings in its own window',
           text: 'Settings opens beside the main window, in clean grouped lists, so you can keep working while you change things.'
         },

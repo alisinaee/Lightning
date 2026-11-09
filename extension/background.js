@@ -9,8 +9,37 @@ let cachedPort = null
 // Links the browser is allowed to download itself (the app was not there to take them).
 const letThrough = new Set()
 
+/** The key Lightning wrote beside these files when it set them up ('' when there is none). */
+async function bundledKey() {
+  try {
+    const response = await fetch(api.runtime.getURL('pairing.json'), { cache: 'no-store' })
+    if (!response.ok) return ''
+    const { key } = await response.json()
+    return typeof key === 'string' && /^[0-9a-f]{64}$/.test(key) ? key : ''
+  } catch {
+    return ''
+  }
+}
+
 async function settings() {
-  return { ...DEFAULTS, ...(await api.storage.local.get(DEFAULTS)) }
+  const saved = { ...DEFAULTS, ...(await api.storage.local.get(DEFAULTS)) }
+  if (!saved.key) {
+    // Pairs by itself when Lightning put its key here: nothing to paste.
+    const key = await bundledKey()
+    if (key) {
+      await api.storage.local.set({ key })
+      saved.key = key
+    }
+  }
+  return saved
+}
+
+/** After Lightning made a new key it rewrites pairing.json: picks that up. True when it changed. */
+async function repair(oldKey) {
+  const key = await bundledKey()
+  if (!key || key === oldKey) return false
+  await api.storage.local.set({ key })
+  return true
 }
 
 /** Finds the port Lightning answers on; null when the app is not running. */
@@ -76,7 +105,7 @@ async function sendToLightning(payload) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(payload)
     })
-    if (response.status === 401) return 'key'
+    if (response.status === 401) { await repair(key); return 'key' }
     return response.ok ? 'ok' : 'error'
   } catch {
     cachedPort = null
@@ -85,7 +114,7 @@ async function sendToLightning(payload) {
 }
 
 /** Whether the key is right, without sending a link: 'ok', 'key', 'down' or 'error'. */
-async function checkKey() {
+async function checkKey(retried = false) {
   const { key } = await settings()
   const port = await findPort()
   if (!port) return 'down'
@@ -93,7 +122,7 @@ async function checkKey() {
     const response = await fetch(`http://127.0.0.1:${port}/v1/auth`, {
       headers: { Authorization: `Bearer ${key}` }
     })
-    if (response.status === 401) return 'key'
+    if (response.status === 401) return !retried && (await repair(key)) ? checkKey(true) : 'key'
     return response.ok ? 'ok' : 'error'
   } catch {
     return 'down'
@@ -290,7 +319,7 @@ async function sendLinksToLightning(links, pageUrl) {
         userAgent: navigator.userAgent
       })
     })
-    if (response.status === 401) return 'key'
+    if (response.status === 401) { await repair(key); return 'key' }
     return response.ok ? 'ok' : 'error'
   } catch {
     cachedPort = null
@@ -364,7 +393,7 @@ async function sendClipboard() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: '{}'
     })
-    if (response.status === 401) return 'key'
+    if (response.status === 401) { await repair(key); return 'key' }
     if (response.status === 403) return 'off'
     if (response.status === 400) return 'nothing'
     return response.ok ? 'ok' : 'error'
@@ -424,7 +453,7 @@ async function sendYoutubeBatch(videos) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ videos: videos.slice(0, 200) })
     })
-    if (response.status === 401) return { result: 'key' }
+    if (response.status === 401) { await repair(key); return { result: 'key' } }
     if (response.status === 403) return { result: 'off' }
     if (!response.ok) return { result: 'error' }
     const body = await response.json().catch(() => ({}))
