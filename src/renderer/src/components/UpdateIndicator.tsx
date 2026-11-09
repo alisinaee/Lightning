@@ -1,6 +1,7 @@
 import { ArrowCircleUp as CircleArrowUp } from '@phosphor-icons/react'
 import { useAppStore } from '../store/useAppStore'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t } from '@shared/i18n/react'
 
 /** Sits next to ThemeToggle once the banner has been dismissed — same size/shape, so it reads as
  * part of the same row of controls, but in the accent colour and blinking so an update isn't missed. */
@@ -19,7 +20,7 @@ export function UpdateIndicator(): React.JSX.Element | null {
             href={availableUpdate.url}
             target="_blank"
             rel="noreferrer"
-            aria-label={`Update available: ${availableUpdate.version}`}
+            aria-label={t('Update available: {version}', { version: availableUpdate.version })}
             className="relative flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-[0.5px] border-primary/60 bg-primary/10 text-primary [-webkit-app-region:no-drag]"
           >
             {/* Blinks to be noticed, but only for people who haven't asked for less motion. */}
@@ -31,7 +32,7 @@ export function UpdateIndicator(): React.JSX.Element | null {
           </a>
         }
       />
-      <TooltipContent>New update available</TooltipContent>
+      <TooltipContent>{t('New update available')}</TooltipContent>
     </Tooltip>
   )
 }

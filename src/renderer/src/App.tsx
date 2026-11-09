@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
 import { useEffect } from 'react'
 import { AppSidebar } from './components/AppSidebar'
@@ -201,8 +202,10 @@ function App(): React.JSX.Element {
           } else {
             window.alert(
               result === 'current'
-                ? `You have the latest version (${window.lightning.initialState.version}).`
-                : 'Couldn’t reach GitHub. Check your connection and try again.'
+                ? t('You have the latest version ({version}).', {
+                    version: window.lightning.initialState.version
+                  })
+                : t('Couldn’t reach GitHub. Check your connection and try again.')
             )
           }
         })

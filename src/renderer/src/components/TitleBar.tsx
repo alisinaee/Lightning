@@ -4,6 +4,7 @@ import { useLogsStore } from '../store/useLogsStore'
 import { useLabStore } from '../store/useLabStore'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { Button } from './ui/button'
+import { t } from '@shared/i18n/react'
 
 const isMac = window.lightning.platform === 'darwin'
 
@@ -16,12 +17,12 @@ function Debug(): React.JSX.Element {
     <Button
       variant={open ? 'secondary' : 'ghost'}
       size="xs"
-      aria-label="Debug: open the Test lab"
+      aria-label={t('Debug: open the Test lab')}
       aria-pressed={open}
       onClick={() => setOpen(!open)}
     >
       <BugIcon data-icon="inline-start" className={running ? 'animate-pulse text-sky-500' : ''} />
-      Debug
+      {t('Debug')}
     </Button>
   )
 }
@@ -34,12 +35,12 @@ function Logs(): React.JSX.Element {
     <Button
       variant={open ? 'secondary' : 'ghost'}
       size="xs"
-      aria-label="Open the logs"
+      aria-label={t('Open the logs')}
       aria-pressed={open}
       onClick={() => setOpen(true)}
     >
       <ScrollTextIcon data-icon="inline-start" />
-      Logs
+      {t('Logs')}
     </Button>
   )
 }

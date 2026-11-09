@@ -1,4 +1,5 @@
 import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
+import { t } from '@shared/i18n/react'
 import { EmptyStatusIcon } from '../components/EmptyIcon'
 import { TelegramIcon } from '../components/telegram/TelegramIcon'
 import { ListPlus, Plus, Warning as TriangleAlert, User, X } from '@phosphor-icons/react'
@@ -30,12 +31,12 @@ interface Entry {
   group: boolean
 }
 
-const EMPTY_FILTERED: Record<TelegramJobFilter, string> = {
-  all: 'Nothing matches',
-  active: 'No Telegram downloads in progress',
-  finished: 'No finished Telegram downloads',
-  failed: 'No Telegram downloads need attention'
-}
+const emptyFiltered = (): Record<TelegramJobFilter, string> => ({
+  all: t('Nothing matches'),
+  active: t('No Telegram downloads in progress'),
+  finished: t('No finished Telegram downloads'),
+  failed: t('No Telegram downloads need attention')
+})
 
 const matchesJob = (job: TdlJob, filter: TelegramJobFilter): boolean =>
   filter === 'all' ||
@@ -164,7 +165,7 @@ export function TelegramScreen({
   }, [entries, setSelected])
 
   const ready = status?.binary && status.loggedIn
-  const accountLabel = status?.loggedIn ? (status.account ?? 'Signed in') : 'Sign in'
+  const accountLabel = status?.loggedIn ? (status.account ?? t('Signed in')) : t('Sign in')
 
   return (
     <div className="flex h-full min-w-0 flex-1 bg-background">
@@ -175,25 +176,25 @@ export function TelegramScreen({
             <h1 className="sr-only">Telegram</h1>
             <PauseAllButton
               pausing={pausing}
-              resumeLabel="Resume all"
+              resumeLabel={t('Resume all')}
               disabled={pausing ? false : paused.length === 0}
               onPause={() => act(running, window.lightning.tdlPauseJob)}
               onResume={() => act(paused, window.lightning.tdlResumeJob)}
             />
             <NetworksMenu onOpenLimits={openLimits} />
             <NewMenu
-              label="New download"
+              label={t('New download')}
               disabled={!ready}
               items={[
-                { label: 'Telegram links', icon: Plus, run: () => openAdd() },
-                { label: 'Export a chat', icon: ListPlus, run: openExport }
+                { label: t('Telegram links'), icon: Plus, run: () => openAdd() },
+                { label: t('Export a chat'), icon: ListPlus, run: openExport }
               ]}
             />
             {/* After the + button, so a VPN turning up doesn't move it. */}
             <VpnControl />
             <div className="flex-1" />
             <SearchField
-              label="Search Telegram downloads"
+              label={t('Search Telegram downloads')}
               value={search}
               onChange={(value) => {
                 setSearch(value)
@@ -212,7 +213,7 @@ export function TelegramScreen({
                     variant="secondary"
                     disabled={!status?.binary}
                     onClick={() => openLogin()}
-                    aria-label={`Telegram account: ${accountLabel}`}
+                    aria-label={t('Telegram account: {account}', { account: accountLabel })}
                     className="max-w-[160px]"
                   >
                     <User data-icon="inline-start" />
@@ -221,28 +222,28 @@ export function TelegramScreen({
                 }
               />
               <TooltipContent>
-                {status?.loggedIn ? 'Telegram account' : 'Sign in to Telegram'}
+                {status?.loggedIn ? t('Telegram account') : t('Sign in to Telegram')}
               </TooltipContent>
             </Tooltip>
-            <SettingsButton label="Settings" onClick={() => onOpenSettings('Telegram')} />
+            <SettingsButton label={t('Settings')} onClick={() => onOpenSettings('Telegram')} />
           </div>
         ) : (
           <div
             role="toolbar"
-            aria-label="Selected jobs"
+            aria-label={t('Selected jobs')}
             className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
           >
             <Button
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="Deselect all"
+              aria-label={t('Deselect all')}
               onClick={() => setSelected(new Set())}
             >
               <X />
             </Button>
             <span className="shrink-0 text-[13px] font-semibold whitespace-nowrap">
-              {chosen.length} selected
+              {t('{count} selected', { count: chosen.length })}
             </span>
             <div className="flex-1" />
             {pausable.length > 0 && (
@@ -252,7 +253,7 @@ export function TelegramScreen({
                 variant="secondary"
                 onClick={() => act(pausable, window.lightning.tdlPauseJob)}
               >
-                Pause ({pausable.length})
+                {t('Pause ({count})', { count: pausable.length })}
               </Button>
             )}
             {resumable.length > 0 && (
@@ -262,7 +263,7 @@ export function TelegramScreen({
                 variant="secondary"
                 onClick={() => act(resumable, window.lightning.tdlResumeJob)}
               >
-                Resume ({resumable.length})
+                {t('Resume ({count})', { count: resumable.length })}
               </Button>
             )}
             {retryable.length > 0 && (
@@ -272,17 +273,17 @@ export function TelegramScreen({
                 variant="secondary"
                 onClick={() => act(retryable, window.lightning.tdlRetryJob)}
               >
-                Retry ({retryable.length})
+                {t('Retry ({count})', { count: retryable.length })}
               </Button>
             )}
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              title="Takes them off the list; the files stay on your computer"
+              title={t('Takes them off the list; the files stay on your computer')}
               onClick={removeChosen}
             >
-              Remove from list ({chosen.length})
+              {t('Remove from list ({count})', { count: chosen.length })}
             </Button>
           </div>
         )}
@@ -293,30 +294,34 @@ export function TelegramScreen({
           <div className="p-4">
             <Alert variant="destructive">
               <TriangleAlert />
-              <AlertTitle>The Telegram downloader is missing</AlertTitle>
+              <AlertTitle>{t('The Telegram downloader is missing')}</AlertTitle>
               <AlertDescription>
-                Lightning couldn’t start its bundled tdl program, so Telegram downloads are
-                unavailable. Reinstalling Lightning restores it.
+                {t(
+                  'Lightning couldn’t start its bundled tdl program, so Telegram downloads are unavailable. Reinstalling Lightning restores it.'
+                )}
               </AlertDescription>
             </Alert>
           </div>
         ) : !status.loggedIn ? (
           <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
             <TelegramIcon className="size-14" />
-            <div className="font-sans text-[16px] leading-[1.2] font-bold">Sign in to Telegram</div>
+            <div className="font-sans text-[16px] leading-[1.2] font-bold">
+              {t('Sign in to Telegram')}
+            </div>
             <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-              Lightning downloads the files in messages you can see in your Telegram account. Choose
-              how to sign in.
+              {t(
+                'Lightning downloads the files in messages you can see in your Telegram account. Choose how to sign in.'
+              )}
             </div>
             <div className="mt-1 flex flex-wrap justify-center gap-2">
               <Button type="button" onClick={() => openLogin('qr')}>
-                QR code
+                {t('QR code')}
               </Button>
               <Button type="button" variant="secondary" onClick={() => openLogin('code')}>
-                Phone number
+                {t('Phone number')}
               </Button>
               <Button type="button" variant="secondary" onClick={() => openLogin('desktop')}>
-                Telegram Desktop
+                {t('Telegram Desktop')}
               </Button>
             </div>
           </div>
@@ -325,7 +330,7 @@ export function TelegramScreen({
             <div
               ref={listRef}
               role="table"
-              aria-label="Telegram downloads"
+              aria-label={t('Telegram downloads')}
               className="flex min-h-0 flex-1 flex-col overflow-hidden"
             >
               {entries.length > 0 && (
@@ -336,7 +341,7 @@ export function TelegramScreen({
                 >
                   <div role="columnheader" className="flex items-center justify-center">
                     <Checkbox
-                      aria-label="Select all"
+                      aria-label={t('Select all')}
                       checked={entries.length > 0 && entries.every((e) => selected.has(e.job.id))}
                       onCheckedChange={(on) =>
                         setSelected(on ? new Set(entries.map((entry) => entry.job.id)) : new Set())
@@ -344,25 +349,25 @@ export function TelegramScreen({
                     />
                   </div>
                   <div role="columnheader" className="px-2">
-                    Name
+                    {t('Name')}
                   </div>
-                  <div role="columnheader" className="px-2 text-right">
-                    Size
+                  <div role="columnheader" className="px-2 text-end">
+                    {t('Size')}
                   </div>
                   <div role="columnheader" className="px-2">
-                    Status
+                    {t('Status')}
                   </div>
-                  <div role="columnheader" className="px-2 text-right">
-                    Speed
+                  <div role="columnheader" className="px-2 text-end">
+                    {t('Speed')}
                   </div>
                   {columns.eta && (
-                    <div role="columnheader" className="px-2 text-right">
-                      Time left
+                    <div role="columnheader" className="px-2 text-end">
+                      {t('Time left')}
                     </div>
                   )}
                   {columns.added && (
                     <div role="columnheader" className="px-2">
-                      Added
+                      {t('Added')}
                     </div>
                   )}
                   <div role="columnheader" />
@@ -372,7 +377,7 @@ export function TelegramScreen({
                 {entries.length === 0 ? (
                   <EmptyList
                     nothingAtAll={allJobs.length === 0}
-                    message={EMPTY_FILTERED[jobFilter]}
+                    message={emptyFiltered()[jobFilter]}
                     filter={jobFilter}
                     onAdd={() => openAdd()}
                     onExport={openExport}
@@ -405,7 +410,7 @@ export function TelegramScreen({
           </columnsContext.Provider>
         )}
         <div className="shrink-0 border-t-[0.5px] border-border px-3 py-1.5 text-[11.5px] text-muted-foreground">
-          Telegram downloads use the default connection.
+          {t('Telegram downloads use the default connection.')}
         </div>
       </div>
     </div>
@@ -446,19 +451,22 @@ function EmptyList({
   return (
     <div className="flex flex-col items-center gap-4 px-5 pt-16 pb-10 text-center">
       <TelegramIcon className="size-14" />
-      <div className="font-sans text-[16px] leading-[1.2] font-bold">No Telegram downloads yet</div>
+      <div className="font-sans text-[16px] leading-[1.2] font-bold">
+        {t('No Telegram downloads yet')}
+      </div>
       <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-        Copy a link to a Telegram message and Lightning offers to download it, or add links and
-        whole chats here.
+        {t(
+          'Copy a link to a Telegram message and Lightning offers to download it, or add links and whole chats here.'
+        )}
       </div>
       <div className="mt-1 flex gap-2">
         <Button type="button" onClick={onAdd}>
           <Plus data-icon="inline-start" />
-          Add links
+          {t('Add links')}
         </Button>
         <Button type="button" variant="secondary" onClick={onExport}>
           <ListPlus data-icon="inline-start" />
-          Export chat…
+          {t('Export chat…')}
         </Button>
       </div>
     </div>

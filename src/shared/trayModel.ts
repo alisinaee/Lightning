@@ -1,4 +1,5 @@
 import { isVpn } from './networks'
+import { t, tn } from './i18n'
 import type { DownloadState, StatusBarPrefs } from './types'
 
 /** What the menu of the menu-bar icon holds, before it becomes a native menu: kept apart so it is
@@ -172,8 +173,11 @@ export function buildTrayModel(
       kind: 'info',
       text:
         running.length === 0
-          ? 'Nothing is downloading'
-          : `${running.length} downloading · ↓ ${formatSpeed(speed)}`
+          ? t('Nothing is downloading')
+          : t('{count} downloading · ↓ {speed}', {
+              count: running.length,
+              speed: formatSpeed(speed)
+            })
     })
   }
 
@@ -206,7 +210,7 @@ export function buildTrayModel(
       .sort((a, b) => b.speed - a.speed)) {
       lines.push({
         kind: 'info',
-        text: `   ${clip(row.label, 24)}  ${formatSpeed(row.speed)} · ${row.open} ${row.open === 1 ? 'connection' : 'connections'}`
+        text: `   ${clip(row.label, 24)}  ${formatSpeed(row.speed)} · ${tn(row.open, '{count} connection', '{count} connections')}`
       })
     }
   }
@@ -223,7 +227,10 @@ export function buildTrayModel(
       })
     }
     if (ranked.length > prefs.trayRows) {
-      lines.push({ kind: 'info', text: `…and ${ranked.length - prefs.trayRows} more` })
+      lines.push({
+        kind: 'info',
+        text: t('…and {count} more', { count: ranked.length - prefs.trayRows })
+      })
     }
   }
 
@@ -232,9 +239,9 @@ export function buildTrayModel(
     lines.push({
       kind: 'info',
       text: [
-        queued > 0 && `${queued} waiting`,
-        paused > 0 && `${paused} paused`,
-        failed > 0 && `${failed} failed`
+        queued > 0 && t('{count} waiting', { count: queued }),
+        paused > 0 && t('{count} paused', { count: paused }),
+        failed > 0 && t('{count} failed', { count: failed })
       ]
         .filter(Boolean)
         .join(' · ')

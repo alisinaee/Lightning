@@ -13,6 +13,7 @@ import { DnsTestDialog } from './DnsTestDialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { t } from '@shared/i18n/react'
 
 /** Choosing the DNS to look names up with: the system's, a saved one, or a new one to add. The
  * choice made is remembered by name, most recent first. `value` null means "follow what is
@@ -61,7 +62,7 @@ export function DnsPicker({
       setError(
         failure instanceof Error
           ? failure.message.replace(/^Error invoking.*?: /, '')
-          : 'Could not save'
+          : t('Could not save')
       )
     }
   }
@@ -106,15 +107,15 @@ export function DnsPicker({
             )}
             <Row
               selected={value === 'system'}
-              title="System DNS"
-              hint="What your computer uses"
+              title={t('System DNS')}
+              hint={t('What your computer uses')}
               note={SYSTEM_DESCRIPTION}
               onClick={() => choose('system')}
             />
             <Row
               selected={value === 'auto'}
-              title="Auto"
-              hint="The best DNS found for each site"
+              title={t('Auto')}
+              hint={t('The best DNS found for each site')}
               note={AUTO_DESCRIPTION}
               onClick={() => choose('auto')}
             />
@@ -135,7 +136,7 @@ export function DnsPicker({
               return (
                 <div key={group}>
                   <div className="px-2 pt-2 pb-1 text-[11px] text-muted-foreground">
-                    {group === 'iran' ? 'Well-known · Iran' : 'Well-known · Worldwide'}
+                    {group === 'iran' ? t('Well-known · Iran') : t('Well-known · Worldwide')}
                   </div>
                   {list.map((preset) => (
                     <Row
@@ -162,7 +163,7 @@ export function DnsPicker({
                 className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-[12.5px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Gauge aria-hidden className="size-3.5" />
-                Test DNS for this site…
+                {t('Test DNS for this site…')}
               </button>
             )}
             {adding ? (
@@ -175,14 +176,15 @@ export function DnsPicker({
               >
                 <Input
                   autoFocus
-                  aria-label="DNS name"
-                  placeholder="Name, e.g. Office"
+                  aria-label={t('DNS name')}
+                  placeholder={t('Name, e.g. Office')}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
                 <Input
-                  aria-label="DNS servers"
-                  placeholder="Servers, e.g. 1.1.1.1, 1.0.0.1"
+                  aria-label={t('DNS servers')}
+                  placeholder={t('Servers, e.g. 1.1.1.1, 1.0.0.1')}
+                  dir="ltr"
                   value={servers}
                   onChange={(event) => setServers(event.target.value)}
                   className="font-mono text-[12px]"
@@ -190,10 +192,10 @@ export function DnsPicker({
                 {error && <div className="text-[11.5px] text-destructive">{error}</div>}
                 <div className="flex justify-end gap-2">
                   <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
-                    Cancel
+                    {t('Cancel')}
                   </Button>
                   <Button type="submit" size="sm">
-                    Save and use
+                    {t('Save and use')}
                   </Button>
                 </div>
               </form>
@@ -204,7 +206,7 @@ export function DnsPicker({
                 className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-[12.5px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus aria-hidden className="size-3.5" />
-                Add a DNS…
+                {t('Add a DNS…')}
               </button>
             )}
           </div>
@@ -234,7 +236,7 @@ function Row({
       <button
         type="button"
         onClick={onClick}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="size-4 shrink-0">
           {selected && <Check aria-hidden className="size-4 text-primary" />}
@@ -242,7 +244,10 @@ function Row({
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-[13px] leading-none font-medium">{title}</span>
           {hint && (
-            <span className="truncate font-mono text-[11px] leading-none text-muted-foreground">
+            <span
+              dir="ltr"
+              className="truncate font-mono text-[11px] leading-none text-muted-foreground rtl:text-end"
+            >
               {hint}
             </span>
           )}
@@ -252,9 +257,9 @@ function Row({
       {onRemove && (
         <button
           type="button"
-          aria-label={`Forget ${title}`}
+          aria-label={t('Forget {title}', { title })}
           onClick={onRemove}
-          className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none group-hover/row:opacity-100 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+          className="me-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none group-hover/row:opacity-100 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Trash2 aria-hidden className="size-3.5" />
         </button>

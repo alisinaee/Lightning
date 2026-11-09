@@ -13,6 +13,7 @@ import type {
 } from '../shared/youtube'
 import type {
   AppSettings,
+  ClipboardHistoryEntry,
   DnsConfig,
   DownloadUpdate,
   GroupPatch,
@@ -164,6 +165,19 @@ const lightningApi = {
   checkForUpdate: () => invoke('checkForUpdate'),
   checkForUpdateNow: () => invoke('checkForUpdateNow'),
   takePendingLink: () => invoke('takePendingLink'),
+  getClipboardHistory: () => invoke('getClipboardHistory'),
+  removeClipboardEntry: (id: string) => invoke('removeClipboardEntry', id),
+  clearClipboardHistory: () => invoke('clearClipboardHistory'),
+  downloadClipboardEntry: (id: string) => invoke('downloadClipboardEntry', id),
+  /** The clipboard history changed (a link was noticed, removed or cleared): the new list. */
+  onClipboardHistoryChanged: (
+    callback: (entries: ClipboardHistoryEntry[]) => void
+  ): (() => void) => {
+    const listener = (_event: IpcRendererEvent, entries: ClipboardHistoryEntry[]): void =>
+      callback(entries)
+    ipcRenderer.on(IpcChannels.clipboardHistoryChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.clipboardHistoryChanged, listener)
+  },
   labList: () => invoke('labList'),
   labGetState: () => invoke('labGetState'),
   labRun: (planId: string) => invoke('labRun', planId),

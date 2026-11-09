@@ -1,5 +1,6 @@
 import type { NetworkInterfaceKind, UsageHistoryResult } from '@shared/types'
 import { useEffect, useMemo, useState } from 'react'
+import { t, formatDate, formatTime } from '@shared/i18n/react'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes } from '../utils/format'
@@ -34,13 +35,8 @@ const HEIGHT = 150
 
 function when(time: number, bucketMs: number): string {
   const date = new Date(time)
-  if (bucketMs >= DAY) return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  if (bucketMs >= DAY) return formatDate(date, { month: 'short', day: 'numeric' })
+  return `${formatDate(date, { month: 'short', day: 'numeric' })} ${formatTime(date, { hour: '2-digit', minute: '2-digit' })}`
 }
 
 /** What each network received over a time range: a chart by network, each network's total, and
@@ -90,10 +86,11 @@ export function UsageSettings(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <div className="text-[15px] font-semibold">Data usage</div>
+        <div className="text-[15px] font-semibold">{t('Data usage')}</div>
         <div className="text-[12.5px] text-muted-foreground">
-          What each connection received, and which files used it. Counted from the first time this
-          version ran.
+          {t(
+            'What each connection received, and which files used it. Counted from the first time this version ran.'
+          )}
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -106,7 +103,7 @@ export function UsageSettings(): React.JSX.Element {
               range === choice ? 'bg-primary/15 font-medium' : 'bg-secondary hover:bg-secondary/70'
             }`}
           >
-            {choice.label}
+            {t(choice.label)}
           </button>
         ))}
       </div>
@@ -118,7 +115,7 @@ export function UsageSettings(): React.JSX.Element {
             network === null ? 'bg-primary/15 font-medium' : 'bg-secondary hover:bg-secondary/70'
           }`}
         >
-          All connections
+          {t('All connections')}
         </button>
         {networks.map(([id]) => (
           <button
@@ -137,9 +134,14 @@ export function UsageSettings(): React.JSX.Element {
 
       <div className="rounded-lg border-[0.5px] border-border p-3">
         <div className="mb-2 flex items-baseline justify-between">
-          <div className="text-[22px] font-semibold">{formatBytes(data?.total ?? 0)}</div>
+          <div dir="ltr" className="text-[22px] font-semibold">
+            {formatBytes(data?.total ?? 0)}
+          </div>
           <div className="text-[12px] text-muted-foreground">
-            peak {formatBytes(peak > 1 ? peak : 0)} per {formatSlice(range.bucketMs)}
+            {t('peak {size} per {slice}', {
+              size: formatBytes(peak > 1 ? peak : 0),
+              slice: formatSlice(range.bucketMs)
+            })}
           </div>
         </div>
         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-[150px] w-full" role="img">
@@ -184,16 +186,16 @@ export function UsageSettings(): React.JSX.Element {
         {series.length > 0 && (
           <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
             <span>{when(series[0].time, range.bucketMs)}</span>
-            <span>now</span>
+            <span>{t('now')}</span>
           </div>
         )}
       </div>
 
-      <div className="text-[12px] font-medium text-muted-foreground">By connection</div>
+      <div className="text-[12px] font-medium text-muted-foreground">{t('By connection')}</div>
       <div className="flex flex-col gap-1.5">
         {networks.length === 0 && (
           <div className="text-[12.5px] text-muted-foreground">
-            Nothing downloaded in this time.
+            {t('Nothing downloaded in this time.')}
           </div>
         )}
         {networks.map(([id, bytes]) => (
@@ -212,13 +214,15 @@ export function UsageSettings(): React.JSX.Element {
                 }}
               />
             </div>
-            <span className="w-20 shrink-0 text-right tabular-nums">{formatBytes(bytes)}</span>
+            <span dir="ltr" className="w-20 shrink-0 text-end tabular-nums">
+              {formatBytes(bytes)}
+            </span>
           </div>
         ))}
       </div>
 
       <div className="mt-1 text-[12px] font-medium text-muted-foreground">
-        By file{network ? ` · ${visual(network).name}` : ''}
+        {network ? t('By file · {name}', { name: visual(network).name }) : t('By file')}
       </div>
       <div className="flex flex-col">
         {(data?.files ?? []).slice(0, 50).map((file) => (
@@ -226,7 +230,7 @@ export function UsageSettings(): React.JSX.Element {
             key={file.id}
             className="flex items-center gap-2 border-t-[0.5px] border-border py-1.5 text-[12.5px] first:border-t-0"
           >
-            <span className="min-w-0 flex-1 truncate" title={file.name}>
+            <span dir="auto" className="min-w-0 flex-1 truncate" title={file.name}>
               {file.name}
             </span>
             <span className="flex shrink-0 gap-0.5">
@@ -242,7 +246,9 @@ export function UsageSettings(): React.JSX.Element {
                 />
               ))}
             </span>
-            <span className="w-20 shrink-0 text-right tabular-nums">{formatBytes(file.bytes)}</span>
+            <span dir="ltr" className="w-20 shrink-0 text-end tabular-nums">
+              {formatBytes(file.bytes)}
+            </span>
           </div>
         ))}
       </div>
@@ -255,7 +261,7 @@ function sum(values: Record<string, number>): number {
 }
 
 function formatSlice(bucketMs: number): string {
-  if (bucketMs >= DAY) return 'day'
-  if (bucketMs >= HOUR) return `${bucketMs / HOUR} h`
-  return `${bucketMs / MINUTE} min`
+  if (bucketMs >= DAY) return t('day')
+  if (bucketMs >= HOUR) return t('{count} h', { count: bucketMs / HOUR })
+  return t('{count} min', { count: bucketMs / MINUTE })
 }

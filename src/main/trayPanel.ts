@@ -6,6 +6,7 @@ import { shouldClosePanel } from '../shared/panelFocus'
 import { buildPanelState, type PanelAction } from '../shared/trayPanel'
 import type { DownloadState } from '../shared/types'
 import { getTrayConfig } from './trayConfig'
+import { getLanguage, onLanguageChange } from '../shared/i18n'
 
 const WIDTH = 340
 const MIN_HEIGHT = 160
@@ -150,10 +151,13 @@ export function createTrayPanel(deps: {
         networkPreferences: config.networkPreferences,
         accent: config.accent,
         version: deps.version,
-        toggles: config.toggles
+        toggles: config.toggles,
+        language: getLanguage()
       })
     )
   }
+
+  onLanguageChange(() => push())
 
   // Only the panel's own page may ask, and only for what a person could press there.
   const fromPanel = (event: { sender: Electron.WebContents }): boolean =>

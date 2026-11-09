@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DnsConfig, DnsProfile } from '@shared/types'
 import { useEffect } from 'react'
 import { create } from 'zustand'
@@ -37,12 +38,12 @@ export function dnsLabel(
   profiles: DnsProfile[],
   defaultId?: string
 ): string {
-  if (id === 'system') return 'System DNS'
-  if (id === 'auto') return 'Auto'
+  if (id === 'system') return t('System DNS')
+  if (id === 'auto') return t('Auto')
   const profile = profiles.find((one) => one.id === id)
   if (profile) return profile.name
-  if (id) return 'System DNS'
-  if (defaultId === 'auto') return 'Default (Auto)'
+  if (id) return t('System DNS')
+  if (defaultId === 'auto') return t('Default (Auto)')
   const fallback = profiles.find((one) => one.id === defaultId)
-  return fallback ? `Default (${fallback.name})` : 'Default (system)'
+  return fallback ? t('Default ({name})', { name: fallback.name }) : t('Default (system)')
 }

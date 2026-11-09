@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Gear as Settings
 } from '@phosphor-icons/react'
+import { setLanguage, t, tn, isRtl, useLanguage } from '@shared/i18n/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { SpeedGraph } from '../components/SpeedGraph'
 import { assignNetworkColors, resolveNetworkVisual } from '../theme'
@@ -78,8 +79,8 @@ function DownloadRow({ download }: { download: PanelDownload }): React.JSX.Eleme
       <button
         type="button"
         onClick={() => act({ type: 'open-download', id: download.id })}
-        className="flex min-w-0 flex-1 flex-col gap-1 text-left outline-none"
-        aria-label={`Open ${download.name}`}
+        className="flex min-w-0 flex-1 flex-col gap-1 text-start outline-none"
+        aria-label={t('Open {name}', { name: download.name })}
       >
         <span className="flex items-baseline justify-between gap-2 text-[12.5px]">
           <span className="min-w-0 truncate font-medium">{download.name}</span>
@@ -94,18 +95,18 @@ function DownloadRow({ download }: { download: PanelDownload }): React.JSX.Eleme
               style={{ width: `${Math.max(2, download.percent)}%` }}
             />
           </span>
-          <span className="w-8 shrink-0 text-right font-mono text-[11px] text-muted-foreground tabular-nums">
+          <span className="w-8 shrink-0 text-end font-mono text-[11px] text-muted-foreground tabular-nums">
             {download.percent}%
           </span>
-          <span className="w-12 shrink-0 text-right font-mono text-[11px] text-muted-foreground tabular-nums">
+          <span className="w-12 shrink-0 text-end font-mono text-[11px] text-muted-foreground tabular-nums">
             {download.timeLeft ? formatDuration(download.timeLeft) : '–'}
           </span>
         </span>
       </button>
       <button
         type="button"
-        aria-label={`Pause ${download.name}`}
-        title="Pause"
+        aria-label={t('Pause {name}', { name: download.name })}
+        title={t('Pause')}
         onClick={() => act({ type: 'pause', id: download.id })}
         className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none group-hover/row:opacity-100 hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -115,27 +116,46 @@ function DownloadRow({ download }: { download: PanelDownload }): React.JSX.Eleme
   )
 }
 
-const BUTTONS: Record<
-  TrayButton,
-  { label: string; icon: typeof Plus; action: PanelAction; toggle?: 'vpn' | 'slowMode' }
-> = {
-  'new-download': { label: 'New', icon: Plus, action: { type: 'new-download' } },
-  'several-links': { label: 'Links', icon: ListPlus, action: { type: 'several-links' } },
-  'pause-all': { label: 'Pause all', icon: Pause, action: { type: 'pause-all' } },
-  'resume-all': { label: 'Resume all', icon: Play, action: { type: 'resume-all' } },
-  show: { label: 'Open', icon: ExternalLink, action: { type: 'show' } },
-  settings: { label: 'Settings', icon: Settings, action: { type: 'settings' } },
-  vpn: { label: 'VPN', icon: ShieldCheck, action: { type: 'toggle-vpn' }, toggle: 'vpn' },
-  'slow-mode': {
-    label: 'Slow mode',
-    icon: Gauge,
-    action: { type: 'toggle-slow-mode' },
-    toggle: 'slowMode'
-  },
-  'open-folder': { label: 'Folder', icon: FolderDown, action: { type: 'open-folder' } },
-  telegram: { label: 'Telegram', icon: PaperPlaneTilt, action: { type: 'open-telegram' } },
-  'check-update': { label: 'Update', icon: ArrowsClockwise, action: { type: 'check-update' } },
-  logs: { label: 'Logs', icon: Article, action: { type: 'logs' } }
+type ButtonSpec = {
+  label: string
+  icon: typeof Plus
+  action: PanelAction
+  toggle?: 'vpn' | 'slowMode'
+}
+
+/** The labels are looked up when drawn, so they follow the language. */
+const buttonSpec = (id: TrayButton): ButtonSpec => {
+  switch (id) {
+    case 'new-download':
+      return { label: t('New'), icon: Plus, action: { type: 'new-download' } }
+    case 'several-links':
+      return { label: t('Links'), icon: ListPlus, action: { type: 'several-links' } }
+    case 'pause-all':
+      return { label: t('Pause all'), icon: Pause, action: { type: 'pause-all' } }
+    case 'resume-all':
+      return { label: t('Resume all'), icon: Play, action: { type: 'resume-all' } }
+    case 'show':
+      return { label: t('Open'), icon: ExternalLink, action: { type: 'show' } }
+    case 'settings':
+      return { label: t('Settings'), icon: Settings, action: { type: 'settings' } }
+    case 'vpn':
+      return { label: 'VPN', icon: ShieldCheck, action: { type: 'toggle-vpn' }, toggle: 'vpn' }
+    case 'slow-mode':
+      return {
+        label: t('Slow mode'),
+        icon: Gauge,
+        action: { type: 'toggle-slow-mode' },
+        toggle: 'slowMode'
+      }
+    case 'open-folder':
+      return { label: t('Folder'), icon: FolderDown, action: { type: 'open-folder' } }
+    case 'telegram':
+      return { label: 'Telegram', icon: PaperPlaneTilt, action: { type: 'open-telegram' } }
+    case 'check-update':
+      return { label: t('Update'), icon: ArrowsClockwise, action: { type: 'check-update' } }
+    case 'logs':
+      return { label: t('Logs'), icon: Article, action: { type: 'logs' } }
+  }
 }
 
 function Action({
@@ -207,7 +227,7 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
       {tiles > 0 && (
         <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
           {list.map((id) => {
-            const button = BUTTONS[id]
+            const button = buttonSpec(id)
             const tile = (
               <Action
                 primary={id === 'new-download'}
@@ -258,9 +278,9 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
                 {tile}
                 <button
                   type="button"
-                  aria-label={`Remove ${button.label}`}
+                  aria-label={t('Remove {name}', { name: button.label })}
                   onClick={() => commit(list.filter((entry) => entry !== id))}
-                  className="absolute -top-1 -left-1 flex size-4 items-center justify-center rounded-full bg-foreground/70 text-background outline-none hover:bg-foreground"
+                  className="absolute -top-1 -start-1 flex size-4 items-center justify-center rounded-full bg-foreground/70 text-background outline-none hover:bg-foreground"
                 >
                   <Minus weight="bold" className="size-2.5" />
                 </button>
@@ -282,8 +302,8 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
         >
           <div className="text-[10.5px] text-muted-foreground">
             {room
-              ? 'More buttons: drag one up, or tap it.'
-              : `${TRAY_BUTTONS_MAX} is the most: drop one on a button to swap it.`}
+              ? t('More buttons: drag one up, or tap it.')
+              : t('{max} is the most: drop one on a button to swap it.', { max: TRAY_BUTTONS_MAX })}
           </div>
           <div className="grid grid-cols-4 gap-1.5">
             {spare.map((id) => (
@@ -299,8 +319,8 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
                 className="cursor-grab"
               >
                 <Action
-                  label={BUTTONS[id].label}
-                  icon={BUTTONS[id].icon}
+                  label={buttonSpec(id).label}
+                  icon={buttonSpec(id).icon}
                   onClick={() => {
                     if (room) commit([...list, id])
                   }}
@@ -313,7 +333,7 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
       <div className="flex items-center justify-between pt-0.5 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <FolderDown aria-hidden className="size-3" />
-          Lightning {state.version}
+          Lightning <bdi dir="ltr">{state.version}</bdi>
         </span>
         <span className="flex items-center gap-0.5">
           <button
@@ -321,8 +341,8 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
             aria-pressed={pinned}
             title={
               pinned
-                ? 'Pinned: stays open until you unpin it'
-                : 'Pin: keep this panel open while you click elsewhere'
+                ? t('Pinned: stays open until you unpin it')
+                : t('Pin: keep this panel open while you click elsewhere')
             }
             onClick={() => setPinned((on) => !on)}
             className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${
@@ -330,7 +350,7 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
             }`}
           >
             <PushPin weight={pinned ? 'fill' : 'regular'} aria-hidden className="size-3" />
-            {pinned ? 'Pinned' : 'Pin'}
+            {pinned ? t('Pinned') : t('Pin')}
           </button>
           <button
             type="button"
@@ -345,7 +365,7 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
             ) : (
               <PencilSimple aria-hidden className="size-3" />
             )}
-            {editing ? 'Done' : 'Edit'}
+            {editing ? t('Done') : t('Edit')}
           </button>
           <button
             type="button"
@@ -353,7 +373,7 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
             className="flex items-center gap-1 rounded-md px-1.5 py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Power aria-hidden className="size-3" />
-            Quit
+            {t('Quit')}
           </button>
         </span>
       </div>
@@ -364,10 +384,21 @@ function Dock({ state }: { state: PanelState }): React.JSX.Element {
 /** The panel under the menu-bar icon: the same facts as the status menu, with live bars, colours
  * and buttons. It draws what main last sent (about once a second) and nothing else. */
 export function TrayPanel(): React.JSX.Element {
+  useLanguage()
   const [state, setState] = useState<PanelState | null>(null)
   const root = useRef<HTMLDivElement>(null)
 
-  useEffect(() => window.trayPanel.onState(setState), [])
+  useEffect(
+    () =>
+      window.trayPanel.onState((next) => {
+        // The panel is a page of its own: it takes the language (and its direction) from main.
+        setLanguage(next.language)
+        document.documentElement.lang = next.language
+        document.documentElement.dir = isRtl(next.language) ? 'rtl' : 'ltr'
+        setState(next)
+      }),
+    []
+  )
   useEffect(() => {
     if (state) document.documentElement.dataset.accent = state.accent
   }, [state?.accent]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -404,7 +435,7 @@ export function TrayPanel(): React.JSX.Element {
     <div
       ref={root}
       role="region"
-      aria-label="Lightning status"
+      aria-label={t('Lightning status')}
       className="flex w-full flex-col bg-background/25 font-sans text-foreground"
     >
       {show.trayTotals && (
@@ -412,7 +443,9 @@ export function TrayPanel(): React.JSX.Element {
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-[11px] text-muted-foreground">
-                {idle ? 'Nothing is downloading' : `${state.running} downloading`}
+                {idle
+                  ? t('Nothing is downloading')
+                  : t('{count} downloading', { count: state.running })}
               </span>
               <span className="flex items-baseline gap-1.5">
                 <ArrowDownToLine
@@ -420,7 +453,7 @@ export function TrayPanel(): React.JSX.Element {
                   className={`size-4 self-center ${idle ? 'text-muted-foreground' : 'text-primary'}`}
                 />
                 <span
-                  aria-label="Total speed"
+                  aria-label={t('Total speed')}
                   className="font-mono text-[24px] leading-none font-semibold tabular-nums"
                 >
                   {formatSpeedIn(state.speed, state.unit)}
@@ -429,7 +462,9 @@ export function TrayPanel(): React.JSX.Element {
             </div>
             {state.left > 0 && (
               <div className="flex shrink-0 flex-col items-end gap-0.5 text-[11px] text-muted-foreground">
-                <span className="tabular-nums">{formatBytes(state.left)} left</span>
+                <span className="tabular-nums">
+                  {t('{size} left', { size: formatBytes(state.left) })}
+                </span>
                 {state.speed > 0 && (
                   <span className="tabular-nums">{formatDuration(state.left / state.speed)}</span>
                 )}
@@ -441,7 +476,7 @@ export function TrayPanel(): React.JSX.Element {
       )}
 
       {show.trayNetworks && state.networks.length > 0 && (
-        <Section title="Networks">
+        <Section title={t('Networks')}>
           {state.networks.map((network) => {
             const look = visual(network.id, network.kind, network.label)
             return (
@@ -466,9 +501,9 @@ export function TrayPanel(): React.JSX.Element {
                   />
                 </div>
                 <div className="text-[10.5px] text-muted-foreground">
-                  {network.open} {network.open === 1 ? 'connection' : 'connections'} ·{' '}
-                  {network.moving} moving · {network.downloads}{' '}
-                  {network.downloads === 1 ? 'download' : 'downloads'}
+                  {tn(network.open, '{count} connection', '{count} connections')} ·{' '}
+                  {t('{count} moving', { count: network.moving })} ·{' '}
+                  {tn(network.downloads, '{count} download', '{count} downloads')}
                 </div>
               </div>
             )
@@ -477,14 +512,16 @@ export function TrayPanel(): React.JSX.Element {
       )}
 
       {show.trayDownloads && state.downloads.length > 0 && (
-        <Section title="Running">
+        <Section title={t('Running')}>
           <div className="-mx-1.5 flex flex-col">
             {state.downloads.map((download) => (
               <DownloadRow key={download.id} download={download} />
             ))}
           </div>
           {state.more > 0 && (
-            <div className="text-[11px] text-muted-foreground">…and {state.more} more</div>
+            <div className="text-[11px] text-muted-foreground">
+              {t('…and {count} more', { count: state.more })}
+            </div>
           )}
         </Section>
       )}
@@ -492,9 +529,9 @@ export function TrayPanel(): React.JSX.Element {
       {show.trayQueue && (state.queued > 0 || state.paused > 0 || state.failed > 0) && (
         <Section>
           <div className="flex flex-wrap gap-1.5">
-            <Chip label="waiting" count={state.queued} tone="var(--status-queued, #6e6e73)" />
-            <Chip label="paused" count={state.paused} tone="var(--status-paused, #d97706)" />
-            <Chip label="failed" count={state.failed} tone="var(--status-failed, #dc2626)" />
+            <Chip label={t('waiting')} count={state.queued} tone="var(--status-queued, #6e6e73)" />
+            <Chip label={t('paused')} count={state.paused} tone="var(--status-paused, #d97706)" />
+            <Chip label={t('failed')} count={state.failed} tone="var(--status-failed, #dc2626)" />
           </div>
         </Section>
       )}

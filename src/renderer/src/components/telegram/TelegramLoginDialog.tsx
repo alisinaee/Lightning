@@ -4,6 +4,7 @@ import {
   CheckCircle as CircleCheck,
   FolderOpen
 } from '@phosphor-icons/react'
+import { t } from '@shared/i18n/react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store/useAppStore'
@@ -27,38 +28,51 @@ export function TelegramLoginDialog(): React.JSX.Element {
   )
 }
 
-const MODE_HELP: Record<TdlLoginMode, string> = {
-  qr: 'Scan the code with Telegram on your phone: Settings → Devices → Link Desktop Device.',
-  code: 'Two steps: your phone number first, then the code Telegram sends to your Telegram app.',
-  desktop:
-    'Reuse the account of Telegram Desktop (the telegram.org app). The Mac App Store version of Telegram cannot be imported: use the QR code instead.'
-}
+const modeHelp = (mode: TdlLoginMode): string =>
+  mode === 'qr'
+    ? t('Scan the code with Telegram on your phone: Settings → Devices → Link Desktop Device.')
+    : mode === 'code'
+      ? t('Two steps: your phone number first, then the code Telegram sends to your Telegram app.')
+      : t(
+          'Reuse the account of Telegram Desktop (the telegram.org app). The Mac App Store version of Telegram cannot be imported: use the QR code instead.'
+        )
 
-const PROMPTS = {
-  phone: {
-    label: 'Your phone number',
-    hint: '+98 912 000 0000',
-    type: 'tel',
-    help: 'Start with + and the country code. Telegram will send a code to your Telegram app.',
-    submit: 'Send code'
-  },
-  code: {
-    label: 'The code Telegram sent you',
-    hint: '12345',
-    type: 'text',
-    help: 'Open the Telegram app on your phone: the code is in the chat named "Telegram" (or comes by SMS).',
-    submit: 'Verify'
-  },
-  password: {
-    label: 'Your two-step password',
-    hint: 'Telegram cloud password',
-    type: 'password',
-    help: 'This is the extra password you set in Telegram, not the login code.',
-    submit: 'Sign in'
+const PROMPT_TYPES = { phone: 'tel', code: 'text', password: 'password' } as const
+
+type PromptField = keyof typeof PROMPT_TYPES
+
+/** The words of one prompt, looked up when drawn so they follow the language. */
+function promptText(field: PromptField): {
+  label: string
+  hint: string
+  help: string
+  submit: string
+} {
+  if (field === 'phone') {
+    return {
+      label: t('Your phone number'),
+      hint: '+98 912 000 0000',
+      help: t('Start with + and the country code. Telegram will send a code to your Telegram app.'),
+      submit: t('Send code')
+    }
   }
-} as const
-
-type PromptField = keyof typeof PROMPTS
+  if (field === 'code') {
+    return {
+      label: t('The code Telegram sent you'),
+      hint: '12345',
+      help: t(
+        'Open the Telegram app on your phone: the code is in the chat named "Telegram" (or comes by SMS).'
+      ),
+      submit: t('Verify')
+    }
+  }
+  return {
+    label: t('Your two-step password'),
+    hint: t('Telegram cloud password'),
+    help: t('This is the extra password you set in Telegram, not the login code.'),
+    submit: t('Sign in')
+  }
+}
 
 /** Persian and Arabic-Indic digits to 0-9. */
 function asciiDigits(text: string): string {
@@ -71,23 +85,22 @@ function asciiDigits(text: string): string {
 function answerProblem(field: PromptField, value: string): string | null {
   const text = asciiDigits(value.trim())
   if (field === 'phone') {
-    if (!text.startsWith('+')) return 'Start with + and the country code, like +98.'
-    if (text.replace(/\D/g, '').length < 8) return 'That number looks too short.'
+    if (!text.startsWith('+')) return t('Start with + and the country code, like +98.')
+    if (text.replace(/\D/g, '').length < 8) return t('That number looks too short.')
   }
   if (field === 'code') {
     if (text.startsWith('+') || text.replace(/\D/g, '').length > 8) {
-      return 'That looks like a phone number. Enter the short code Telegram just sent you.'
+      return t('That looks like a phone number. Enter the short code Telegram just sent you.')
     }
-    if (/\D/.test(text.replace(/\s/g, ''))) return 'The code is digits only.'
+    if (/\D/.test(text.replace(/\s/g, ''))) return t('The code is digits only.')
   }
   return null
 }
 
-const STEPS: { field: PromptField; label: string }[] = [
-  { field: 'phone', label: 'Phone number' },
-  { field: 'code', label: 'Code' },
-  { field: 'password', label: 'Password' }
-]
+const stepLabel = (field: PromptField): string =>
+  field === 'phone' ? t('Phone number') : field === 'code' ? t('Code') : t('Password')
+
+const STEPS: PromptField[] = ['phone', 'code', 'password']
 
 function Steps({
   current,
@@ -96,15 +109,15 @@ function Steps({
   current: PromptField
   sawPassword: boolean
 }): React.JSX.Element {
-  const steps = STEPS.filter((step) => step.field !== 'password' || sawPassword)
-  const index = steps.findIndex((step) => step.field === current)
+  const steps = STEPS.filter((step) => step !== 'password' || sawPassword)
+  const index = steps.findIndex((step) => step === current)
   return (
-    <ol className="flex items-center gap-2 text-[12px]" aria-label="Sign-in steps">
+    <ol className="flex items-center gap-2 text-[12px]" aria-label={t('Sign-in steps')}>
       {steps.map((step, position) => {
         const done = position < index
         const active = position === index
         return (
-          <li key={step.field} className="flex items-center gap-2">
+          <li key={step} className="flex items-center gap-2">
             <span
               className={`flex size-5 items-center justify-center rounded-full text-[11px] font-semibold ${
                 done || active
@@ -114,7 +127,9 @@ function Steps({
             >
               {done ? <CircleCheck className="size-3.5" /> : position + 1}
             </span>
-            <span className={active ? 'font-medium' : 'text-muted-foreground'}>{step.label}</span>
+            <span className={active ? 'font-medium' : 'text-muted-foreground'}>
+              {stepLabel(step)}
+            </span>
             {position < steps.length - 1 && <span className="h-px w-5 bg-border" />}
           </li>
         )
@@ -180,7 +195,9 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   const start = async (): Promise<void> => {
     if (mode === 'desktop' && /\.app\/?$/i.test(desktopDir.trim())) {
       setError(
-        'That is the Telegram app itself. Pick the "Telegram Desktop" data folder, or sign in with the QR code.'
+        t(
+          'That is the Telegram app itself. Pick the "Telegram Desktop" data folder, or sign in with the QR code.'
+        )
       )
       return
     }
@@ -247,46 +264,47 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
   }
 
   const signedIn = status?.loggedIn && !running
-  const title = account || signedIn ? 'Telegram account' : 'Sign in to Telegram'
+  const title = account || signedIn ? t('Telegram account') : t('Sign in to Telegram')
   return (
     <div className="flex flex-col">
       <div className="border-b-[0.5px] border-border px-5 py-4">
         <DialogTitle className="text-[16px] font-semibold">{title}</DialogTitle>
         <DialogDescription className="sr-only">
-          Sign in to Telegram so Lightning can download from your chats.
+          {t('Sign in to Telegram so Lightning can download from your chats.')}
         </DialogDescription>
       </div>
       <div className="flex flex-col gap-3.5 px-5 py-4">
         {account ? (
           <div className="flex items-center gap-2 text-[13px]">
             <CircleCheck aria-hidden className="size-4 shrink-0 text-[var(--status-done)]" />
-            Signed in as {account}
+            {t('Signed in as {account}', { account })}
           </div>
         ) : signedIn ? (
           <>
             <div className="flex items-center gap-2 text-[13px]">
               <CircleCheck aria-hidden className="size-4 shrink-0 text-[var(--status-done)]" />
               <span className="min-w-0 truncate">
-                Signed in as {status?.account ?? 'your account'}
+                {t('Signed in as {account}', { account: status?.account ?? t('your account') })}
               </span>
             </div>
             {confirmLogout ? (
               <div className="flex flex-col gap-2 text-[12.5px] text-[var(--text-secondary)]">
-                Signing out deletes the Telegram session Lightning stored on this computer. Files
-                already downloaded stay.
+                {t(
+                  'Signing out deletes the Telegram session Lightning stored on this computer. Files already downloaded stay.'
+                )}
                 <div className="flex gap-2">
                   <Button type="button" variant="destructive" onClick={() => void logout()}>
-                    Sign out
+                    {t('Sign out')}
                   </Button>
                   <Button type="button" variant="secondary" onClick={() => setConfirmLogout(false)}>
-                    Keep me signed in
+                    {t('Keep me signed in')}
                   </Button>
                 </div>
               </div>
             ) : (
               <div>
                 <Button type="button" variant="secondary" onClick={() => setConfirmLogout(true)}>
-                  Sign out…
+                  {t('Sign out…')}
                 </Button>
               </div>
             )}
@@ -296,15 +314,15 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
             <ToggleGroup
               value={[mode]}
               variant="outline"
-              aria-label="Sign-in method"
+              aria-label={t('Sign-in method')}
               onValueChange={(value) => !running && value[0] && setMode(value[0] as TdlLoginMode)}
             >
-              <ToggleGroupItem value="qr">QR code</ToggleGroupItem>
-              <ToggleGroupItem value="code">Phone number</ToggleGroupItem>
+              <ToggleGroupItem value="qr">{t('QR code')}</ToggleGroupItem>
+              <ToggleGroupItem value="code">{t('Phone number')}</ToggleGroupItem>
               <ToggleGroupItem value="desktop">Telegram Desktop</ToggleGroupItem>
             </ToggleGroup>
             <div className="text-[12.5px] leading-[1.5] text-[var(--text-secondary)]">
-              {MODE_HELP[mode]}
+              {modeHelp(mode)}
             </div>
             {mode === 'desktop' && !running && (
               <div className="flex flex-col gap-2">
@@ -312,22 +330,23 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                   <Input
                     value={desktopDir}
                     onChange={(event) => setDesktopDir(event.target.value)}
-                    placeholder="Telegram Desktop data folder (optional)"
+                    placeholder={t('Telegram Desktop data folder (optional)')}
                     spellCheck={false}
-                    aria-label="Telegram Desktop data folder"
+                    aria-label={t('Telegram Desktop data folder')}
+                    dir="ltr"
                     className="h-9 min-w-0 flex-1 rounded-[9px] text-[12.5px]"
                   />
                   <Button type="button" variant="secondary" onClick={() => void browse()}>
                     <FolderOpen data-icon="inline-start" />
-                    Browse…
+                    {t('Browse…')}
                   </Button>
                 </div>
                 <Input
                   type="password"
                   value={passcode}
                   onChange={(event) => setPasscode(event.target.value)}
-                  placeholder="Local passcode (if you set one)"
-                  aria-label="Local passcode"
+                  placeholder={t('Local passcode (if you set one)')}
+                  aria-label={t('Local passcode')}
                   className="h-9 rounded-[9px] text-[12.5px]"
                 />
               </div>
@@ -337,11 +356,12 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 <TelegramQr ascii={qr} />
                 <div className="flex flex-col items-center gap-1.5">
                   <Button type="button" variant="secondary" onClick={() => setEnlarged(true)}>
-                    Enlarge for scanning
+                    {t('Enlarge for scanning')}
                   </Button>
                   <div className="text-center text-[12px] leading-[1.5] text-[var(--text-secondary)]">
-                    Telegram cannot read it? Press Stop, choose Phone number, and enter the code
-                    Telegram sends to your app.
+                    {t(
+                      'Telegram cannot read it? Press Stop, choose Phone number, and enter the code Telegram sends to your app.'
+                    )}
                   </div>
                 </div>
               </>
@@ -370,11 +390,11 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 }}
               >
                 <label className="text-[13px] font-medium" htmlFor="tdl-answer">
-                  {PROMPTS[prompt].label}
+                  {promptText(prompt).label}
                 </label>
                 {prompt === 'code' && sentTo && (
                   <div className="text-[12px] text-muted-foreground">
-                    Sent for the number ending in {sentTo}.
+                    {t('Sent for the number ending in {digits}.', { digits: sentTo })}
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -382,13 +402,14 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     id="tdl-answer"
                     key={prompt}
                     autoFocus
-                    type={PROMPTS[prompt].type}
+                    type={PROMPT_TYPES[prompt]}
                     inputMode={
                       prompt === 'password' ? undefined : prompt === 'phone' ? 'tel' : 'numeric'
                     }
                     value={answer}
                     onChange={(event) => setAnswer(event.target.value)}
-                    placeholder={PROMPTS[prompt].hint}
+                    placeholder={promptText(prompt).hint}
+                    dir={prompt === 'password' ? undefined : 'ltr'}
                     autoComplete={prompt === 'code' ? 'one-time-code' : 'off'}
                     spellCheck={false}
                     className={`h-10 min-w-0 flex-1 rounded-[9px] ${
@@ -398,7 +419,7 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     }`}
                   />
                   <Button type="submit" disabled={!answer || !!answerProblem(prompt, answer)}>
-                    {PROMPTS[prompt].submit}
+                    {promptText(prompt).submit}
                   </Button>
                 </div>
                 {answer && answerProblem(prompt, answer) ? (
@@ -408,7 +429,7 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                   </div>
                 ) : (
                   <div className="text-[12px] leading-[1.5] text-muted-foreground">
-                    {PROMPTS[prompt].help}
+                    {promptText(prompt).help}
                   </div>
                 )}
               </form>
@@ -416,12 +437,12 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
             {running && !qr && !prompt && (
               <div className="text-[12.5px] text-muted-foreground">
                 {submitted === 'phone'
-                  ? 'Asking Telegram to send you a code…'
+                  ? t('Asking Telegram to send you a code…')
                   : submitted === 'code'
-                    ? 'Checking the code with Telegram…'
+                    ? t('Checking the code with Telegram…')
                     : submitted === 'password'
-                      ? 'Signing in…'
-                      : 'Waiting for Telegram…'}
+                      ? t('Signing in…')
+                      : t('Waiting for Telegram…')}
               </div>
             )}
           </>
@@ -433,21 +454,23 @@ function LoginForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           </div>
         )}
         <div className="text-[11.5px] text-muted-foreground">
-          Telegram downloads use the default connection. Your session is stored on this computer.
+          {t(
+            'Telegram downloads use the default connection. Your session is stored on this computer.'
+          )}
         </div>
       </div>
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
         {!account && !signedIn && running && (
           <Button type="button" variant="secondary" onClick={() => void stop()}>
-            Stop
+            {t('Stop')}
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={onDone}>
-          {account || signedIn ? 'Close' : 'Cancel'}
+          {account || signedIn ? t('Close') : t('Cancel')}
         </Button>
         {!account && !signedIn && !running && (
           <Button type="button" onClick={() => void start()}>
-            {error ? 'Try again' : 'Start'}
+            {error ? t('Try again') : t('Start')}
           </Button>
         )}
       </div>

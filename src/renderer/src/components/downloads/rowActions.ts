@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import {
   Copy,
   DownloadSimple as Download,
@@ -14,12 +15,14 @@ import {
   X
 } from '@phosphor-icons/react'
 import { isFinished, type Item, type RowInfo } from '../../utils/status'
-import { REVEAL_LABEL, type RowHandlers } from './rowHelpers'
+import { revealLabel, type RowHandlers } from './rowHelpers'
 import type { RowAction } from './rowMenu'
 
 /** The action a row's main button does: Pause, Resume, Retry or Download again. */
 export interface PrimaryAction {
   label: string
+  /** Which verb, for the short menu label; the button label carries the file name. */
+  kind?: 'pause' | 'resume' | 'retry'
   icon?: RowAction['icon']
   run: () => void
 }
@@ -36,18 +39,19 @@ export function primaryActionOf(
   let primary: PrimaryAction | null = null
   if (!isFinished(item)) {
     if (item.status === 'downloading' || item.status === 'queued') {
-      primary = { label: `Pause ${name}`, icon: Pause, run: pause }
+      primary = { label: t('Pause {name}', { name }), kind: 'pause', icon: Pause, run: pause }
     } else if (item.status === 'paused') {
-      primary = { label: `Resume ${name}`, icon: Play, run: resume }
+      primary = { label: t('Resume {name}', { name }), kind: 'resume', icon: Play, run: resume }
     } else if (item.status === 'error') {
       // Retry always tries the saved link first; Fix link is for when that link is refused.
       if (item.resumable !== false) {
-        primary = { label: `Retry ${name}`, icon: RotateCw, run: resume }
-      } else primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
+        primary = { label: t('Retry {name}', { name }), kind: 'retry', icon: RotateCw, run: resume }
+      } else
+        primary = { label: t('Download again'), icon: Download, run: () => handlers.again(item) }
     }
   }
   if (info.status === 'completed' && info.missing) {
-    primary = { label: 'Download again', icon: Download, run: () => handlers.again(item) }
+    primary = { label: t('Download again'), icon: Download, run: () => handlers.again(item) }
   }
   return primary
 }
@@ -82,7 +86,7 @@ export function buildDownloadActions({
   if (finished) {
     menu.push({
       id: 'open-file',
-      label: 'Open file',
+      label: t('Open file'),
       icon: ExternalLink,
       disabled: info.missing,
       run: () => void window.lightning.openDownloadedFile(item.id)
@@ -90,40 +94,41 @@ export function buildDownloadActions({
   }
   menu.push({
     id: 'reveal',
-    label: REVEAL_LABEL,
+    label: revealLabel(),
     icon: FolderOpen,
     run: () => void window.lightning.revealDownload(item.id),
     disabled: info.missing
   })
-  menu.push({ id: 'details', label: 'Details', icon: Info, run: () => handlers.open(item.id) })
+  menu.push({ id: 'details', label: t('Details'), icon: Info, run: () => handlers.open(item.id) })
   if (primary && (!isFinished(item) || info.missing)) {
     menu.push({
       id: 'primary',
-      label: primary.label.startsWith('Pause')
-        ? 'Pause'
-        : primary.label.startsWith('Resume')
-          ? 'Resume'
-          : primary.label.startsWith('Retry')
-            ? 'Retry'
-            : primary.label,
+      label:
+        primary.kind === 'pause'
+          ? t('Pause')
+          : primary.kind === 'resume'
+            ? t('Resume')
+            : primary.kind === 'retry'
+              ? t('Retry')
+              : primary.label,
       icon: primary.icon ?? Link2,
       run: primary.run,
       divider: true
     })
   }
   if (fixLink) {
-    menu.push({ id: 'fix', label: 'Fix link', icon: Link2, run: () => handlers.fix(item) })
+    menu.push({ id: 'fix', label: t('Fix link'), icon: Link2, run: () => handlers.fix(item) })
   }
   menu.push({
     id: 'copy',
-    label: 'Copy link',
+    label: t('Copy link'),
     icon: Copy,
     run: () => void navigator.clipboard.writeText(item.url).catch(() => {}),
     divider: !primary
   })
   menu.push({
     id: 'copy-name',
-    label: 'Copy file name',
+    label: t('Copy file name'),
     icon: FileText,
     run: () => void navigator.clipboard.writeText(name).catch(() => {})
   })
@@ -131,15 +136,15 @@ export function buildDownloadActions({
     const path = item.destinationPath
     menu.push({
       id: 'copy-path',
-      label: 'Copy file location',
+      label: t('Copy file location'),
       icon: FolderInput,
       run: () => void navigator.clipboard.writeText(path).catch(() => {})
     })
   }
-  if (primary?.label !== 'Download again') {
+  if (primary?.label !== t('Download again')) {
     menu.push({
       id: 'again',
-      label: 'Download again…',
+      label: t('Download again…'),
       icon: RotateCw,
       run: () => handlers.again(item),
       divider: true
@@ -148,7 +153,7 @@ export function buildDownloadActions({
   if (finished) {
     menu.push({
       id: 'remove',
-      label: remove?.label ?? 'Remove from list…',
+      label: remove?.label ?? t('Remove from list…'),
       icon: X,
       run: remove?.run ?? (() => handlers.removeFromList(item)),
       divider: true
@@ -156,7 +161,7 @@ export function buildDownloadActions({
     if (!info.missing) {
       menu.push({
         id: 'trash',
-        label: 'Delete file…',
+        label: t('Delete file…'),
         icon: Trash2,
         danger: true,
         run: () => handlers.trash(item)
@@ -165,7 +170,7 @@ export function buildDownloadActions({
   } else {
     menu.push({
       id: 'cancel',
-      label: 'Cancel and delete partial data…',
+      label: t('Cancel and delete partial data…'),
       icon: Trash2,
       danger: true,
       run: () => handlers.cancel(item),

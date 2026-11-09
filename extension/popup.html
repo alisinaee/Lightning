@@ -2,41 +2,94 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1>Lightning</h1>
-    <p id="status" class="status">Looking for Lightning…</p>
-    <label class="row"
-      ><input id="enabled" type="checkbox" /> Send browser downloads to Lightning</label
-    >
-    <label
-      >Pairing key
-      <input
-        id="key"
-        type="password"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="From Lightning → Settings → Browser"
-      />
-    </label>
-    <label
-      >Video cookies (YouTube and other video sites)
-      <select id="videoCookies">
-        <option value="save">Save in Lightning</option>
-        <option value="saved">Use cookies saved in Lightning</option>
-        <option value="none">Don't send cookies</option>
-      </select>
-    </label>
-    <label
-      >Only files larger than (MB, 0 = all)
-      <input id="minSizeMB" type="number" min="0" step="1" />
-    </label>
-    <label
-      >Never for these sites (one per line)
-      <textarea id="excluded" rows="3" spellcheck="false"></textarea>
-    </label>
-    <button id="save">Save</button>
+    <header>
+      <img src="icons/icon.png" alt="" width="22" height="22" />
+      <h1>Lightning</h1>
+      <span id="ver" class="ver"></span>
+    </header>
+
+    <section id="card" class="card status" data-state="checking" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <div class="grow">
+        <div id="st-title" class="st-title"></div>
+        <div id="st-hint" class="st-hint"></div>
+        <div class="st-actions">
+          <button id="retry" class="btn primary" data-i18n="retry" hidden></button>
+          <button id="repair" class="btn" data-i18n="repair" hidden></button>
+        </div>
+        <div id="repair-msg" class="st-hint" hidden></div>
+      </div>
+    </section>
+
+    <div id="update" class="notice" hidden data-i18n="upd"></div>
+
+    <details id="manual" class="card fold" hidden>
+      <summary data-i18n="manual"></summary>
+      <div class="fold-body">
+        <input id="key" type="password" autocomplete="off" spellcheck="false" data-i18n-ph="key_ph" />
+        <button id="save-key" class="btn" data-i18n="save_key"></button>
+      </div>
+    </details>
+
+    <section class="card">
+      <label class="switch-row">
+        <span class="grow">
+          <span class="row-title" data-i18n="takeover"></span>
+          <span class="row-sub" data-i18n="takeover_h"></span>
+        </span>
+        <input id="enabled" type="checkbox" role="switch" />
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+      <div class="actions">
+        <button id="scan" class="action" disabled>
+          <span class="row-title" data-i18n="scan"></span>
+          <span class="row-sub" data-i18n="scan_h"></span>
+        </button>
+        <button id="yt" class="action" hidden>
+          <span class="row-title" data-i18n="yt"></span>
+          <span class="row-sub" data-i18n="yt_h"></span>
+        </button>
+      </div>
+    </section>
+
+    <details class="card fold">
+      <summary data-i18n="options"></summary>
+      <div class="fold-body">
+        <label class="field"
+          ><span data-i18n="vc"></span>
+          <select id="videoCookies">
+            <option value="save" data-i18n="vc_save"></option>
+            <option value="saved" data-i18n="vc_saved"></option>
+            <option value="none" data-i18n="vc_none"></option>
+          </select>
+        </label>
+        <label class="field"
+          ><span data-i18n="minsize"></span>
+          <input id="minSizeMB" type="number" min="0" step="1" />
+        </label>
+        <label class="field"
+          ><span data-i18n="excluded"></span>
+          <textarea id="excluded" rows="3" spellcheck="false" dir="ltr"></textarea>
+        </label>
+        <button id="save" class="btn primary" data-i18n="save"></button>
+        <span id="saved" class="saved" hidden data-i18n="saved"></span>
+      </div>
+    </details>
+
+    <details class="card fold">
+      <summary data-i18n="how"></summary>
+      <ul class="fold-body how">
+        <li data-i18n="how1"></li>
+        <li data-i18n="how2"></li>
+        <li data-i18n="how3"></li>
+      </ul>
+    </details>
+
+    <script src="i18n.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

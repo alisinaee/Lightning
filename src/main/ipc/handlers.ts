@@ -59,7 +59,7 @@ import { redactUrl } from '../../shared/urlTools'
 import { diagnosticReport } from '../diagnostics'
 import { findDuplicates } from '../download/findDuplicates'
 import { appVariant } from '../variant'
-import { applyBehavior, integrationPort } from '../appBehavior'
+import { applyBehavior, getClipboardWatcher, integrationPort } from '../appBehavior'
 import { loadSettings, prefsOf, saveSettings } from '../settings'
 import { AUTO_DNS, DnsService, SYSTEM_DNS } from '../network/dns'
 import { testDnsForUrl, type DnsCandidate } from '../network/dnsTest'
@@ -447,6 +447,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('takePendingLink', async () => takePendingLink())
 
   handle('readClipboardText', async () => clipboard.readText())
+
+  handle('getClipboardHistory', async () => getClipboardWatcher()?.history() ?? [])
+  handle('removeClipboardEntry', async (_event, id) => getClipboardWatcher()?.remove(id))
+  handle('clearClipboardHistory', async () => getClipboardWatcher()?.clear())
+  handle('downloadClipboardEntry', async (_event, id) => getClipboardWatcher()?.download(id))
 
   handle('readLog', async (_event, limit) => {
     const count = Number.isFinite(limit) ? Math.trunc(limit) : 0

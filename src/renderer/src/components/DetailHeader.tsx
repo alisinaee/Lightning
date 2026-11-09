@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { CaretLeft as ChevronLeft } from '@phosphor-icons/react'
 import { useState } from 'react'
@@ -36,10 +37,10 @@ export function DetailHeader({
       <button
         type="button"
         onClick={() => setView({ name: 'list' })}
-        className="-ml-2 flex items-center gap-1 rounded-md px-1.5 py-1 font-sans text-[15px] leading-none font-medium text-[var(--text-secondary)] hover:text-foreground"
+        className="-ms-2 flex items-center gap-1 rounded-md px-1.5 py-1 font-sans text-[15px] leading-none font-medium text-[var(--text-secondary)] hover:text-foreground"
       >
-        <ChevronLeft className="size-4.5" />
-        Downloads
+        <ChevronLeft className="size-4.5 rtl:-scale-x-100" />
+        {t('Downloads')}
       </button>
       <div className="flex-1" />
       {download.checksum && <ChecksumChip result={download.checksum} />}
@@ -63,7 +64,7 @@ function RemoveButton({
   const [error, setError] = useState<string | null>(null)
   const finished = 'unitsWritten' in download || download.status === 'completed'
   const missing = 'missing' in download && download.missing === true
-  const trashName = window.lightning.platform === 'win32' ? 'Recycle Bin' : 'Trash'
+  const win = window.lightning.platform === 'win32'
 
   return (
     <AlertDialog
@@ -75,19 +76,22 @@ function RemoveButton({
       <AlertDialogTrigger
         render={
           <Button type="button" variant={finished ? 'secondary' : 'destructive'}>
-            {finished ? 'Remove from list…' : 'Cancel download…'}
+            {finished ? t('Remove from list…') : t('Cancel download…')}
           </Button>
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {finished ? 'Remove from list' : 'Cancel download'}: {download.fileName}?
+            {t('{action}: {name}?', {
+              action: finished ? t('Remove from list') : t('Cancel download'),
+              name: `\u2068${download.fileName}\u2069`
+            })}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {finished
-              ? 'This removes the download from your list. Its files stay on your computer.'
-              : 'This stops the download and deletes its downloaded data.'}
+              ? t('This removes the download from your list. Its files stay on your computer.')
+              : t('This stops the download and deletes its downloaded data.')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {finished &&
@@ -98,7 +102,9 @@ function RemoveButton({
             !!download.downloadedFiles?.length) && (
             <label className="flex items-center gap-2.5 text-[13px]">
               <Checkbox checked={trashFile} onCheckedChange={setTrashFile} />
-              Also move downloaded files to the {trashName}. Unrelated files stay in place.
+              {win
+                ? t('Also move downloaded files to the Recycle Bin. Unrelated files stay in place.')
+                : t('Also move downloaded files to the Trash. Unrelated files stay in place.')}
             </label>
           )}
         <AlertDialogFooter>
@@ -107,7 +113,7 @@ function RemoveButton({
               {error}
             </p>
           )}
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{t('Cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className={buttonVariants({
               variant: finished && !trashFile ? 'default' : 'destructive',
@@ -135,10 +141,12 @@ function RemoveButton({
             }}
           >
             {trashFile
-              ? `Move files to ${trashName}`
+              ? win
+                ? t('Move files to Recycle Bin')
+                : t('Move files to Trash')
               : finished
-                ? 'Remove from list'
-                : 'Cancel download'}
+                ? t('Remove from list')
+                : t('Cancel download')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

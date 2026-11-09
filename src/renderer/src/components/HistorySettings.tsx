@@ -1,17 +1,14 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { FolderOpen, PencilSimple as Pencil, Trash as Trash2 } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
+import { t, formatDate } from '@shared/i18n/react'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes } from '../utils/format'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { Button } from './ui/button'
 
 function finishedOn(time: number): string {
-  return new Date(time).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  return formatDate(time, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function uploadedOf(entry: { kind: string; bytesUploaded?: number }): number {
@@ -90,14 +87,20 @@ export function HistorySettings({
   }
 
   const forget = (entry: FinishedDownload): void => {
-    if (!window.confirm(`Remove “${entry.fileName}” from the history? The file stays where it is.`))
+    if (
+      !window.confirm(
+        t('Remove “{name}” from the history? The file stays where it is.', {
+          name: entry.fileName
+        })
+      )
+    )
       return
     removeDownload(entry.id)
     if (editing === entry.id) setEditing(null)
   }
 
   const clear = (): void => {
-    if (!window.confirm('Clear the download history? The files stay where they are.')) return
+    if (!window.confirm(t('Clear the download history? The files stay where they are.'))) return
     void window.lightning.clearHistory()
     setEditing(null)
   }
@@ -105,13 +108,13 @@ export function HistorySettings({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <div className="text-[15px] font-semibold">Download history</div>
+        <div className="text-[15px] font-semibold">{t('Download history')}</div>
         <div className="text-[12.5px] text-muted-foreground">
-          Finished files. Renaming also renames the file on disk when it is still there.
+          {t('Finished files. Renaming also renames the file on disk when it is still there.')}
         </div>
       </div>
       <label className="flex items-center gap-3 text-[13px]">
-        Keep this many finished downloads
+        {t('Keep this many finished downloads')}
         <input
           type="number"
           min={50}
@@ -126,28 +129,36 @@ export function HistorySettings({
         />
       </label>
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="Downloaded" value={formatBytes(finishedDown + live.downloaded)} />
-        <Stat label="Uploaded" value={formatBytes(finishedUp + live.uploaded)} />
-        <Stat label="Finished" value={String(history.length)} />
+        <Stat label={t('Downloaded')} value={formatBytes(finishedDown + live.downloaded)} />
+        <Stat label={t('Uploaded')} value={formatBytes(finishedUp + live.uploaded)} />
+        <Stat label={t('Finished')} value={String(history.length)} />
       </div>
       <div className="text-[12px] text-muted-foreground">
-        Totals cover the files listed here
-        {live.downloaded > 0 || live.uploaded > 0
-          ? `, and ${formatBytes(live.downloaded)} still downloading${live.uploaded > 0 ? ` and ${formatBytes(live.uploaded)} uploaded so far` : ''}`
-          : ''}
-        . Removing a file from the history takes it out of them.
+        {live.uploaded > 0
+          ? t(
+              'Totals cover the files listed here, and {down} still downloading and {up} uploaded so far. Removing a file from the history takes it out of them.',
+              { down: formatBytes(live.downloaded), up: formatBytes(live.uploaded) }
+            )
+          : live.downloaded > 0
+            ? t(
+                'Totals cover the files listed here, and {down} still downloading. Removing a file from the history takes it out of them.',
+                { down: formatBytes(live.downloaded) }
+              )
+            : t(
+                'Totals cover the files listed here. Removing a file from the history takes it out of them.'
+              )}
       </div>
       <input
         type="search"
-        aria-label="Search history"
-        placeholder="Search history"
+        aria-label={t('Search history')}
+        placeholder={t('Search history')}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         className="h-8 rounded-md border border-input bg-[var(--input-bg)] px-2 text-[12.5px] outline-none"
       />
       {shown.length === 0 ? (
         <div className="py-6 text-center text-[12.5px] text-muted-foreground">
-          {history.length === 0 ? 'No finished downloads yet.' : 'Nothing matches.'}
+          {history.length === 0 ? t('No finished downloads yet.') : t('Nothing matches.')}
         </div>
       ) : (
         <ul className="flex flex-col gap-1">
@@ -160,20 +171,27 @@ export function HistorySettings({
                   kind={entry.kind === 'torrent' ? 'torrent' : undefined}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] font-medium">{entry.fileName}</div>
+                  <div dir="auto" className="truncate text-[12.5px] font-medium">
+                    {entry.fileName}
+                  </div>
                   <div className="truncate text-[11.5px] text-muted-foreground">
-                    {formatBytes(entry.bytesDownloaded)}
-                    {' · '}
-                    {finishedOn(entry.completedAt ?? entry.startedAt)}
-                    {entry.missing ? ' · file missing' : ''}
-                    {uploadedOf(entry) > 0 ? ` · up ${formatBytes(uploadedOf(entry))}` : ''}
+                    {[
+                      formatBytes(entry.bytesDownloaded),
+                      finishedOn(entry.completedAt ?? entry.startedAt),
+                      entry.missing ? t('file missing') : '',
+                      uploadedOf(entry) > 0
+                        ? t('up {size}', { size: formatBytes(uploadedOf(entry)) })
+                        : ''
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </div>
                 </div>
                 <Button
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Rename ${entry.fileName}`}
+                  aria-label={t('Rename {name}', { name: entry.fileName })}
                   onClick={() => {
                     setEditing(entry.id)
                     setDraft(entry.fileName)
@@ -186,7 +204,7 @@ export function HistorySettings({
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Show ${entry.fileName} in the folder`}
+                  aria-label={t('Show {name} in the folder', { name: entry.fileName })}
                   disabled={entry.missing}
                   onClick={() => void window.lightning.revealDownload(entry.id)}
                 >
@@ -196,7 +214,7 @@ export function HistorySettings({
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Remove ${entry.fileName} from history`}
+                  aria-label={t('Remove {name} from history', { name: entry.fileName })}
                   onClick={() => forget(entry)}
                 >
                   <Trash2 />
@@ -211,14 +229,14 @@ export function HistorySettings({
                   }}
                 >
                   <input
-                    aria-label="File name"
+                    aria-label={t('File name')}
                     value={draft}
                     disabled={busy}
                     onChange={(event) => setDraft(event.target.value)}
                     className="h-8 min-w-0 flex-1 rounded-md border border-input bg-[var(--input-bg)] px-2 text-[12.5px] outline-none"
                   />
                   <Button type="submit" size="sm" disabled={busy || draft.trim() === ''}>
-                    Save
+                    {t('Save')}
                   </Button>
                   <Button
                     type="button"
@@ -227,7 +245,7 @@ export function HistorySettings({
                     disabled={busy}
                     onClick={() => setEditing(null)}
                   >
-                    Cancel
+                    {t('Cancel')}
                   </Button>
                 </form>
               )}
@@ -242,7 +260,7 @@ export function HistorySettings({
       )}
       {history.length > 0 && (
         <Button type="button" variant="secondary" className="self-start" onClick={clear}>
-          Clear history
+          {t('Clear history')}
         </Button>
       )}
     </div>

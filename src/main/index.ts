@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n'
 import { registerGlassWindow } from './glass'
 import { externalStates } from './externalActivity'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -6,6 +7,7 @@ import { installAppMenu, installTray } from './appMenu'
 import { createTrayPanel } from './trayPanel'
 import {
   applyBehavior,
+  applyLanguage,
   behavior,
   installClipboardWatcher,
   installLocalApi,
@@ -237,14 +239,14 @@ function createWindow(): void {
   mainWindow.webContents.on('context-menu', (_, { isEditable, selectionText, editFlags }) => {
     const template: Electron.MenuItemConstructorOptions[] = isEditable
       ? [
-          { role: 'cut', enabled: editFlags.canCut },
-          { role: 'copy', enabled: editFlags.canCopy },
-          { role: 'paste', enabled: editFlags.canPaste },
+          { role: 'cut', label: t('Cut'), enabled: editFlags.canCut },
+          { role: 'copy', label: t('Copy'), enabled: editFlags.canCopy },
+          { role: 'paste', label: t('Paste'), enabled: editFlags.canPaste },
           { type: 'separator' },
-          { role: 'selectAll', enabled: editFlags.canSelectAll }
+          { role: 'selectAll', label: t('Select All'), enabled: editFlags.canSelectAll }
         ]
       : selectionText.trim()
-        ? [{ role: 'copy' }]
+        ? [{ role: 'copy', label: t('Copy') }]
         : []
     if (template.length) Menu.buildFromTemplate(template).popup()
   })
@@ -316,6 +318,8 @@ app.whenReady().then(async () => {
       console.error('[lightning] folder access check failed', error)
     )
   }
+  // The language is known before any menu is built (a later change re-words them).
+  applyLanguage(await loadSettings())
   installAppMenu(() => mainWindow)
   if (testKnobs.trayPanel) {
     createTrayPanel({

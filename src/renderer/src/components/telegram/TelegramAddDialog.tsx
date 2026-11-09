@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { parseTelegramLinks } from '@shared/telegram'
 import { Warning as AlertTriangle, FolderOpen, X } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
@@ -13,7 +14,9 @@ const describeLink = (link: string): string => {
   const parts = link.replace(/^https:\/\/t\.me\//, '').split('/')
   const message = parts[parts.length - 1]
   const chat = parts.slice(0, -1).join('/')
-  return `${chat.replace(/^c\//, 'private chat ')} · message ${message}`
+  return chat.startsWith('c/')
+    ? t('private chat {chat} · message {message}', { chat: chat.slice(2), message })
+    : t('{chat} · message {message}', { chat, message })
 }
 
 const TME_WORD = /(?:^|[/.])(?:t|telegram)\.me\//i
@@ -83,9 +86,9 @@ function AddForm({ onDone }: { onDone: () => void }): React.JSX.Element {
       }}
     >
       <div className="border-b-[0.5px] border-border px-5 py-4">
-        <DialogTitle className="text-[16px] font-semibold">Add Telegram links</DialogTitle>
+        <DialogTitle className="text-[16px] font-semibold">{t('Add Telegram links')}</DialogTitle>
         <DialogDescription className="sr-only">
-          Paste Telegram message links to download the files in them.
+          {t('Paste Telegram message links to download the files in them.')}
         </DialogDescription>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
@@ -93,15 +96,19 @@ function AddForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           autoFocus
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Paste message links, one or many. Any text works: the links are picked out of it."
+          placeholder={t(
+            'Paste message links, one or many. Any text works: the links are picked out of it.'
+          )}
           spellCheck={false}
-          aria-label="Telegram links"
+          aria-label={t('Telegram links')}
           className="h-24 min-h-[72px] shrink-0 resize-y rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <div className="text-[12.5px] font-medium">
-          {links.length} valid
+          {t('{count} valid', { count: links.length })}
           {ignored > 0 && (
-            <span className="ml-2 font-normal text-muted-foreground">{ignored} ignored</span>
+            <span className="ms-2 font-normal text-muted-foreground">
+              {t('{count} ignored', { count: ignored })}
+            </span>
           )}
         </div>
         {links.length > 0 && (
@@ -111,19 +118,23 @@ function AddForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 key={link}
                 className="flex items-center gap-2 border-b-[0.5px] border-border px-3 py-1.5 text-[12.5px] last:border-b-0"
               >
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px]" title={link}>
+                <span
+                  dir="ltr"
+                  className="min-w-0 flex-1 truncate text-start font-mono text-[12px]"
+                  title={link}
+                >
                   {describeLink(link)}
                 </span>
                 {known.has(link) && (
                   <Badge variant="secondary" className="shrink-0">
-                    Already added
+                    {t('Already added')}
                   </Badge>
                 )}
                 <Button
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Remove ${describeLink(link)}`}
+                  aria-label={t('Remove {name}', { name: describeLink(link) })}
                   onClick={() => setRemoved((prev) => new Set(prev).add(link))}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -134,13 +145,17 @@ function AddForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           </div>
         )}
         <div className="flex items-center gap-2 text-[12.5px]">
-          <span className="w-20 shrink-0 text-[var(--text-secondary)]">Saved to</span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[12px]" title={dir ?? undefined}>
-            {dir ? toDisplayPath(dir, homeDir) : 'Lightning Telegram folder (see Settings)'}
+          <span className="w-20 shrink-0 text-[var(--text-secondary)]">{t('Saved to')}</span>
+          <span
+            dir="ltr"
+            className="min-w-0 flex-1 truncate text-start font-mono text-[12px]"
+            title={dir ?? undefined}
+          >
+            {dir ? toDisplayPath(dir, homeDir) : t('Lightning Telegram folder (see Settings)')}
           </span>
           <Button type="button" variant="secondary" onClick={() => void browse()}>
             <FolderOpen data-icon="inline-start" />
-            Browse…
+            {t('Browse…')}
           </Button>
         </div>
         {error && (
@@ -151,14 +166,16 @@ function AddForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         )}
       </div>
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
-        <span className="mr-auto text-[11.5px] text-muted-foreground">
-          Telegram downloads use the default connection.
+        <span className="me-auto text-[11.5px] text-muted-foreground">
+          {t('Telegram downloads use the default connection.')}
         </span>
         <Button type="button" variant="secondary" onClick={onDone} disabled={starting}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button type="submit" disabled={links.length === 0 || starting}>
-          {links.length > 1 ? `Download ${links.length} messages` : 'Download'}
+          {links.length > 1
+            ? t('Download {count} messages', { count: links.length })
+            : t('Download')}
         </Button>
       </div>
     </form>

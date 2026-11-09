@@ -1,4 +1,5 @@
 import { RowProgressLine } from './downloads/RowProgressLine'
+import { t } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
 import {
@@ -104,7 +105,7 @@ export const GroupFileRow = memo(
       const failed = entry.item.error ? describeError(entry.item.error) : undefined
       info = {
         status: failed ? 'failed' : 'queued',
-        label: failed ? 'Failed' : group.held ? 'Added for later' : 'Queued',
+        label: failed ? t('Failed') : group.held ? t('Added for later') : t('Queued'),
         reason: failed?.split(/(?<=[.!?])\s/)[0],
         reasonFull: failed,
         percent: 0,
@@ -116,7 +117,8 @@ export const GroupFileRow = memo(
         addedAt: group.createdAt,
         missing: false
       }
-      if (!failed && chosen.length > 0) reason = `next on ${chosen.map(nameOf).join(' + ')}`
+      if (!failed && chosen.length > 0)
+        reason = t('next on {networks}', { networks: chosen.map(nameOf).join(' + ') })
       chips = chosen.map((networkId) => ({
         id: networkId,
         name: nameOf(networkId),
@@ -125,7 +127,7 @@ export const GroupFileRow = memo(
       host = sourceOf(entry.item.request.url)
       if (failed) {
         action = {
-          label: 'Retry',
+          label: t('Retry'),
           icon: RotateCw,
           run: () => attempt(() => retryGroupFiles(group.id, [id]))
         }
@@ -139,19 +141,19 @@ export const GroupFileRow = memo(
         const live = entry.download
         if (live.status === 'downloading' || live.status === 'queued') {
           action = {
-            label: 'Pause',
+            label: t('Pause'),
             icon: Pause,
             run: () => attempt(() => window.lightning.pauseDownload(id))
           }
         } else if (live.status === 'paused') {
           action = {
-            label: 'Resume',
+            label: t('Resume'),
             icon: Play,
             run: () => attempt(() => window.lightning.resumeDownload(id))
           }
         } else if (live.status === 'error' && live.resumable !== false) {
           action = {
-            label: 'Retry',
+            label: t('Retry'),
             icon: RotateCw,
             run: () => attempt(() => window.lightning.resumeDownload(id))
           }
@@ -159,7 +161,7 @@ export const GroupFileRow = memo(
           // It can't continue (the file on the server changed, say): it starts again from a fresh
           // look at its link, in this group.
           action = {
-            label: 'Download again',
+            label: t('Download again'),
             icon: Download,
             run: () => attempt(() => retryGroupFiles(group.id, [id]))
           }
@@ -167,11 +169,11 @@ export const GroupFileRow = memo(
         if (auto && live.status === 'downloading') {
           const on = chips
           const fastest = [...group.plan.networks].sort((a, b) => b.baselineBps - a.baselineBps)[0]
-          if (pinned) reason = 'your choice'
-          else if (on.length > 1) reason = 'extra connections are helping'
-          else if (on.length === 1 && fastest?.id === on[0].id) reason = 'fastest network'
-          else if (on.length === 1) reason = 'its own network'
-        } else if (pinned) reason = 'your choice'
+          if (pinned) reason = t('your choice')
+          else if (on.length > 1) reason = t('extra connections are helping')
+          else if (on.length === 1 && fastest?.id === on[0].id) reason = t('fastest network')
+          else if (on.length === 1) reason = t('its own network')
+        } else if (pinned) reason = t('your choice')
       }
     }
 
@@ -187,7 +189,7 @@ export const GroupFileRow = memo(
       else if (
         entry.kind === 'download' &&
         entry.download.bytesDownloaded > 0 &&
-        !window.confirm(`Remove ${name}? The part already downloaded is deleted.`)
+        !window.confirm(t('Remove {name}? The part already downloaded is deleted.', { name }))
       )
         return
       else removeDownload(id)
@@ -196,7 +198,7 @@ export const GroupFileRow = memo(
     const finished = info.status === 'completed'
     const cells: Record<string, React.JSX.Element> = {
       name: (
-        <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 pl-9')}>
+        <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 ps-9')}>
           <FormatBadge
             name={name}
             size="sm"
@@ -215,9 +217,9 @@ export const GroupFileRow = memo(
             <button
               type="button"
               data-title
-              aria-label={`Open ${name}`}
+              aria-label={t('Open {name}', { name })}
               onClick={() => onOpen(id)}
-              className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-start outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ClippedText
                 text={name}
@@ -227,7 +229,7 @@ export const GroupFileRow = memo(
                 )}
               />
               <span className="truncate text-[11px] leading-none text-muted-foreground">
-                {[showSourceHost && host, pinned && 'pinned by you', !pinned && reason]
+                {[showSourceHost && host, pinned && t('pinned by you'), !pinned && reason]
                   .filter(Boolean)
                   .join(' · ') || '\u00A0'}
               </span>
@@ -259,17 +261,19 @@ export const GroupFileRow = memo(
     const menu: RowAction[] =
       entry.kind === 'waiting'
         ? [
-            ...(action ? [{ id: 'retry', label: 'Retry', icon: RotateCw, run: action.run }] : []),
-            { id: 'remove', label: 'Remove from group', icon: X, run: remove, divider: true },
+            ...(action
+              ? [{ id: 'retry', label: t('Retry'), icon: RotateCw, run: action.run }]
+              : []),
+            { id: 'remove', label: t('Remove from group'), icon: X, run: remove, divider: true },
             {
               id: 'copy',
-              label: 'Copy link',
+              label: t('Copy link'),
               icon: Copy,
               run: () => copyLink(entry.item.request.url)
             },
             {
               id: 'copy-name',
-              label: 'Copy file name',
+              label: t('Copy file name'),
               icon: FileText,
               run: () => void navigator.clipboard.writeText(name).catch(() => {})
             }
@@ -280,7 +284,7 @@ export const GroupFileRow = memo(
             handlers,
             primary: action ? { label: action.label, icon: action.icon, run: action.run } : null,
             fixLink: fixLinkOf(entry.download, info),
-            remove: { label: 'Remove from list', run: remove }
+            remove: { label: t('Remove from list'), run: remove }
           })
 
     const row = (
@@ -302,14 +306,14 @@ export const GroupFileRow = memo(
         <div role="cell" className="flex items-center justify-center">
           {entry.kind !== 'waiting' && (
             <Checkbox
-              aria-label={`Select ${name}`}
+              aria-label={t('Select {name}', { name })}
               checked={selected}
               onCheckedChange={(on) => onSelect(id, on)}
             />
           )}
         </div>
         {columns.map((column) => cells[column])}
-        <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+        <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
           {file && (
             <ConnectionPicker
               iconOnly
@@ -334,7 +338,7 @@ export const GroupFileRow = memo(
                     type="button"
                     size="icon-sm"
                     variant="ghost"
-                    aria-label={`${action.label} ${name}`}
+                    aria-label={t('{action} {name}', { action: action.label, name })}
                     onClick={action.run}
                     className="text-muted-foreground hover:text-foreground"
                   >
@@ -352,7 +356,7 @@ export const GroupFileRow = memo(
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Remove ${name}`}
+                  aria-label={t('Remove {name}', { name })}
                   onClick={remove}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -361,7 +365,7 @@ export const GroupFileRow = memo(
               }
             />
             <TooltipContent>
-              {entry.kind === 'finished' ? 'Remove from list' : 'Remove from group'}
+              {entry.kind === 'finished' ? t('Remove from list') : t('Remove from group')}
             </TooltipContent>
           </Tooltip>
         </div>

@@ -1,4 +1,5 @@
 import { Stack as Layers, type Icon } from '@phosphor-icons/react'
+import { t } from '@shared/i18n/react'
 import type { DownloadFilter } from '../../store/useAppStore'
 import { statusStyle, type StatusKey } from '../../utils/status'
 
@@ -10,7 +11,13 @@ export const STATUSES: {
   color?: string
   status?: StatusKey
 }[] = [
-  { value: 'all', label: 'All downloads', icon: Layers },
+  {
+    value: 'all',
+    get label() {
+      return t('All downloads')
+    },
+    icon: Layers
+  },
   ...(
     [
       ['downloading', 'Downloading', 'downloading'],
@@ -21,7 +28,9 @@ export const STATUSES: {
     ] as [DownloadFilter, string, StatusKey][]
   ).map(([value, label, status]) => ({
     value,
-    label,
+    get label() {
+      return t(label)
+    },
     icon: statusStyle(status).icon,
     color: statusStyle(status).color,
     status

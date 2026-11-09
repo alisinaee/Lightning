@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { reportYoutube } from '../externalActivity'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -271,11 +272,12 @@ async function notifyFinished(
   if (!allowed || testKnobs.userDataDir || !Notification.isSupported()) return
   if (settings.notifyWhenInactive && getWindow()?.isFocused()) return
 
-  const title = job.status === 'completed' ? 'YouTube download finished' : 'YouTube download failed'
+  const title =
+    job.status === 'completed' ? t('YouTube download finished') : t('YouTube download failed')
   const body =
     job.status === 'completed'
-      ? job.title || '1 video downloaded'
-      : job.error || 'The download could not be completed.'
+      ? job.title || t('1 video downloaded')
+      : job.error || t('The download could not be completed.')
 
   try {
     const notification = new Notification({ title, body, silent: true })

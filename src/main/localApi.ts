@@ -6,6 +6,26 @@ import { redactUrl } from '../shared/urlTools'
 import { isYoutubeUrl } from '../shared/youtube'
 import { log } from './logger'
 
+let bundledExtensionVersion: Promise<string | null> | null = null
+/** The version in the extension folder this Lightning ships, so the popup can say when the loaded
+ * copy is older. Read once; null when it cannot be read (no manifest, or run outside Electron). */
+function extensionVersion(): Promise<string | null> {
+  bundledExtensionVersion ??= (async () => {
+    try {
+      const [{ extensionFolder }, { readFile }, { join }] = await Promise.all([
+        import('./integration'),
+        import('node:fs/promises'),
+        import('node:path')
+      ])
+      const manifest = JSON.parse(await readFile(join(extensionFolder(), 'manifest.json'), 'utf8'))
+      return typeof manifest.version === 'string' ? manifest.version : null
+    } catch {
+      return null
+    }
+  })()
+  return bundledExtensionVersion
+}
+
 /** The ports Lightning tries, in order; the extension looks for it on the same ones. */
 export const API_PORTS = [17891, 17892, 17893, 17894, 17895, 17896, 17897, 17898, 17899, 17900]
 const MAX_BODY_BYTES = 256 * 1024
@@ -157,7 +177,18 @@ export class LocalApi {
     }
     const path = (req.url ?? '').split('?')[0]
     if (req.method === 'GET' && path === '/v1/ping') {
-      return this.send(res, 200, { app: 'Lightning', version: this.deps.version, api: 1 }, origin)
+      const bundled = await extensionVersion()
+      return this.send(
+        res,
+        200,
+        {
+          app: 'Lightning',
+          version: this.deps.version,
+          api: 1,
+          ...(bundled ? { extensionVersion: bundled } : {})
+        },
+        origin
+      )
     }
     if (!(await this.authorized(req))) {
       log.warn('action', 'browser call refused: the pairing key is missing or wrong', { path })

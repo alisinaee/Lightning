@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { CircleNotch as Loader2, X } from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
@@ -20,7 +21,7 @@ export function YoutubeFetchQueue({
 
   return (
     <div className="flex flex-col gap-2 border-b-[0.5px] border-border px-3 py-2.5">
-      <div className="text-[12px] font-medium text-muted-foreground">Fetch queue</div>
+      <div className="text-[12px] font-medium text-muted-foreground">{t('Fetch queue')}</div>
       {fetches.map((item) => (
         <div key={item.id}>
           <div className="flex items-center gap-3 rounded-md bg-muted/40 px-3 py-2">
@@ -31,7 +32,7 @@ export function YoutubeFetchQueue({
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
-                  Fetching {item.url}
+                  {t('Fetching {url}', { url: item.url })}
                 </span>
               </>
             )}
@@ -41,7 +42,7 @@ export function YoutubeFetchQueue({
                   {item.meta.title}
                 </span>
                 <Button type="button" size="sm" onClick={() => openFetch(item.id)}>
-                  Choose quality
+                  {t('Choose quality')}
                 </Button>
               </>
             )}
@@ -55,7 +56,7 @@ export function YoutubeFetchQueue({
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="Dismiss"
+              aria-label={t('Dismiss')}
               onClick={() => void dismissFetch(item.id)}
             >
               <X />

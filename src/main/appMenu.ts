@@ -3,6 +3,7 @@ import { app, Menu, Tray, nativeImage, shell, type BrowserWindow } from 'electro
 import { loadSettings } from './settings'
 import { getDefaultDownloadsDir } from './download/paths'
 import { iconWithLabel } from './trayLabel'
+import { onLanguageChange, t } from '../shared/i18n'
 
 /** The icon and the speed while something downloads. */
 const DOWNLOADING_YELLOW = '#FFC20A'
@@ -49,77 +50,102 @@ function show(getWindow: () => BrowserWindow | null): void {
 
 /** The Apple menu bar: the app's own actions, not only the stock File and Edit roles. */
 export function installAppMenu(getWindow: () => BrowserWindow | null): void {
+  const build = (): void => buildAppMenu(getWindow)
+  build()
+  // The menu's words are fixed when it is built: a new language builds it again.
+  onLanguageChange(build)
+}
+
+function buildAppMenu(getWindow: () => BrowserWindow | null): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin'
       ? [
           {
             label: app.name,
             submenu: [
-              { role: 'about' as const },
+              { role: 'about' as const, label: t('About {app}', { app: app.name }) },
               {
-                label: 'Settings…',
+                label: t('Settings…'),
                 accelerator: 'CommandOrControl+,',
                 click: () => send(getWindow, 'settings')
               },
               {
-                label: 'Check for Updates…',
+                label: t('Check for Updates…'),
                 click: () => send(getWindow, 'check-update')
               },
               { type: 'separator' as const },
-              { role: 'services' as const },
+              { role: 'services' as const, label: t('Services') },
               { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
+              { role: 'hide' as const, label: t('Hide {app}', { app: app.name }) },
+              { role: 'hideOthers' as const, label: t('Hide Others') },
+              { role: 'unhide' as const, label: t('Show All') },
               { type: 'separator' as const },
-              { role: 'quit' as const }
+              { role: 'quit' as const, label: t('Quit {app}', { app: app.name }) }
             ]
           }
         ]
       : []),
     {
-      label: 'File',
+      label: t('File'),
       submenu: [
         {
-          label: 'New Download…',
+          label: t('New Download…'),
           accelerator: 'CommandOrControl+N',
           click: () => send(getWindow, 'new-download')
         },
         {
-          label: 'Add Several Links…',
+          label: t('Add Several Links…'),
           accelerator: 'CommandOrControl+Shift+N',
           click: () => send(getWindow, 'several-links')
         },
-        { label: 'Telegram', click: () => send(getWindow, 'open-telegram') },
+        { label: t('Telegram'), click: () => send(getWindow, 'open-telegram') },
         { type: 'separator' },
-        { label: 'Pause All', click: () => send(getWindow, 'pause-all') },
-        { label: 'Resume All', click: () => send(getWindow, 'resume-all') },
+        { label: t('Pause All'), click: () => send(getWindow, 'pause-all') },
+        { label: t('Resume All'), click: () => send(getWindow, 'resume-all') },
         { type: 'separator' },
         ...(process.platform === 'darwin'
-          ? [{ role: 'close' as const }]
-          : [{ role: 'quit' as const }])
+          ? [{ role: 'close' as const, label: t('Close') }]
+          : [{ role: 'quit' as const, label: t('Quit') }])
       ]
     },
-    { role: 'editMenu' },
     {
-      label: 'View',
+      label: t('Edit'),
       submenu: [
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
+        { role: 'undo', label: t('Undo') },
+        { role: 'redo', label: t('Redo') },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'cut', label: t('Cut') },
+        { role: 'copy', label: t('Copy') },
+        { role: 'paste', label: t('Paste') },
+        { role: 'selectAll', label: t('Select All') }
       ]
     },
-    { role: 'windowMenu' },
     {
-      label: 'Help',
+      label: t('View'),
       submenu: [
-        { label: 'Logs', click: () => send(getWindow, 'logs') },
-        { label: 'Settings…', click: () => send(getWindow, 'settings') }
+        { role: 'reload', label: t('Reload') },
+        { role: 'toggleDevTools', label: t('Toggle Developer Tools') },
+        { type: 'separator' },
+        { role: 'resetZoom', label: t('Actual Size') },
+        { role: 'zoomIn', label: t('Zoom In') },
+        { role: 'zoomOut', label: t('Zoom Out') },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: t('Toggle Full Screen') }
+      ]
+    },
+    {
+      label: t('Window'),
+      submenu: [
+        { role: 'minimize', label: t('Minimize') },
+        { role: 'zoom', label: t('Zoom') },
+        { role: 'close', label: t('Close') }
+      ]
+    },
+    {
+      label: t('Help'),
+      submenu: [
+        { label: t('Logs'), click: () => send(getWindow, 'logs') },
+        { label: t('Settings…'), click: () => send(getWindow, 'settings') }
       ]
     }
   ]
@@ -223,21 +249,29 @@ export function installTray(
     menu = Menu.buildFromTemplate([
       ...status,
       ...(status.length > 0 ? [{ type: 'separator' as const }] : []),
-      { label: 'Show Lightning', click: () => show(getWindow) },
+      { label: t('Show Lightning'), click: () => show(getWindow) },
       { type: 'separator' },
-      { label: 'New Download…', click: () => send(getWindow, 'new-download') },
-      { label: 'Add Several Links…', click: () => send(getWindow, 'several-links') },
-      { label: 'Pause All', enabled: model.canPause, click: () => send(getWindow, 'pause-all') },
-      { label: 'Resume All', enabled: model.canResume, click: () => send(getWindow, 'resume-all') },
+      { label: t('New Download…'), click: () => send(getWindow, 'new-download') },
+      { label: t('Add Several Links…'), click: () => send(getWindow, 'several-links') },
+      { label: t('Pause All'), enabled: model.canPause, click: () => send(getWindow, 'pause-all') },
+      {
+        label: t('Resume All'),
+        enabled: model.canResume,
+        click: () => send(getWindow, 'resume-all')
+      },
       { type: 'separator' },
-      { label: 'Settings…', click: () => send(getWindow, 'settings') },
-      { label: 'Check for Updates…', click: () => send(getWindow, 'check-update') },
+      { label: t('Settings…'), click: () => send(getWindow, 'settings') },
+      { label: t('Check for Updates…'), click: () => send(getWindow, 'check-update') },
       { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() }
+      { label: t('Quit'), click: () => app.quit() }
     ])
   }
 
   onTrayConfig(() => {
+    shown = ''
+    rebuild()
+  })
+  onLanguageChange(() => {
     shown = ''
     rebuild()
   })

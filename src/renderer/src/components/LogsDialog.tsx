@@ -4,6 +4,7 @@ import { useLogsStore } from '../store/useLogsStore'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
+import { t } from '@shared/i18n/react'
 
 type Level = 'INFO' | 'WARN' | 'ERROR'
 const LEVELS: Level[] = ['INFO', 'WARN', 'ERROR']
@@ -43,7 +44,7 @@ function LogsView(): React.JSX.Element {
     try {
       setLines(await window.lightning.readLog(LINES))
     } catch (error) {
-      setNote(`Could not read the log: ${String(error)}`)
+      setNote(t('Could not read the log: {error}', { error: String(error) }))
     }
   }, [])
 
@@ -70,9 +71,9 @@ function LogsView(): React.JSX.Element {
   const copy = async (text: string, what: string): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text)
-      setNote(`Copied ${what}`)
+      setNote(t('Copied {what}', { what }))
     } catch {
-      setNote('Could not copy')
+      setNote(t('Could not copy'))
     }
   }
 
@@ -84,9 +85,11 @@ function LogsView(): React.JSX.Element {
   return (
     <>
       <div>
-        <DialogTitle className="text-[16px] font-semibold">Logs</DialogTitle>
+        <DialogTitle className="text-[16px] font-semibold">{t('Logs')}</DialogTitle>
         <DialogDescription className="text-[12px]">
-          The latest {LINES} lines. Links are shown without their query strings.
+          {t('The latest {count} lines. Links are shown without their query strings.', {
+            count: LINES
+          })}
         </DialogDescription>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -104,8 +107,8 @@ function LogsView(): React.JSX.Element {
         ))}
         <Input
           type="search"
-          aria-label="Search the log"
-          placeholder="Search"
+          aria-label={t('Search the log')}
+          placeholder={t('Search')}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="h-8 w-[200px] text-[12.5px]"
@@ -116,19 +119,21 @@ function LogsView(): React.JSX.Element {
             checked={auto}
             onChange={(event) => setAuto(event.target.checked)}
           />
-          Auto-refresh
+          {t('Auto-refresh')}
         </label>
         <Button type="button" size="sm" variant="ghost" onClick={() => void load()}>
-          Refresh
+          {t('Refresh')}
         </Button>
       </div>
       <div
         ref={box}
         role="log"
-        aria-label="Log lines"
+        aria-label={t('Log lines')}
         className="min-h-0 flex-1 overflow-auto rounded-[9px] border-[0.5px] border-border bg-card p-2 font-mono text-[11px] leading-[1.45]"
       >
-        {shown.length === 0 && <div className="text-muted-foreground">No lines to show.</div>}
+        {shown.length === 0 && (
+          <div className="text-muted-foreground">{t('No lines to show.')}</div>
+        )}
         {shown.map((line, index) => (
           <div
             key={index}
@@ -147,29 +152,29 @@ function LogsView(): React.JSX.Element {
           type="button"
           size="sm"
           variant="secondary"
-          onClick={() => void copy(lines.join('\n'), 'all lines')}
+          onClick={() => void copy(lines.join('\n'), t('all lines'))}
         >
-          Copy all
+          {t('Copy all')}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="secondary"
           onClick={() =>
-            void copy(lines.filter((line) => levelOf(line) === 'ERROR').join('\n'), 'errors')
+            void copy(lines.filter((line) => levelOf(line) === 'ERROR').join('\n'), t('errors'))
           }
         >
-          Copy errors only
+          {t('Copy errors only')}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="secondary"
           onClick={() =>
-            void window.lightning.diagnosticReport().then((report) => copy(report, 'the report'))
+            void window.lightning.diagnosticReport().then((report) => copy(report, t('the report')))
           }
         >
-          Copy diagnostic report
+          {t('Copy diagnostic report')}
         </Button>
         <Button
           type="button"
@@ -177,7 +182,7 @@ function LogsView(): React.JSX.Element {
           variant="secondary"
           onClick={() => void window.lightning.openLogFolder()}
         >
-          Open log folder
+          {t('Open log folder')}
         </Button>
         <Button
           type="button"
@@ -185,9 +190,9 @@ function LogsView(): React.JSX.Element {
           variant="destructive"
           onClick={() => void window.lightning.clearLog().then(load)}
         >
-          Clear
+          {t('Clear')}
         </Button>
-        <span role="status" className="ml-auto text-[12px] text-muted-foreground">
+        <span role="status" className="ms-auto text-[12px] text-muted-foreground">
           {note}
         </span>
       </div>

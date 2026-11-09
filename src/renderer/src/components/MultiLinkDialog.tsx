@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import type { ProbeResult } from '@shared/types'
 import type { DuplicateMatch } from '@shared/duplicates'
 import { cn } from 'cn'
@@ -119,16 +120,33 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
       if (result.links.length === 0) {
         setScanNote(
           result.otherCount > 0
-            ? `No file links found (${result.otherCount} other links). Tick “Every link” to list them.`
-            : 'No links found. A page that builds its links with JavaScript can’t be read here.'
+            ? tn(
+                result.otherCount,
+                'No file links found ({count} other link). Tick “Every link” to list them.',
+                'No file links found ({count} other links). Tick “Every link” to list them.'
+              )
+            : t('No links found. A page that builds its links with JavaScript can’t be read here.')
         )
       } else {
         setText(
           (current) => `${current.trim()}${current.trim() ? '\n' : ''}${result.links.join('\n')}`
         )
+        const added = tn(
+          result.links.length,
+          '{count} link added to the box',
+          '{count} links added to the box'
+        )
         setScanNote(
-          `${result.links.length} ${result.links.length === 1 ? 'link' : 'links'} added to the box` +
-            (result.otherCount > 0 ? `, ${result.otherCount} other links left out` : '')
+          result.otherCount > 0
+            ? t('{first}, {second}', {
+                first: added,
+                second: tn(
+                  result.otherCount,
+                  '{count} other link left out',
+                  '{count} other links left out'
+                )
+              })
+            : added
         )
       }
     } catch (error) {
@@ -256,7 +274,9 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         return
       }
       setStarted(failed.length < requests.length)
-      setStartError(`${failed.length} could not start. ${failed[0]}`)
+      setStartError(
+        t('{count} could not start. {reason}', { count: failed.length, reason: failed[0] })
+      )
     } catch (error) {
       setStartError(describeError(error))
     }
@@ -265,11 +285,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
 
   const stepNumber = !rows ? 1 : step === 'files' ? 2 : 3
   const title = !rows
-    ? 'Add several links'
+    ? t('Add several links')
     : step === 'files'
-      ? 'Choose what to download'
-      : 'Download settings'
-  const plural = chosen.length === 1 ? 'file' : 'files'
+      ? t('Choose what to download')
+      : t('Download settings')
 
   const selectButton = (
     label: string,
@@ -311,7 +330,9 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     >
       <div className="flex items-baseline justify-between gap-3 border-b-[0.5px] border-border px-5 py-4">
         <DialogTitle className="text-[16px] font-semibold">{title}</DialogTitle>
-        <span className="mr-9 text-[12px] text-muted-foreground">Step {stepNumber} of 3</span>
+        <span className="me-9 text-[12px] text-muted-foreground">
+          {t('Step {step} of 3', { step: stepNumber })}
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
@@ -329,9 +350,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       void handleScan()
                     }
                   }}
-                  placeholder="Or scan a web page: paste its address to list the files on it"
+                  dir="ltr"
+                  placeholder={t('Or scan a web page: paste its address to list the files on it')}
                   spellCheck={false}
-                  aria-label="Page address"
+                  aria-label={t('Page address')}
                   className="h-9 min-w-0 flex-1 rounded-[9px] border border-input bg-[var(--input-bg)] px-3 text-[12.5px] outline-none"
                 />
                 <Button
@@ -340,7 +362,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                   disabled={scanning || pageUrl.trim() === ''}
                   onClick={() => void handleScan()}
                 >
-                  {scanning ? 'Scanning…' : 'Scan page'}
+                  {scanning ? t('Scanning…') : t('Scan page')}
                 </Button>
               </div>
               <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -349,7 +371,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                   checked={scanAll}
                   onChange={(event) => setScanAll(event.target.checked)}
                 />
-                Every link, not only files
+                {t('Every link, not only files')}
               </label>
               {scanNote && (
                 <div role="status" className="text-[12px] text-[var(--text-secondary)]">
@@ -361,43 +383,54 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               autoFocus
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder={'Paste your links here, one on each line'}
+              dir="ltr"
+              placeholder={t('Paste your links here, one on each line')}
               spellCheck={false}
-              aria-label="Links"
+              aria-label={t('Links')}
               rows={9}
               className="h-[190px] min-h-[190px] w-full shrink-0 resize-none rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12.5px] text-foreground outline-none"
             />
             <RequestOptions value={draft} onChange={setDraft} link={found.links[0] ?? ''} />
             <div className="text-[12.5px] text-[var(--text-secondary)]">
               {found.links.length === 0
-                ? 'Links start with https:// or magnet:'
-                : `${found.links.length} ${found.links.length === 1 ? 'link' : 'links'} found` +
-                  (found.skipped > 0 ? `, ${found.skipped} skipped (repeated or not a link)` : '')}
+                ? t('Links start with https:// or magnet:')
+                : found.skipped > 0
+                  ? t('{first}, {second}', {
+                      first: tn(found.links.length, '{count} link found', '{count} links found'),
+                      second: t('{count} skipped (repeated or not a link)', {
+                        count: found.skipped
+                      })
+                    })
+                  : tn(found.links.length, '{count} link found', '{count} links found')}
             </div>
           </>
         ) : step === 'files' ? (
           <>
             <div className="flex shrink-0 items-center gap-1 text-[12.5px]">
               <span className="flex-1 font-medium">
-                {chosen.length} of {rows.length} selected
+                {t('{chosen} of {total} selected', { chosen: chosen.length, total: rows.length })}
                 {totalBytes > 0 && (
-                  <span className="ml-2 font-normal text-muted-foreground">
+                  <span dir="ltr" className="ms-2 inline-block font-normal text-muted-foreground">
                     {formatBytes(totalBytes)}
                   </span>
                 )}
                 {skipped > 0 && (
-                  <span className="ml-2 font-normal text-muted-foreground">{skipped} skipped</span>
+                  <span className="ms-2 font-normal text-muted-foreground">
+                    {t('{count} skipped', { count: skipped })}
+                  </span>
                 )}
                 {duplicateByUrl.size > 0 && (
-                  <span className="ml-2 font-normal text-amber-700 dark:text-amber-400">
-                    {duplicateByUrl.size} already downloaded or downloading
+                  <span className="ms-2 font-normal text-amber-700 dark:text-amber-400">
+                    {t('{count} already downloaded or downloading', {
+                      count: duplicateByUrl.size
+                    })}
                   </span>
                 )}
               </span>
-              {selectButton('Select all', ListChecks, ready.length === 0 || allTicked, () =>
+              {selectButton(t('Select all'), ListChecks, ready.length === 0 || allTicked, () =>
                 setUnticked([])
               )}
-              {selectButton('Unselect all', ListX, chosen.length === 0, () =>
+              {selectButton(t('Unselect all'), ListX, chosen.length === 0, () =>
                 setUnticked(ready.map((row) => row.url))
               )}
             </div>
@@ -440,7 +473,7 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                         </TooltipContent>
                       </Tooltip>
                       {row.status === 'checking' && (
-                        <div className="text-[11.5px] text-muted-foreground">Checking…</div>
+                        <div className="text-[11.5px] text-muted-foreground">{t('Checking…')}</div>
                       )}
                       {row.status === 'error' && (
                         <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-danger)]">
@@ -459,7 +492,10 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     </div>
                   </label>
                   {row.status === 'ready' && row.result.totalBytes !== null && (
-                    <span className="w-20 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground">
+                    <span
+                      dir="ltr"
+                      className="w-20 shrink-0 text-end font-mono text-[11.5px] text-muted-foreground"
+                    >
                       {formatBytes(row.result.totalBytes)}
                     </span>
                   )}
@@ -470,8 +506,8 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
         ) : (
           <>
             <div className="text-[12.5px] text-[var(--text-secondary)]">
-              {chosen.length} {plural}
-              {totalBytes > 0 && ` · ${formatBytes(totalBytes)}`}
+              {tn(chosen.length, '{count} file', '{count} files')}
+              {totalBytes > 0 && <bdi dir="ltr">{` · ${formatBytes(totalBytes)}`}</bdi>}
             </div>
 
             <GroupSettings
@@ -512,25 +548,31 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
 
             <div className="flex flex-col gap-1.5">
               <label className="flex items-center gap-2 text-[12.5px]">
-                <span className="w-24 shrink-0 text-[var(--text-secondary)]">New folder</span>
+                <span className="w-24 shrink-0 text-[var(--text-secondary)]">
+                  {t('New folder')}
+                </span>
                 <input
                   type="text"
                   value={folder}
                   onChange={(event) => setFolder(event.target.value)}
-                  placeholder="Name of a folder to put them in (optional)"
+                  placeholder={t('Name of a folder to put them in (optional)')}
                   spellCheck={false}
-                  aria-label="Folder name"
+                  aria-label={t('Folder name')}
                   className="h-9 min-w-0 flex-1 rounded-[9px] border border-input bg-[var(--input-bg)] px-3 text-[13px] text-foreground outline-none"
                 />
               </label>
               <div className="flex items-center gap-2 text-[12.5px]">
-                <span className="w-24 shrink-0 text-[var(--text-secondary)]">Saved to</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px]" title={target}>
+                <span className="w-24 shrink-0 text-[var(--text-secondary)]">{t('Saved to')}</span>
+                <span
+                  dir="ltr"
+                  className="min-w-0 flex-1 truncate text-end font-mono text-[12px]"
+                  title={target}
+                >
                   {toDisplayPath(target, homeDir)}
                 </span>
                 <Button type="button" variant="secondary" onClick={handleBrowse}>
                   <FolderOpen data-icon="inline-start" />
-                  Browse…
+                  {t('Browse…')}
                 </Button>
               </div>
             </div>
@@ -549,23 +591,25 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           <Button
             type="button"
             variant="ghost"
-            className="mr-auto"
+            className="me-auto"
             disabled={starting || started}
             onClick={() => (step === 'settings' ? setStep('files') : setRows(null))}
           >
-            Back
+            {t('Back')}
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={onDone} disabled={starting}>
-          {started ? 'Close' : 'Cancel'}
+          {started ? t('Close') : t('Cancel')}
         </Button>
         {!rows ? (
           <Button type="submit" disabled={found.links.length === 0}>
-            Continue
+            {t('Continue')}
           </Button>
         ) : step === 'files' ? (
           <Button type="submit" disabled={chosen.length === 0 || checking}>
-            {checking ? 'Checking…' : `Continue with ${chosen.length} ${plural}`}
+            {checking
+              ? t('Checking…')
+              : tn(chosen.length, 'Continue with {count} file', 'Continue with {count} files')}
           </Button>
         ) : (
           !started && (
@@ -576,10 +620,12 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 disabled={!canStart}
                 onClick={() => void handleStart(true)}
               >
-                Download later
+                {t('Download later')}
               </Button>
               <Button type="submit" disabled={!canStart}>
-                {starting ? 'Starting…' : `Download ${chosen.length} ${plural}`}
+                {starting
+                  ? t('Starting…')
+                  : tn(chosen.length, 'Download {count} file', 'Download {count} files')}
               </Button>
             </>
           )

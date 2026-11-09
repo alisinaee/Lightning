@@ -1,4 +1,5 @@
 import type { DownloadState } from '@shared/types'
+import { t } from '@shared/i18n/react'
 import { Folder } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { FixLinkDialog } from '../components/FixLinkDialog'
@@ -36,12 +37,12 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
   const resumable = !cancelled && download.resumable !== false && download.bytesDownloaded > 0
   const knownSize = download.totalBytes > 0
   const percent = knownSize ? formatPercent(download.bytesDownloaded, wantedBytes(download)) : 0
-  const heading = cancelled ? 'Download cancelled' : 'Download failed'
+  const heading = cancelled ? t('Download cancelled') : t('Download failed')
   const description = cancelled
-    ? 'The download was stopped before finishing.'
+    ? t('The download was stopped before finishing.')
     : download.error
       ? describeError(download.error)
-      : 'The download stopped unexpectedly. Try again.'
+      : t('The download stopped unexpectedly. Try again.')
 
   const handleCopyUrl = async (): Promise<void> => {
     try {
@@ -58,7 +59,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
       <DetailHeader download={download}>
         {expired ? (
           <Button type="button" onClick={() => setFixing(true)}>
-            Fix link
+            {t('Fix link')}
           </Button>
         ) : resumable ? (
           <Button
@@ -69,11 +70,11 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
               void window.lightning.resumeDownload(download.id).finally(() => setResuming(false))
             }}
           >
-            {resuming ? 'Retrying…' : 'Retry'}
+            {resuming ? t('Retrying…') : t('Retry')}
           </Button>
         ) : (
           <Button type="button" onClick={handleDownloadAgain}>
-            Download again
+            {t('Download again')}
           </Button>
         )}
       </DetailHeader>
@@ -142,14 +143,14 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
           </div>
 
           {/* File capsule */}
-          <div className="flex w-full items-center gap-[11px] rounded-[9px] border-[0.5px] border-border bg-background p-[10px_12px] text-left">
+          <div className="flex w-full items-center gap-[11px] rounded-[9px] border-[0.5px] border-border bg-background p-[10px_12px] text-start">
             <FormatBadge
               name={download.fileName}
               className="size-[34px] rounded-[7px] text-[8.5px]"
               kind={isFolder(download) ? 'torrent' : undefined}
             >
               {isFolder(download) ? (
-                <Folder aria-label="Folder" className="size-[15px]" />
+                <Folder aria-label={t('Folder')} className="size-[15px]" />
               ) : undefined}
             </FormatBadge>
             <div className="min-w-0 flex-1">
@@ -162,18 +163,24 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
                   <>
                     {formatBytes(download.bytesDownloaded)}
                     {knownSize
-                      ? ` of ${formatBytes(wantedBytes(download))} (${percent}%)`
-                      : ' downloaded'}
+                      ? t(' of {total} ({percent}%)', {
+                          total: formatBytes(wantedBytes(download)),
+                          percent
+                        })
+                      : t(' downloaded')}
                   </>
                 ) : (
-                  'No data downloaded'
+                  t('No data downloaded')
                 )}
               </div>
             </div>
           </div>
 
           <div className="flex w-full min-w-0 items-center gap-2 border-t-[0.5px] border-border pt-3">
-            <div className="min-w-0 flex-1 text-left font-mono text-[11px] leading-none text-muted-foreground">
+            <div
+              className="min-w-0 flex-1 text-start font-mono text-[11px] leading-none text-muted-foreground"
+              dir="ltr"
+            >
               <TruncatedText text={download.url} />
             </div>
             <button
@@ -183,7 +190,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
                 copied ? 'text-[var(--color-success)]' : 'text-primary'
               }`}
             >
-              {copied ? 'Copied' : 'Copy link'}
+              {copied ? t('Copied') : t('Copy link')}
             </button>
           </div>
         </div>

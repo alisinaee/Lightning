@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n'
 import { createContext, useContext } from 'react'
 import { ACTIONS_WIDTH, SELECT_WIDTH } from '../downloads/columns'
 import type { YoutubeJob } from '@shared/youtube'
@@ -17,13 +18,21 @@ const STATUS_KEY: Record<YoutubeJob['status'], StatusKey> = {
   cancelled: 'paused'
 }
 
-const LABEL: Record<YoutubeJob['status'], string> = {
-  queued: 'Queued',
-  downloading: 'Downloading',
-  paused: 'Paused',
-  completed: 'Completed',
-  error: 'Failed',
-  cancelled: 'Cancelled'
+const label = (status: YoutubeJob['status']): string => {
+  switch (status) {
+    case 'queued':
+      return t('Queued')
+    case 'downloading':
+      return t('Downloading')
+    case 'paused':
+      return t('Paused')
+    case 'completed':
+      return t('Completed')
+    case 'error':
+      return t('Failed')
+    case 'cancelled':
+      return t('Cancelled')
+  }
 }
 
 /** Turns a YouTube job into the same row description the Downloads list uses, so the status,
@@ -35,7 +44,9 @@ export function describeYoutubeJob(job: YoutubeJob): RowInfo {
   const firstLine = job.error?.split('\n')[0]
   return {
     status: STATUS_KEY[job.status],
-    label: downloading ? `Downloading ${Math.round(percent)}%` : LABEL[job.status],
+    label: downloading
+      ? t('Downloading {percent}%', { percent: Math.round(percent) })
+      : label(job.status),
     reason: job.status === 'error' ? firstLine : undefined,
     reasonFull: job.status === 'error' ? job.error : undefined,
     percent,
@@ -75,7 +86,7 @@ export function describeYoutubeGroup(jobs: YoutubeJob[]): RowInfo {
   const speed = jobs.reduce((sum, job) => sum + (job.status === 'downloading' ? job.speed : 0), 0)
   return {
     status,
-    label: allDone ? 'Completed' : `${done} of ${jobs.length} done`,
+    label: allDone ? t('Completed') : t('{done} of {total} done', { done, total: jobs.length }),
     percent,
     bar: !allDone,
     received: jobs.reduce(

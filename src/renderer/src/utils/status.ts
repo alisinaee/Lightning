@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import {
   ArrowLineDown as ArrowDownToLine,
@@ -16,12 +17,49 @@ export type Item = DownloadState | FinishedDownload
 export type StatusKey = 'downloading' | 'queued' | 'paused' | 'completed' | 'failed' | 'attention'
 
 export const STATUS_STYLE: Record<StatusKey, { label: string; icon: Icon; color: string }> = {
-  downloading: { label: 'Downloading', icon: ArrowDownToLine, color: 'var(--status-downloading)' },
-  queued: { label: 'Queued', icon: Clock, color: 'var(--status-queued)' },
-  paused: { label: 'Paused', icon: Pause, color: 'var(--status-paused)' },
-  completed: { label: 'Completed', icon: CircleCheck, color: 'var(--status-done)' },
-  failed: { label: 'Failed', icon: CircleAlert, color: 'var(--status-failed)' },
-  attention: { label: 'Needs attention', icon: TriangleAlert, color: 'var(--status-attention)' }
+  // Labels are getters so they are read in the current language each time.
+  downloading: {
+    get label() {
+      return t('Downloading')
+    },
+    icon: ArrowDownToLine,
+    color: 'var(--status-downloading)'
+  },
+  queued: {
+    get label() {
+      return t('Queued')
+    },
+    icon: Clock,
+    color: 'var(--status-queued)'
+  },
+  paused: {
+    get label() {
+      return t('Paused')
+    },
+    icon: Pause,
+    color: 'var(--status-paused)'
+  },
+  completed: {
+    get label() {
+      return t('Completed')
+    },
+    icon: CircleCheck,
+    color: 'var(--status-done)'
+  },
+  failed: {
+    get label() {
+      return t('Failed')
+    },
+    icon: CircleAlert,
+    color: 'var(--status-failed)'
+  },
+  attention: {
+    get label() {
+      return t('Needs attention')
+    },
+    icon: TriangleAlert,
+    color: 'var(--status-attention)'
+  }
 }
 
 /** A style for any key, even one this version doesn't know: never undefined. */
@@ -104,7 +142,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
   if (isFinished(item)) {
     return {
       ...base,
-      label: base.missing ? 'File missing' : statusStyle('completed').label,
+      label: base.missing ? t('File missing') : statusStyle('completed').label,
       bar: false,
       speed: 0,
       etaSeconds: null
@@ -117,7 +155,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     case 'downloading':
       return {
         ...base,
-        label: total > 0 ? `Downloading ${percent}%` : 'Downloading',
+        label: total > 0 ? t('Downloading {percent}%', { percent }) : t('Downloading'),
         bar: true,
         speed,
         etaSeconds
@@ -125,7 +163,7 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     case 'queued':
       return {
         ...base,
-        label: queuePosition ? `Queued #${queuePosition}` : 'Queued',
+        label: queuePosition ? t('Queued #{position}', { position: queuePosition }) : t('Queued'),
         bar: item.bytesDownloaded > 0,
         speed: 0,
         etaSeconds: null
@@ -133,7 +171,8 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
     case 'paused':
       return {
         ...base,
-        label: total > 0 && item.bytesDownloaded > 0 ? `Paused ${percent}%` : 'Paused',
+        label:
+          total > 0 && item.bytesDownloaded > 0 ? t('Paused {percent}%', { percent }) : t('Paused'),
         bar: item.bytesDownloaded > 0,
         speed: 0,
         etaSeconds: null
@@ -147,10 +186,12 @@ export function describeItem(item: Item, queuePosition?: number): RowInfo {
         etaSeconds: null
       }
     default: {
-      const full = describeError(item.error ?? 'Something went wrong')
+      const full = describeError(item.error ?? t('Something went wrong'))
       // What it has downloaded is kept for a retry: say so, with how much.
       const kept =
-        item.bytesDownloaded > 0 && item.resumable !== false && total > 0 ? `${percent}% kept` : ''
+        item.bytesDownloaded > 0 && item.resumable !== false && total > 0
+          ? t('{percent}% kept', { percent })
+          : ''
       return {
         ...base,
         label: statusStyle(status).label,

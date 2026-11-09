@@ -1,4 +1,5 @@
 import { describeError, linkRefused } from '@shared/errors'
+import { formatDate, formatNumber, formatTime, t, tn } from '@shared/i18n/react'
 import type {
   DownloadNetwork,
   DownloadState,
@@ -10,44 +11,46 @@ import type {
   TorrentDownloadState
 } from '@shared/types'
 
-const UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
+const unitNames = (): string[] => [t('B'), t('KB'), t('MB'), t('GB'), t('TB')]
 
 export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  if (!Number.isFinite(bytes) || bytes <= 0) return `${formatNumber(0)} ${t('B')}`
   // Under 1 byte (a slow speed averaged over a few seconds) is still bytes, not a unit below them.
-  let exponent = Math.max(
-    0,
-    Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1)
-  )
+  let exponent = Math.max(0, Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 4))
   let value = bytes / 1024 ** exponent
-  if (exponent < UNITS.length - 1 && Number(value.toFixed(exponent === 0 ? 0 : 1)) >= 1024) {
+  if (exponent < 4 && Number(value.toFixed(exponent === 0 ? 0 : 1)) >= 1024) {
     exponent += 1
     value = bytes / 1024 ** exponent
   }
-  return `${value.toFixed(exponent === 0 ? 0 : 1)} ${UNITS[exponent]}`
+  const digits = exponent === 0 ? 0 : 1
+  const shown = formatNumber(value, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  })
+  return `${shown} ${unitNames()[exponent]}`
 }
 
 export function formatSpeed(bytesPerSec: number): string {
-  return `${formatBytes(bytesPerSec)}/s`
+  return t('{size}/s', { size: formatBytes(bytesPerSec) })
 }
 
 export function formatEta(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return '—'
   // Seconds round up, so anything past 59s is a minute: "1m 0s", never "60s".
-  if (Math.ceil(seconds) < 60) return `${Math.max(1, Math.ceil(seconds))}s`
+  if (Math.ceil(seconds) < 60) return t('{n}s', { n: Math.max(1, Math.ceil(seconds)) })
   const totalSec = Math.max(60, Math.round(seconds))
   const mins = Math.floor(totalSec / 60)
   const secs = totalSec % 60
-  if (mins < 60) return `${mins}m ${secs}s`
+  if (mins < 60) return t('{m}m {s}s', { m: mins, s: secs })
   const hrs = Math.floor(mins / 60)
   const remMins = mins % 60
-  return `${hrs}h ${remMins}m`
+  return t('{h}h {m}m', { h: hrs, m: remMins })
 }
 
 /** "3 files", or "2 of 4 files" when only some were chosen. */
 export function describeFileCount(chosen: number, total: number): string {
-  const files = `${total} ${total === 1 ? 'file' : 'files'}`
-  return chosen === total ? files : `${chosen} of ${files}`
+  const files = tn(total, '{count} file', '{count} files')
+  return chosen === total ? files : t('{chosen} of {files}', { chosen, files })
 }
 
 /** A torrent file's path within the torrent's own folder, which every path starts with. */
@@ -88,16 +91,16 @@ export function fileExtensionBadge(fileName: string): string {
  * "Yesterday 21:10", or the date. */
 export function formatWhen(time: number, now: number): string {
   const minutes = Math.floor((now - time) / 60_000)
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes} min ago`
+  if (minutes < 1) return t('Just now')
+  if (minutes < 60) return t('{n} min ago', { n: minutes })
   const date = new Date(time)
-  const clock = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const clock = formatTime(date, { hour: '2-digit', minute: '2-digit' })
   const days = Math.round(
     (new Date(now).setHours(0, 0, 0, 0) - new Date(time).setHours(0, 0, 0, 0)) / 86_400_000
   )
-  if (days === 0) return `Today ${clock}`
-  if (days === 1) return `Yesterday ${clock}`
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  if (days === 0) return t('Today {time}', { time: clock })
+  if (days === 1) return t('Yesterday {time}', { time: clock })
+  return formatDate(date, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /** What Lightning can download: a web link, a magnet link, or a .torrent file on this computer. */
@@ -117,15 +120,19 @@ export function sourceOf(url: string): string {
   }
 }
 
+const two = { minimumIntegerDigits: 2, useGrouping: false }
+
 /** m:ss, or h:mm:ss past an hour. */
 export function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
+  if (!Number.isFinite(seconds) || seconds <= 0) return `${formatNumber(0)}:${formatNumber(0, two)}`
   const total = Math.max(0, Math.round(seconds))
   const hrs = Math.floor(total / 3600)
   const mins = Math.floor((total % 3600) / 60)
   const secs = total % 60
-  if (hrs > 0) return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  return `${mins}:${String(secs).padStart(2, '0')}`
+  if (hrs > 0) {
+    return `${formatNumber(hrs)}:${formatNumber(mins, two)}:${formatNumber(secs, two)}`
+  }
+  return `${formatNumber(mins)}:${formatNumber(secs, two)}`
 }
 
 /** "12.3 MB" -> { value: "12.3", unit: "MB" } — for readouts that size the number and unit separately. */
@@ -223,7 +230,7 @@ export function formatSeconds(seconds: number | null): string {
 
 /** A date and time in full, for a tooltip. */
 export function formatDateTime(time: number): string {
-  return new Date(time).toLocaleString(undefined, {
+  return formatDate(time, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import type { TdlItem, TdlJob, TgMediaKind } from '@shared/telegram'
 import {
   ListDashes as ListX,
@@ -15,12 +16,42 @@ import type { FileKind } from '../../utils/fileKind'
 import type { RowInfo } from '../../utils/status'
 
 /** The media groups in the order the side panel lists them. */
-export const MEDIA_KINDS: { kind: TgMediaKind; label: string; fileKind: FileKind }[] = [
-  { kind: 'video', label: 'Videos', fileKind: 'video' },
-  { kind: 'photo', label: 'Photos', fileKind: 'image' },
-  { kind: 'audio', label: 'Audio', fileKind: 'audio' },
-  { kind: 'document', label: 'Documents', fileKind: 'document' },
-  { kind: 'other', label: 'Other', fileKind: 'other' }
+export const MEDIA_KINDS: { kind: TgMediaKind; readonly label: string; fileKind: FileKind }[] = [
+  {
+    kind: 'video',
+    get label() {
+      return t('Videos')
+    },
+    fileKind: 'video'
+  },
+  {
+    kind: 'photo',
+    get label() {
+      return t('Photos')
+    },
+    fileKind: 'image'
+  },
+  {
+    kind: 'audio',
+    get label() {
+      return t('Audio')
+    },
+    fileKind: 'audio'
+  },
+  {
+    kind: 'document',
+    get label() {
+      return t('Documents')
+    },
+    fileKind: 'document'
+  },
+  {
+    kind: 'other',
+    get label() {
+      return t('Other')
+    },
+    fileKind: 'other'
+  }
 ]
 
 export const fileKindOfMedia = (media: TgMediaKind): FileKind =>
@@ -64,7 +95,7 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
     return {
       ...base,
       status: 'completed',
-      label: item.status === 'skipped' ? 'Already there' : 'Completed',
+      label: item.status === 'skipped' ? t('Already there') : t('Completed'),
       percent: 100,
       received: item.total || item.received,
       bar: false,
@@ -73,11 +104,11 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
     }
   }
   if (item.status === 'failed') {
-    const reason = item.error || job.error || 'The download failed'
+    const reason = item.error || job.error || t('The download failed')
     return {
       ...base,
       status: 'failed',
-      label: 'Failed',
+      label: t('Failed'),
       reason: clip(reason),
       reasonFull: reason,
       bar: false,
@@ -86,11 +117,11 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
     }
   }
   if (job.status === 'error' || job.status === 'cancelled') {
-    const reason = job.status === 'error' ? job.error || 'The download failed' : ''
+    const reason = job.status === 'error' ? job.error || t('The download failed') : ''
     return {
       ...base,
       status: job.status === 'error' ? 'failed' : 'paused',
-      label: job.status === 'error' ? 'Failed' : 'Cancelled',
+      label: job.status === 'error' ? t('Failed') : t('Cancelled'),
       reason: reason ? clip(reason) : undefined,
       reasonFull: reason || undefined,
       bar: false,
@@ -102,7 +133,7 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
     return {
       ...base,
       status: 'paused',
-      label: base.percent > 0 ? `Paused ${base.percent}%` : 'Paused',
+      label: base.percent > 0 ? t('Paused {percent}%', { percent: base.percent }) : t('Paused'),
       bar: item.received > 0,
       speed: 0,
       etaSeconds: null
@@ -113,7 +144,8 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
     return {
       ...base,
       status: 'downloading',
-      label: item.total > 0 ? `Downloading ${base.percent}%` : 'Downloading',
+      label:
+        item.total > 0 ? t('Downloading {percent}%', { percent: base.percent }) : t('Downloading'),
       bar: true,
       speed: item.speed,
       etaSeconds: item.speed > 0 && item.total > 0 ? Math.ceil(left / item.speed) : null
@@ -122,7 +154,7 @@ export function itemInfo(job: TdlJob, item: TdlItem): RowInfo {
   return {
     ...base,
     status: 'queued',
-    label: job.status === 'exporting' ? 'Reading the chat' : 'Queued',
+    label: job.status === 'exporting' ? t('Reading the chat') : t('Queued'),
     bar: item.received > 0,
     speed: 0,
     etaSeconds: null
@@ -160,7 +192,7 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: failed > 0 ? 'attention' : 'completed',
-        label: failed > 0 ? `${failed} failed` : 'Completed',
+        label: failed > 0 ? t('{count} failed', { count: failed }) : t('Completed'),
         percent: failed > 0 ? percent : 100,
         bar: false,
         speed: 0,
@@ -170,7 +202,7 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: 'failed',
-        label: 'Failed',
+        label: t('Failed'),
         reason: job.error ? clip(job.error) : undefined,
         reasonFull: job.error,
         bar: false,
@@ -181,7 +213,7 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: 'paused',
-        label: 'Cancelled',
+        label: t('Cancelled'),
         bar: false,
         speed: 0,
         etaSeconds: null
@@ -190,7 +222,7 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: 'paused',
-        label: `Paused ${counts}`,
+        label: t('Paused {counts}', { counts }),
         bar: received > 0,
         speed: 0,
         etaSeconds: null
@@ -199,7 +231,10 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: 'downloading',
-        label: total > 0 ? `Downloading ${percent}%` : `Downloading ${counts}`,
+        label:
+          total > 0
+            ? t('Downloading {percent}%', { percent })
+            : t('Downloading {counts}', { counts }),
         bar: true,
         speed,
         etaSeconds: speed > 0 && total > 0 ? Math.ceil(left / speed) : null
@@ -208,13 +243,20 @@ export function jobInfo(job: TdlJob, items: TdlItem[] = job.items): RowInfo {
       return {
         ...base,
         status: 'queued',
-        label: 'Reading the chat',
+        label: t('Reading the chat'),
         bar: false,
         speed: 0,
         etaSeconds: null
       }
     default:
-      return { ...base, status: 'queued', label: 'Queued', bar: false, speed: 0, etaSeconds: null }
+      return {
+        ...base,
+        status: 'queued',
+        label: t('Queued'),
+        bar: false,
+        speed: 0,
+        etaSeconds: null
+      }
   }
 }
 
@@ -225,14 +267,13 @@ export function jobTitle(job: TdlJob): string {
     return range ? `${chat} · ${range}` : chat
   }
   const count = job.source.links.length
-  return `${count} Telegram ${count === 1 ? 'message' : 'messages'}`
+  return tn(count, '{count} Telegram message', '{count} Telegram messages')
 }
-
-const platformTrash = window.lightning.platform === 'win32' ? 'Recycle Bin' : 'Trash'
 
 /** What can be done to a job as a whole: the same menu on a group's header and on a one-file row. */
 export function jobActions(job: TdlJob): RowAction[] {
   const id = job.id
+  const win = window.lightning.platform === 'win32'
   const live = job.status === 'running' || job.status === 'queued' || job.status === 'exporting'
   const failed = job.status === 'error' || job.items.some((item) => item.status === 'failed')
   const hasFiles = job.items.some((item) => item.status === 'done' && item.path)
@@ -243,7 +284,7 @@ export function jobActions(job: TdlJob): RowAction[] {
   if (live) {
     actions.push({
       id: 'pause',
-      label: 'Pause',
+      label: t('Pause'),
       icon: Pause,
       run: () => run(window.lightning.tdlPauseJob(id))
     })
@@ -251,7 +292,7 @@ export function jobActions(job: TdlJob): RowAction[] {
   if (job.status === 'paused') {
     actions.push({
       id: 'resume',
-      label: 'Resume',
+      label: t('Resume'),
       icon: Play,
       run: () => run(window.lightning.tdlResumeJob(id))
     })
@@ -259,7 +300,7 @@ export function jobActions(job: TdlJob): RowAction[] {
   if (failed && !live && job.status !== 'paused') {
     actions.push({
       id: 'retry',
-      label: 'Retry failed',
+      label: t('Retry failed'),
       icon: RotateCw,
       run: () => run(window.lightning.tdlRetryJob(id))
     })
@@ -267,7 +308,7 @@ export function jobActions(job: TdlJob): RowAction[] {
   if (live || job.status === 'paused') {
     actions.push({
       id: 'cancel',
-      label: 'Cancel',
+      label: t('Cancel'),
       icon: X,
       danger: true,
       run: () => run(window.lightning.tdlCancelJob(id))
@@ -275,7 +316,7 @@ export function jobActions(job: TdlJob): RowAction[] {
   }
   actions.push({
     id: 'remove',
-    label: 'Remove from list',
+    label: t('Remove from list'),
     icon: ListX,
     divider: actions.length > 0,
     run: () =>
@@ -286,11 +327,14 @@ export function jobActions(job: TdlJob): RowAction[] {
   if (hasFiles) {
     actions.push({
       id: 'trash',
-      label: `Move files to ${platformTrash}`,
+      label: win ? t('Move files to the Recycle Bin') : t('Move files to the Trash'),
       icon: Trash2,
       danger: true,
       run: () => {
-        if (!window.confirm(`Move this job's downloaded files to the ${platformTrash}?`)) return
+        const question = win
+          ? t("Move this job's downloaded files to the Recycle Bin?")
+          : t("Move this job's downloaded files to the Trash?")
+        if (!window.confirm(question)) return
         run(
           window.lightning
             .tdlRemoveJob(id, { trashFiles: true })

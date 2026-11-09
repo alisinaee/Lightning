@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n'
 import { app, dialog, shell, type BrowserWindow } from 'electron'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -38,9 +39,12 @@ export async function askForFolderAccess(window: BrowserWindow | null): Promise<
   await updateJson(markerPath, () => ({ asked: true })).catch(() => {})
   const options = {
     type: 'warning' as const,
-    message: 'Lightning needs access to your folder',
-    detail: `Lightning can't save to ${folder} until you allow it. Turn on Lightning under Files and Folders in System Settings.`,
-    buttons: ['Open System Settings', 'Later'],
+    message: t('Lightning needs access to your folder'),
+    detail: t(
+      "Lightning can't save to {folder} until you allow it. Turn on Lightning under Files and Folders in System Settings.",
+      { folder }
+    ),
+    buttons: [t('Open System Settings'), t('Later')],
     defaultId: 0,
     cancelId: 1
   }

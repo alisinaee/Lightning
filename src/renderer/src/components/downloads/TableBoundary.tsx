@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/button'
@@ -24,9 +25,9 @@ export class TableBoundary extends Component<{ children: ReactNode }, { failed: 
     if (!this.state.failed) return this.props.children
     return (
       <div role="alert" className="flex flex-col items-center gap-2 px-5 py-16 text-center">
-        <p className="text-[16px] font-semibold">Something went wrong</p>
+        <p className="text-[16px] font-semibold">{t('Something went wrong')}</p>
         <Button type="button" variant="secondary" onClick={this.reset}>
-          Reset layout
+          {t('Reset layout')}
         </Button>
       </div>
     )

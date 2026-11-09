@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { NetworkInterfaceInfo } from '@shared/types'
 import { useAppStore } from '../store/useAppStore'
 
@@ -23,5 +24,7 @@ export function useVpnLayer(): {
 
 /** What the VPN layer is doing, in a sentence. */
 export function describeVpn(on: boolean, tunnels: string[]): string {
-  return on ? `On — via ${tunnels.join(', ')}` : 'Off — downloads use your real connections'
+  return on
+    ? t('On — via {tunnels}', { tunnels: tunnels.join(', ') })
+    : t('Off — downloads use your real connections')
 }

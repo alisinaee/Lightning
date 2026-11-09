@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n'
 import { registerGlassWindow } from './glass'
 import { BrowserWindow, nativeTheme, screen, type Display } from 'electron'
 import { is } from '@electron-toolkit/utils'
@@ -48,7 +49,7 @@ export function openSettingsWindow(page?: string, host?: BrowserWindow | null): 
     // Smaller than this and the pages' rows no longer fit.
     minWidth: 860,
     minHeight: 620,
-    title: 'Settings',
+    title: t('Settings'),
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin'

@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadState } from '@shared/types'
 import { useState } from 'react'
 import { describeError, formatBytes } from '../utils/format'
@@ -53,10 +54,21 @@ export function FixLinkDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Paste a new link</DialogTitle>
+          <DialogTitle>{t('Paste a new link')}</DialogTitle>
           <DialogDescription>
             {download &&
-              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Lightning resumes from where the download stopped.`}
+              (download.totalBytes > 0
+                ? t(
+                    'Paste a new link to the same file: {name} ({size}). Lightning resumes from where the download stopped.',
+                    {
+                      name: `\u2068${download.fileName}\u2069`,
+                      size: formatBytes(download.totalBytes)
+                    }
+                  )
+                : t(
+                    'Paste a new link to the same file: {name}. Lightning resumes from where the download stopped.',
+                    { name: `\u2068${download.fileName}\u2069` }
+                  ))}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -68,8 +80,9 @@ export function FixLinkDialog({
         >
           <Input
             autoFocus
-            aria-label="New link"
+            aria-label={t('New link')}
             placeholder="https://…"
+            dir="ltr"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             className="font-mono"
@@ -77,10 +90,10 @@ export function FixLinkDialog({
           {error && <div className="text-[12px] text-[var(--color-danger)]">{error}</div>}
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={close}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button type="submit" disabled={fixing || !url.trim()}>
-              {fixing ? 'Checking…' : 'Continue download'}
+              {fixing ? t('Checking…') : t('Continue download')}
             </Button>
           </DialogFooter>
         </form>

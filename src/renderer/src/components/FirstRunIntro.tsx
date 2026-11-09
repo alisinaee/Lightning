@@ -8,6 +8,7 @@ import {
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { setFirstRunBusy } from '../utils/firstRun'
+import { t } from '@shared/i18n/react'
 
 const DURATION_MS = 5000
 
@@ -182,6 +183,7 @@ export function FirstRunIntro(): React.JSX.Element | null {
 
         <div
           aria-label={NAME}
+          dir="ltr"
           className="flex font-sans text-[54px] leading-none font-extrabold tracking-[0.04em] text-white"
         >
           {NAME.split('').map((letter, index) => (
@@ -195,8 +197,8 @@ export function FirstRunIntro(): React.JSX.Element | null {
             </span>
           ))}
         </div>
-        <div className="lightning-intro-tagline text-[14px] tracking-[0.3em] text-sky-200/90 uppercase">
-          Every connection. One speed.
+        <div className="lightning-intro-tagline text-[14px] tracking-[0.3em] text-sky-200/90 uppercase rtl:tracking-normal">
+          {t('Every connection. One speed.')}
         </div>
       </div>
     </div>

@@ -6,6 +6,11 @@
   window.__lightningPick = true
 
   const api = typeof browser !== 'undefined' ? browser : chrome
+
+  // Texts in Lightning's language (kept in storage by the background script), else the browser's.
+  const I18N = self.LightningI18n
+  let lang = I18N.pick('', api.i18n?.getUILanguage?.() || navigator.language)
+  const t = (key, vars) => I18N.t(lang, key, vars)
   const picked = new Map() // url -> element
   let hovered = null
 
@@ -32,19 +37,47 @@
   bar.id = 'lightning-pick-bar'
   bar.innerHTML =
     '<span class="lightning-count"></span>' +
-    '<button class="lightning-primary" type="button">Send to Lightning</button>' +
-    '<button class="lightning-secondary lightning-all" type="button">Select all</button>' +
-    '<button class="lightning-secondary lightning-cancel" type="button">Cancel</button>'
+    '<button class="lightning-primary" type="button"></button>' +
+    '<button class="lightning-secondary lightning-all" type="button"></button>' +
+    '<button class="lightning-secondary lightning-cancel" type="button"></button>'
   document.documentElement.appendChild(bar)
   const countLabel = bar.querySelector('.lightning-count')
   const sendButton = bar.querySelector('.lightning-primary')
   const allButton = bar.querySelector('.lightning-all')
   const cancelButton = bar.querySelector('.lightning-cancel')
 
+  let status = null // 'sending' | 'sent' | 'fail' | a message from Lightning
+
+  function relabel() {
+    bar.dir = I18N.dir(lang)
+    sendButton.textContent = t('ps_send')
+    allButton.textContent = t('ps_all')
+    cancelButton.textContent = t('ps_cancel')
+  }
+
   function refresh(message) {
-    countLabel.textContent = message || `${picked.size} selected. Click links or videos to pick them.`
+    if (message !== undefined) status = message
+    const text =
+      status === 'sending'
+        ? t('ps_sending', { n: picked.size })
+        : status === 'sent'
+          ? t('ps_sent', { n: picked.size })
+          : status === 'fail'
+            ? t('ps_fail')
+            : status || t('ps_hint', { n: picked.size })
+    countLabel.textContent = text
     sendButton.disabled = picked.size === 0
   }
+
+  const relang = (saved) => {
+    lang = I18N.pick(saved, api.i18n?.getUILanguage?.() || navigator.language)
+    relabel()
+    refresh()
+  }
+  api.storage.local
+    .get({ lang: '' })
+    .then((v) => relang(v.lang))
+    .catch(() => {})
 
   /** The address a clicked element stands for: a link, or the file behind a video or audio. */
   function addressOf(element) {
@@ -52,7 +85,11 @@
     if (!target) return null
     let value = null
     if (target.tagName === 'A') value = target.getAttribute('href')
-    else value = target.currentSrc || target.getAttribute('src') || target.querySelector('source[src]')?.getAttribute('src')
+    else
+      value =
+        target.currentSrc ||
+        target.getAttribute('src') ||
+        target.querySelector('source[src]')?.getAttribute('src')
     if (!value) return null
     try {
       const url = new URL(value, document.baseURI).href
@@ -90,7 +127,7 @@
       target.classList.add('lightning-pick-on')
       picked.set(url, target)
     }
-    refresh()
+    refresh(null)
   }
 
   function onKey(event) {
@@ -111,17 +148,17 @@
 
   sendButton.addEventListener('click', async () => {
     sendButton.disabled = true
-    refresh(`Sending ${picked.size}…`)
+    refresh('sending')
     try {
       const reply = await api.runtime.sendMessage({ type: 'send-links', links: [...picked.keys()] })
       if (reply?.result === 'ok') {
-        refresh(`Sent ${picked.size} to Lightning.`)
+        refresh('sent')
         setTimeout(stop, 1500)
         return
       }
-      refresh(reply?.message || 'Lightning could not take the links.')
+      refresh(reply?.message || 'fail')
     } catch {
-      refresh('Lightning could not take the links.')
+      refresh('fail')
     }
     sendButton.disabled = picked.size === 0
   })
@@ -136,11 +173,12 @@
       picked.set(url, element)
       if (picked.size >= 2000) break
     }
-    refresh()
+    refresh(null)
   })
 
   document.addEventListener('mouseover', onOver, true)
   document.addEventListener('click', onClick, true)
   document.addEventListener('keydown', onKey, true)
-  refresh()
+  relabel()
+  refresh(null)
 })()

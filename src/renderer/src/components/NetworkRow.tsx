@@ -10,6 +10,7 @@ import { TruncatedText } from './TruncatedText'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t, tn } from '@shared/i18n/react'
 
 interface NetworkRowProps {
   group: NetworkGroup
@@ -20,12 +21,19 @@ interface NetworkRowProps {
   onSwitch: (enabled: boolean) => void
 }
 
-const STATUS_TEXT: Record<Exclude<NetworkStatus, 'on'>, string> = {
-  off: 'Off',
-  offline: 'Not connected',
-  unreachable: 'Can’t reach server',
-  failed: 'Failed',
-  limit: 'Data limit reached'
+const statusText = (status: Exclude<NetworkStatus, 'on'>): string => {
+  switch (status) {
+    case 'off':
+      return t('Off')
+    case 'offline':
+      return t('Not connected')
+    case 'unreachable':
+      return t('Can’t reach server')
+    case 'failed':
+      return t('Failed')
+    case 'limit':
+      return t('Data limit reached')
+  }
 }
 
 const rowClass = 'col-span-full grid grid-cols-subgrid items-center gap-3'
@@ -95,19 +103,19 @@ function HttpStreamRows({
         const progress = streamProgress(stream, blocks)
         const active = stream.status === 'downloading'
         const status = progress.done
-          ? 'Done'
+          ? t('Done')
           : stream.status === 'paused'
-            ? 'Paused'
+            ? t('Paused')
             : stream.status === 'retrying'
-              ? 'Retrying…'
-              : 'Idle'
+              ? t('Retrying…')
+              : t('Idle')
         return (
           <div
             role="row"
             key={stream.id}
             className={`${rowClass} border-[var(--border-subtle)] bg-card py-[6px] font-mono text-[11px] leading-[1.2] ${index === 0 ? 'border-t-[0.5px] pt-[9px]' : ''} ${index === group.streams.length - 1 ? 'border-b-[0.5px] pb-[11px]' : ''}`}
           >
-            <div role="cell" className="flex justify-center pl-5">
+            <div role="cell" className="flex justify-center ps-5">
               <div
                 className="size-[5px] rounded-full"
                 style={{
@@ -118,11 +126,11 @@ function HttpStreamRows({
             </div>
             <div role="cell" className="flex min-w-0 items-center gap-[6px]">
               <span className="font-medium whitespace-nowrap text-foreground">
-                Stream #{index + 1}
+                {t('Stream #{n}', { n: index + 1 })}
               </span>
               {progress.block && (
                 <span className="rounded-[3px] border-[0.5px] border-border bg-secondary px-[4.5px] py-[1.5px] text-[9px] leading-none whitespace-nowrap text-muted-foreground">
-                  Chunk #{progress.block.index + 1}
+                  {t('Chunk #{n}', { n: progress.block.index + 1 })}
                 </span>
               )}
               {/* A lit dot and a speed say it's fetching; only what isn't the usual gets a word. */}
@@ -137,14 +145,14 @@ function HttpStreamRows({
                         tabIndex={0}
                         className="h-[13px] rounded-[3px] px-[5px] py-px text-[9px] font-semibold tracking-[0.04em] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
-                        {stream.hedge ? 'BACKUP' : 'SPLIT'}
+                        {stream.hedge ? t('BACKUP') : t('SPLIT')}
                       </ColorBadge>
                     }
                   />
                   <TooltipContent>
                     {stream.hedge
-                      ? 'Racing another stream for this chunk, which was running slowly'
-                      : 'Fetching the far part of this chunk, so another stream doesn’t have to'}
+                      ? t('Racing another stream for this chunk, which was running slowly')
+                      : t('Fetching the far part of this chunk, so another stream doesn’t have to')}
                   </TooltipContent>
                 </Tooltip>
               ) : (
@@ -159,13 +167,13 @@ function HttpStreamRows({
             </div>
             <ProgressBar
               className="h-[5px]"
-              label={`Stream #${index + 1} progress`}
+              label={t('Stream #{n} progress', { n: index + 1 })}
               percent={progress.percent}
               color={visual.solid}
             />
             <div
               role="cell"
-              className="text-right font-mono text-[11px] leading-none font-medium tabular-nums"
+              className="text-end font-mono text-[11px] leading-none font-medium tabular-nums"
               style={{
                 color: progress.done ? visual.text : active ? 'var(--text)' : 'var(--text-tertiary)'
               }}
@@ -174,16 +182,16 @@ function HttpStreamRows({
             </div>
             <div
               role="cell"
-              className="text-right font-mono text-[11px] leading-none font-medium whitespace-nowrap tabular-nums"
+              className="text-end font-mono text-[11px] leading-none font-medium whitespace-nowrap tabular-nums"
               style={{ color: active ? visual.text : 'var(--text-tertiary)' }}
             >
-              {active ? formatSpeed(stream.speedBytesPerSec) : '—'}
+              <bdi>{active ? formatSpeed(stream.speedBytesPerSec) : '—'}</bdi>
             </div>
             <div
               role="cell"
-              className="pr-5 text-right font-mono text-[11px] leading-none whitespace-nowrap text-[var(--text-secondary)] tabular-nums"
+              className="pe-5 text-end font-mono text-[11px] leading-none whitespace-nowrap text-[var(--text-secondary)] tabular-nums"
             >
-              {formatBytes(stream.bytesDownloaded)}
+              <bdi>{formatBytes(stream.bytesDownloaded)}</bdi>
             </div>
           </div>
         )
@@ -216,13 +224,13 @@ function TwoWay({
       <div>
         <span className="sr-only">{labels[0]} </span>
         {showUp && <span aria-hidden>↓ </span>}
-        {down}
+        <bdi>{down}</bdi>
       </div>
       {showUp && (
         <div className="text-muted-foreground">
           <span className="sr-only">{labels[1]} </span>
           <span aria-hidden>↑ </span>
-          {up}
+          <bdi>{up}</bdi>
         </div>
       )}
     </>
@@ -249,11 +257,11 @@ function PeerRows({
             key={peer.id}
             className={`${rowClass} border-[var(--border-subtle)] bg-card py-[6px] font-mono text-[11px] leading-[1.2] ${index === 0 ? 'border-t-[0.5px] pt-[9px]' : ''} ${index === group.peers.length - 1 ? 'border-b-[0.5px] pb-[11px]' : ''}`}
           >
-            <div role="cell" className="flex justify-center pl-5">
+            <div role="cell" className="flex justify-center ps-5">
               {/* Its state, with its speed: no word needed beside it. */}
               <div
                 role="img"
-                aria-label={receiving ? 'Receiving' : 'Idle'}
+                aria-label={receiving ? t('Receiving') : t('Idle')}
                 className="size-[5px] rounded-full"
                 style={{
                   background: receiving ? visual.solid : 'var(--icon-muted)',
@@ -265,7 +273,7 @@ function PeerRows({
               <span className="font-medium whitespace-nowrap text-foreground">
                 {/* Unique in the download: a number is never another peer's, here or on
                     another network. */}
-                Peer #{peer.id + 1}
+                {t('Peer #{n}', { n: peer.id + 1 })}
               </span>
               {/* The client it runs, as a stream shows its chunk. */}
               {peer.client && (
@@ -281,14 +289,14 @@ function PeerRows({
             </div>
             <div
               role="cell"
-              className="text-right font-mono text-[11px] leading-none font-medium tabular-nums"
+              className="text-end font-mono text-[11px] leading-none font-medium tabular-nums"
               style={{ color: receiving ? 'var(--text)' : 'var(--text-tertiary)' }}
             >
               {shareOf(peer.bytesDownloaded, received)}
             </div>
             <div
               role="cell"
-              className="text-right font-mono text-[11px] leading-[1.35] font-medium whitespace-nowrap tabular-nums"
+              className="text-end font-mono text-[11px] leading-[1.35] font-medium whitespace-nowrap tabular-nums"
               style={{ color: receiving ? visual.text : 'var(--text-tertiary)' }}
             >
               <TwoWay
@@ -297,18 +305,18 @@ function PeerRows({
                   peer.uploadSpeedBytesPerSec > 0 ? formatSpeed(peer.uploadSpeedBytesPerSec) : '—'
                 }
                 showUp={sent}
-                labels={['Receiving at', 'Sending at']}
+                labels={[t('Receiving at'), t('Sending at')]}
               />
             </div>
             <div
               role="cell"
-              className="pr-5 text-right font-mono text-[11px] leading-[1.35] whitespace-nowrap text-[var(--text-secondary)] tabular-nums"
+              className="pe-5 text-end font-mono text-[11px] leading-[1.35] whitespace-nowrap text-[var(--text-secondary)] tabular-nums"
             >
               <TwoWay
                 down={formatBytes(peer.bytesDownloaded)}
                 up={formatBytes(peer.bytesUploaded)}
                 showUp={sent}
-                labels={['Received', 'Sent']}
+                labels={[t('Received'), t('Sent')]}
               />
             </div>
           </div>
@@ -338,7 +346,6 @@ export function NetworkRow({
   const isProxyActive = Boolean(proxy?.enabled && proxy.host)
   const rounded = Math.round(sharePercent)
   const shareLabel = group.bytesDownloaded === 0 ? '0%' : rounded === 0 ? '<1%' : `${rounded}%`
-  const noun = group.transfer === 'http' ? 'stream' : 'peer'
   return (
     <>
       <div
@@ -347,8 +354,8 @@ export function NetworkRow({
       >
         <div
           role="cell"
-          aria-label={hasError ? 'Error' : isActive ? 'Active' : 'Idle'}
-          className="ml-5 size-2 rounded-full"
+          aria-label={hasError ? t('Error') : isActive ? t('Active') : t('Idle')}
+          className="ms-5 size-2 rounded-full"
           style={{
             background: hasError ? DANGER : visual.solid,
             animation: isActive ? 'lightning-glow 1.8s infinite' : undefined,
@@ -359,7 +366,7 @@ export function NetworkRow({
           <Checkbox
             checked={group.enabled}
             onCheckedChange={(checked) => onSwitch(checked)}
-            aria-label={`Use ${visual.name}`}
+            aria-label={t('Use {name}', { name: visual.name })}
             className="shrink-0 data-checked:border-transparent"
             style={group.enabled ? { background: visual.solid, color: visual.onSolid } : undefined}
           />
@@ -379,7 +386,7 @@ export function NetworkRow({
               text={visual.text}
               className="h-[15px] rounded-[3px] px-[5px] py-px font-mono text-[8.5px] font-semibold tracking-[0.06em] uppercase"
             >
-              PROXY · {proxy!.type}
+              {t('PROXY · {type}', { type: proxy!.type })}
             </ColorBadge>
           )}
           {connections.length > 0 && (
@@ -391,8 +398,9 @@ export function NetworkRow({
               aria-expanded={expanded}
               className="h-auto cursor-pointer rounded-[4px] border-[0.5px] bg-card px-[7px] py-[3px] font-mono text-[10.5px] leading-none font-medium text-[var(--text-secondary)] aria-expanded:bg-secondary dark:bg-card"
             >
-              {connections.length} {noun}
-              {connections.length === 1 ? '' : 's'}{' '}
+              {group.transfer === 'http'
+                ? tn(connections.length, '{count} stream', '{count} streams')
+                : tn(connections.length, '{count} peer', '{count} peers')}{' '}
               <span aria-hidden className="text-[7.5px] opacity-75">
                 {expanded ? '▲' : '▼'}
               </span>
@@ -407,8 +415,8 @@ export function NetworkRow({
                     className={`rounded-sm font-mono text-[10px] whitespace-nowrap outline-none ${hasError ? 'text-destructive' : 'text-muted-foreground'}`}
                   >
                     {group.status === 'unreachable' && group.transfer === 'torrent'
-                      ? 'Can’t reach peers'
-                      : STATUS_TEXT[group.status]}
+                      ? t('Can’t reach peers')
+                      : statusText(group.status)}
                   </span>
                 }
               />
@@ -418,7 +426,7 @@ export function NetworkRow({
         </div>
         <ProgressBar
           className="h-1.5"
-          label={`${visual.name} progress`}
+          label={t('{name} progress', { name: visual.name })}
           percent={
             totalBytes && totalBytes > 0
               ? Math.min(100, (group.bytesDownloaded / totalBytes) * 100)
@@ -428,14 +436,14 @@ export function NetworkRow({
         />
         <div
           role="cell"
-          className="text-right font-mono text-[11.5px] leading-none font-medium tabular-nums"
+          className="text-end font-mono text-[11.5px] leading-none font-medium tabular-nums"
           style={{ color: sharePercent > 0 ? 'var(--text)' : 'var(--text-tertiary)' }}
         >
           {shareLabel}
         </div>
         <div
           role="cell"
-          className="text-right font-mono text-[11px] leading-[1.35] font-semibold whitespace-nowrap tabular-nums"
+          className="text-end font-mono text-[11px] leading-[1.35] font-semibold whitespace-nowrap tabular-nums"
           style={{ color: isActive ? visual.text : 'var(--text-tertiary)' }}
         >
           <TwoWay
@@ -448,18 +456,18 @@ export function NetworkRow({
             }
             // Always for a torrent, so it's plain each network uploads too.
             showUp={group.transfer === 'torrent'}
-            labels={['Downloading at', 'Uploading at']}
+            labels={[t('Downloading at'), t('Uploading at')]}
           />
         </div>
         <div
           role="cell"
-          className="pr-5 text-right font-mono text-[11.5px] leading-[1.35] text-[var(--text-secondary)] tabular-nums"
+          className="pe-5 text-end font-mono text-[11.5px] leading-[1.35] text-[var(--text-secondary)] tabular-nums"
         >
           <TwoWay
             down={formatBytes(group.bytesDownloaded)}
             up={formatBytes(group.transfer === 'torrent' ? group.bytesUploaded : 0)}
             showUp={group.transfer === 'torrent'}
-            labels={['Downloaded', 'Uploaded']}
+            labels={[t('Downloaded'), t('Uploaded')]}
           />
         </div>
       </div>

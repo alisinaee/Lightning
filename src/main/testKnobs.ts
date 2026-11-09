@@ -13,6 +13,12 @@ function positiveNumber(name: string, fallback: number): number {
 
 export const testKnobs = {
   userDataDir: env['LIGHTNING_USER_DATA'],
+  /** The language an e2e run uses (the suite's selectors are English), whatever the setting says. Null
+   * outside e2e runs. */
+  forcedLanguage:
+    process.env['LIGHTNING_USER_DATA'] && !app?.isPackaged
+      ? (env['LIGHTNING_E2E_LANG'] ?? 'en')
+      : null,
   /** Keeps the window off-screen so a test run doesn't pop windows up over the desktop. */
   hideWindow: env['LIGHTNING_E2E_HIDE_WINDOW'] === '1',
   blockBytes: positiveNumber('LIGHTNING_E2E_BLOCK_BYTES', 8 * 1024 * 1024),

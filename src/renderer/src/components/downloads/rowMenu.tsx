@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { DotsThree as Ellipsis, type Icon } from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import {
@@ -42,7 +43,7 @@ export function RowActionsMenu({
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label={`More actions for ${label}`}
+            aria-label={t('More actions for {label}', { label })}
             className="text-muted-foreground hover:text-foreground"
           />
         }

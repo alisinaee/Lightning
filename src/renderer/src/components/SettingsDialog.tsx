@@ -5,7 +5,9 @@ import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
 import type { TdlStatus } from '@shared/telegram'
 import { isProxyAddress } from '@shared/networks'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { t } from '@shared/i18n/react'
+import type { LanguageSetting } from '@shared/i18n'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { applyGlass } from '../utils/syncSettings'
@@ -16,15 +18,18 @@ import {
   CalendarBlank,
   CaretRight,
   Check,
+  Clipboard,
   ChartBar,
   ClockCounterClockwise,
   Gear,
   Globe,
   Lightning,
+  MagnifyingGlass,
   PaintBrush,
   Rows,
   SlidersHorizontal,
   WifiHigh,
+  X,
   YoutubeLogo
 } from '@phosphor-icons/react'
 import { TelegramIcon } from './telegram/TelegramIcon'
@@ -32,6 +37,8 @@ import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 import { HistorySettings } from './HistorySettings'
 import { UsageSettings } from './UsageSettings'
+import { ClipboardSettings } from './settings/ClipboardSettings'
+import { searchSettings, type SettingEntry } from './settings/searchIndex'
 
 const SCALES = [
   { value: '0.9', label: 'Small' },
@@ -67,6 +74,7 @@ const PAGES = [
   'Browser',
   'Telegram',
   'YouTube',
+  'Clipboard',
   'Interface',
   'Status bar'
 ] as const
@@ -83,6 +91,7 @@ const NAV: Record<(typeof PAGES)[number], { color: string; icon: React.ReactNode
   Browser: { color: '#32ade6', icon: <Globe /> },
   Telegram: { color: '#229ed9', icon: <TelegramIcon /> },
   YouTube: { color: '#e53935', icon: <YoutubeLogo /> },
+  Clipboard: { color: '#ff9f0a', icon: <Clipboard /> },
   Interface: { color: '#636366', icon: <SlidersHorizontal /> },
   'Status bar': { color: '#30b0c7', icon: <Rows /> }
 }
@@ -118,9 +127,14 @@ function Row({
   disabled?: boolean
 }): React.JSX.Element {
   return (
-    <label className={`ios-row ${disabled ? 'opacity-50' : ''}`}>
-      <span className="ios-label">{label}</span>
-      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
+    <label className={`ios-row ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
+      <span className="ios-label">{t(label)}</span>
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        aria-label={t(label)}
+      />
     </label>
   )
 }
@@ -144,10 +158,11 @@ function ProxyField({
     if (text !== value) onChange(text)
   }
   return (
-    <label className="ios-row">
+    <label className="ios-row" data-setting={label}>
       <span className="ios-label">{label}</span>
       <input
         value={draft}
+        dir="ltr"
         placeholder="host:port"
         spellCheck={false}
         aria-invalid={invalid || undefined}
@@ -158,7 +173,9 @@ function ProxyField({
         }}
         className="ios-input w-44 font-mono aria-invalid:ring-2 aria-invalid:ring-[var(--color-danger)]"
       />
-      {invalid && <span className="text-[11.5px] text-[var(--color-danger)]">Not an address</span>}
+      {invalid && (
+        <span className="text-[11.5px] text-[var(--color-danger)]">{t('Not an address')}</span>
+      )}
     </label>
   )
 }
@@ -177,8 +194,8 @@ function NumberField({
   onChange: (value: number) => void
 }): React.JSX.Element {
   return (
-    <label className="ios-row">
-      <span className="ios-label">{label}</span>
+    <label className="ios-row" data-setting={label}>
+      <span className="ios-label">{t(label)}</span>
       <input
         type="number"
         min={min}
@@ -193,6 +210,14 @@ function NumberField({
     </label>
   )
 }
+
+// Language names are always shown in their own language.
+const LANGUAGE_OPTIONS: [LanguageSetting, string | null, string][] = [
+  ['system', 'System default', ''],
+  ['en', null, 'English'],
+  ['fa', null, 'فارسی'],
+  ['ru', null, 'Русский']
+]
 
 /** Settings: version and updates, text size and theme, the proxy, notices, power, and how the
  * window closes. Saved as they change. It fills the Settings window. */
@@ -244,6 +269,69 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
     void window.lightning.updateSettings({ prefs: next })
   }
 
+  // Search: typing replaces the page list with matching settings; picking one opens its page and
+  // scrolls to its row (found by data-setting, or by its text for rows without one).
+  const [query, setQuery] = useState('')
+  const [target, setTarget] = useState<SettingEntry | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const results = searchSettings(query)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    if (!target || target.page !== page) return
+    let tries = 0
+    let timer: ReturnType<typeof setTimeout>
+    const find = (): void => {
+      const root = contentRef.current
+      const wanted = target.label.trim().toLowerCase()
+      const wantedLocal = t(target.label).trim().toLowerCase()
+      const nodes = Array.from(
+        root?.querySelectorAll<HTMLElement>('[data-setting], .ios-title, .ios-row') ?? []
+      )
+      const found =
+        nodes.find((node) => node.dataset.setting === target.label) ??
+        nodes.find((node) => {
+          const text = node.textContent?.trim().toLowerCase() ?? ''
+          return text.startsWith(wanted) || text.startsWith(wantedLocal)
+        })
+      if (!found) {
+        // Pages with parts that load later get a few more looks.
+        if (++tries < 10) timer = setTimeout(find, 100)
+        else setTarget(null)
+        return
+      }
+      found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      found.animate(
+        [
+          { backgroundColor: 'color-mix(in srgb, var(--color-primary, #007aff) 35%, transparent)' },
+          { backgroundColor: 'transparent' }
+        ],
+        { duration: 1600, easing: 'ease-out' }
+      )
+      setTarget(null)
+    }
+    timer = setTimeout(find, 30)
+    return () => clearTimeout(timer)
+  }, [target, page])
+
+  const openResult = (entry: SettingEntry): void => {
+    setPage(entry.page as SettingsPage)
+    setTarget(entry)
+    setQuery('')
+  }
+
   const bar = prefs.statusBar
   const setBar = (patch: Partial<StatusBarPrefs>): void => save({ statusBar: patch })
 
@@ -262,48 +350,122 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
     <div className="settings-ios flex h-screen w-screen bg-background text-foreground">
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto p-3 pt-4">
-          <h1 className="px-2 pb-3 text-[20px] font-semibold tracking-tight">Settings</h1>
-          {PAGES.map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              onClick={() => setPage(entry)}
-              aria-current={page === entry ? 'page' : undefined}
-              className="ios-nav"
-            >
-              <span className="ios-tile [&>svg]:size-[18px]" style={{ color: NAV[entry].color }}>
-                {NAV[entry].icon}
-              </span>
-              {entry}
-            </button>
-          ))}
+          <h1 className="px-2 pb-3 text-[20px] font-semibold tracking-tight">{t('Settings')}</h1>
+          <div className="relative mb-2">
+            <MagnifyingGlass className="pointer-events-none absolute top-1/2 start-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              placeholder={t('Search')}
+              aria-label={t('Search settings')}
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setQuery('')
+                  event.currentTarget.blur()
+                } else if (event.key === 'Enter' && results[0]) openResult(results[0])
+              }}
+              className="h-7 w-full rounded-lg bg-black/5 pe-6 ps-7 text-[13px] outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40 dark:bg-white/10"
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label={t('Clear search')}
+                onClick={() => {
+                  setQuery('')
+                  searchRef.current?.focus()
+                }}
+                className="absolute top-1/2 end-1.5 -translate-y-1/2 text-muted-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          {query.trim() !== '' &&
+            (results.length === 0 ? (
+              <div className="px-2 py-3 text-[13px] text-muted-foreground">
+                {t('No settings match')}
+              </div>
+            ) : (
+              results.map((entry) => (
+                <button
+                  key={`${entry.page}/${entry.label}`}
+                  type="button"
+                  onClick={() => openResult(entry)}
+                  className="ios-nav !h-auto min-w-0 flex-col !items-start !gap-0 py-1.5 !text-start"
+                >
+                  <span className="line-clamp-2 w-full text-[13px] break-words">
+                    {t(entry.label)}
+                  </span>
+                  <span className="w-full truncate text-[11px] text-muted-foreground">
+                    {t(entry.page)}
+                  </span>
+                </button>
+              ))
+            ))}
+          {query.trim() === '' &&
+            PAGES.map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => setPage(entry)}
+                aria-current={page === entry ? 'page' : undefined}
+                className="ios-nav min-w-0"
+                title={t(entry)}
+              >
+                <span className="ios-tile [&>svg]:size-[18px]" style={{ color: NAV[entry].color }}>
+                  {NAV[entry].icon}
+                </span>
+                <span className="min-w-0 flex-1 truncate !text-start">{t(entry)}</span>
+              </button>
+            ))}
         </nav>
-        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-5 text-[14px]">
-          <div className="mb-1 text-[22px] font-semibold tracking-tight">{page}</div>
+        <div
+          ref={contentRef}
+          className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-5 text-[14px]"
+        >
+          <div className="mb-1 text-[22px] font-semibold tracking-tight">{t(page)}</div>
           {page === 'General' && (
             <>
+              <label className="ios-row" data-setting="Language">
+                <span className="ios-label">{t('Language')}</span>
+                <select
+                  value={prefs.language ?? 'system'}
+                  aria-label={t('Language')}
+                  onChange={(event) => save({ language: event.target.value as LanguageSetting })}
+                  className="ios-input w-40"
+                >
+                  {LANGUAGE_OPTIONS.map(([value, key, own]) => (
+                    <option key={value} value={value}>
+                      {key ? t(key) : own}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
-                className="ios-row text-left"
+                className="ios-row text-start"
                 onClick={() => setPage('Telegram')}
               >
-                <span className="ios-label">Telegram settings</span>
-                <CaretRight className="size-4 text-muted-foreground" />
+                <span className="ios-label">{t('Telegram settings')}</span>
+                <CaretRight className="size-4 text-muted-foreground rtl:-scale-x-100" />
               </button>
               <button
                 type="button"
-                className="ios-row text-left"
+                className="ios-row text-start"
                 onClick={() => setPage('YouTube')}
               >
-                <span className="ios-label">YouTube options</span>
-                <CaretRight className="size-4 text-muted-foreground" />
+                <span className="ios-label">{t('YouTube options')}</span>
+                <CaretRight className="size-4 text-muted-foreground rtl:-scale-x-100" />
               </button>
-              <div className="ios-title">About</div>
+              <div className="ios-title">{t('About')}</div>
               <div className="ios-row">
                 <span className="ios-label">
-                  Lightning {initial.version}
+                  {t('Lightning {version}', { version: initial.version })}
                   <span className="ios-hint">
-                    Updates come from the Lightning releases on GitHub.
+                    {t('Updates come from the Lightning releases on GitHub.')}
                   </span>
                 </span>
                 <Button
@@ -320,33 +482,36 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       .finally(() => setChecking(false))
                   }}
                 >
-                  {checking ? 'Checking…' : 'Check for updates'}
+                  {checking ? t('Checking…') : t('Check for updates')}
                 </Button>
               </div>
               {checkResult && (
                 <div className="ios-note" role="status">
-                  {checkResult === 'current' && `You have the latest version (${initial.version}).`}
+                  {checkResult === 'current' &&
+                    t('You have the latest version ({version}).', { version: initial.version })}
                   {checkResult === 'failed' && (
                     <span className="text-destructive">
-                      Couldn’t reach GitHub. Check your connection and try again.
+                      {t('Couldn’t reach GitHub. Check your connection and try again.')}
                     </span>
                   )}
                   {checkResult === 'available' && availableUpdate && (
                     <span>
-                      Lightning {availableUpdate.version} is available.{' '}
+                      {t('Lightning {version} is available.', {
+                        version: availableUpdate.version
+                      })}{' '}
                       <a
                         href={availableUpdate.url}
                         target="_blank"
                         rel="noreferrer"
                         className="font-medium text-primary underline underline-offset-2"
                       >
-                        Download it
+                        {t('Download it')}
                       </a>
                     </span>
                   )}
                 </div>
               )}
-              <div className="ios-title">Downloads</div>
+              <div className="ios-title">{t('Downloads')}</div>
               <NumberField
                 label="Files at once"
                 value={downloadsAtOnce}
@@ -355,10 +520,11 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={setDownloadsAtOnce}
               />
               <div className="ios-row">
-                <span className="ios-label">Default folder</span>
+                <span className="ios-label">{t('Default folder')}</span>
                 <input
                   readOnly
-                  aria-label="Default download folder"
+                  dir="ltr"
+                  aria-label={t('Default download folder')}
                   value={toDisplayPath(destinationDir, homeDir)}
                   title={destinationDir}
                   className="ios-input w-44 font-mono"
@@ -374,7 +540,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     })
                   }
                 >
-                  Change…
+                  {t('Change…')}
                 </Button>
               </div>
               <Row
@@ -398,9 +564,9 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
           {page === 'Usage' && <UsageSettings />}
           {page === 'Appearance' && (
             <>
-              <div className="ios-title">Text size</div>
+              <div className="ios-title">{t('Text size')}</div>
               <div className="ios-row">
-                <span className="ios-seg ml-auto w-full">
+                <span className="ios-seg ms-auto w-full">
                   {SCALES.map((scale) => (
                     <button
                       key={scale.value}
@@ -409,12 +575,12 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       onClick={() => save({ uiScale: Number(scale.value) })}
                       className="flex-1"
                     >
-                      {scale.label}
+                      {t(scale.label)}
                     </button>
                   ))}
                 </span>
               </div>
-              <div className="ios-title">Theme</div>
+              <div className="ios-title">{t('Theme')}</div>
               <div className="ios-row">
                 <span className="ios-seg w-full">
                   {(['dark', 'light'] as const).map((mode) => (
@@ -423,34 +589,37 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       type="button"
                       aria-pressed={theme === mode}
                       onClick={() => setTheme(mode)}
-                      className="flex-1 capitalize"
+                      className="flex-1"
                     >
-                      {mode}
+                      {mode === 'dark' ? t('Dark') : t('Light')}
                     </button>
                   ))}
                 </span>
               </div>
               {window.lightning.platform === 'darwin' && (
                 <>
-                  <div className="ios-title">Window glass</div>
+                  <div className="ios-title">{t('Window glass')}</div>
                   <div className="ios-row">
-                    <span className="ios-label">Transparency</span>
+                    <span className="ios-label">{t('Transparency')}</span>
                     <input
                       type="range"
                       min={0}
                       max={90}
                       step={2}
-                      aria-label="Transparency"
+                      aria-label={t('Transparency')}
                       value={prefs.glassTransparency}
                       onChange={(event) => save({ glassTransparency: Number(event.target.value) })}
                       className="w-40 accent-[var(--color-accent)]"
                     />
-                    <span className="w-9 text-right text-[12px] text-muted-foreground tabular-nums">
+                    <span
+                      dir="ltr"
+                      className="w-9 text-end text-[12px] text-muted-foreground tabular-nums"
+                    >
                       {prefs.glassTransparency}%
                     </span>
                   </div>
                   <div className="ios-row">
-                    <span className="ios-label">Blur</span>
+                    <span className="ios-label">{t('Blur')}</span>
                     <span className="ios-seg">
                       {(
                         [
@@ -465,14 +634,14 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                           aria-pressed={prefs.glassBlur === level}
                           onClick={() => save({ glassBlur: level })}
                         >
-                          {text}
+                          {t(text)}
                         </button>
                       ))}
                     </span>
                   </div>
                 </>
               )}
-              <div className="ios-title">Color</div>
+              <div className="ios-title">{t('Color')}</div>
               <div
                 className="ios-row gap-2 !py-3"
                 style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}
@@ -483,7 +652,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     <button
                       key={accent.id}
                       type="button"
-                      aria-label={accent.label}
+                      aria-label={t(accent.label)}
                       aria-pressed={chosen}
                       onClick={() => save({ accent: accent.id })}
                       // The look of the app's own buttons, filled with the colour it would take.
@@ -496,7 +665,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       }}
                     >
                       {chosen && <Check weight="bold" className="size-3.5" />}
-                      {accent.label}
+                      {t(accent.label)}
                     </button>
                   )
                 })}
@@ -508,18 +677,19 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
               <VpnSetting />
               <button
                 type="button"
-                className="ios-row text-left"
+                className="ios-row text-start"
                 onClick={() => {
                   void window.lightning.runMainCommand('limits')
                 }}
               >
-                <span className="ios-label">Speed and data limits</span>
-                <CaretRight className="size-4 text-muted-foreground" />
+                <span className="ios-label">{t('Speed and data limits')}</span>
+                <CaretRight className="size-4 text-muted-foreground rtl:-scale-x-100" />
               </button>
-              <div className="ios-title">Proxy</div>
+              <div className="ios-title">{t('Proxy')}</div>
               <div className="ios-note">
-                For the app&rsquo;s own requests, such as checking for updates. Downloads connect
-                through the networks you chose and don&rsquo;t use it.
+                {t(
+                  'For the app’s own requests, such as checking for updates. Downloads connect through the networks you chose and don’t use it.'
+                )}
               </div>
               {(
                 [
@@ -536,7 +706,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     checked={prefs.proxyMode === mode}
                     onChange={() => save({ proxyMode: mode })}
                   />
-                  <span className="ios-label">{label}</span>
+                  <span className="ios-label">{t(label)}</span>
                   {prefs.proxyMode === mode && (
                     <Check weight="bold" className="size-4 text-primary" />
                   )}
@@ -566,9 +736,9 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                   />
                 </div>
               )}
-              <div className="ios-title">Advanced</div>
-              <label className="ios-row">
-                <span className="ios-label">Stall timeout (seconds)</span>
+              <div className="ios-title">{t('Advanced')}</div>
+              <label className="ios-row" data-setting="Stall timeout (seconds)">
+                <span className="ios-label">{t('Stall timeout (seconds)')}</span>
                 <input
                   type="number"
                   min={5}
@@ -583,7 +753,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 />
               </label>
               <div className="ios-note">
-                How long a connection may go without data before it is retried.
+                {t('How long a connection may go without data before it is retried.')}
               </div>
             </>
           )}
@@ -648,7 +818,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
           )}
           {page === 'YouTube' && (
             <>
-              <div className="ios-note !mx-0 !mt-0">Used by every new YouTube download.</div>
+              <div className="ios-note !mx-0 !mt-0">{t('Used by every new YouTube download.')}</div>
               <YoutubeOptionsPanel settings />
             </>
           )}
@@ -658,12 +828,14 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 <div className="text-[15px] font-semibold">Telegram</div>
                 <div className="ios-note">
                   {tdl === null
-                    ? 'Checking the account…'
+                    ? t('Checking the account…')
                     : !tdl.binary
-                      ? 'The Telegram downloader (tdl) is missing from this build.'
+                      ? t('The Telegram downloader (tdl) is missing from this build.')
                       : tdl.loggedIn
-                        ? `Signed in${tdl.account ? ` as ${tdl.account}` : ''}.`
-                        : 'Not signed in. Sign in from the Telegram section.'}
+                        ? tdl.account
+                          ? t('Signed in as {account}.', { account: tdl.account })
+                          : t('Signed in.')
+                        : t('Not signed in. Sign in from the Telegram section.')}
                 </div>
                 {tdl?.loggedIn && (
                   <Button
@@ -674,7 +846,9 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     onClick={() => {
                       if (
                         window.confirm(
-                          'Sign out of Telegram? The saved session is deleted from this computer.'
+                          t(
+                            'Sign out of Telegram? The saved session is deleted from this computer.'
+                          )
                         )
                       ) {
                         void window.lightning.tdlLogout().then(() => {
@@ -683,20 +857,32 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       }
                     }}
                   >
-                    Sign out
+                    {t('Sign out')}
                   </Button>
                 )}
               </div>
-              <Row
-                checked={prefs.telegramWatchClipboard}
-                onChange={(telegramWatchClipboard) => save({ telegramWatchClipboard })}
-                label="Offer to download a Telegram message when its link is copied"
-              />
+              <button
+                type="button"
+                className="ios-row text-start"
+                data-setting="Telegram links in the clipboard"
+                onClick={() => setPage('Clipboard')}
+              >
+                <span className="ios-label">
+                  {t('Telegram links in the clipboard')}
+                  <span className="ios-hint">
+                    {prefs.clipboardTrack && prefs.telegramWatchClipboard
+                      ? t('On: offered when copied.')
+                      : t('Off. Change it in Clipboard settings.')}
+                  </span>
+                </span>
+                <CaretRight className="size-4 text-muted-foreground rtl:-scale-x-100" />
+              </button>
               <div className="ios-row">
-                <span className="ios-label">Telegram folder</span>
+                <span className="ios-label">{t('Telegram folder')}</span>
                 <input
                   readOnly
-                  aria-label="Telegram folder"
+                  dir="ltr"
+                  aria-label={t('Telegram folder')}
                   value={toDisplayPath(telegramDir, homeDir)}
                   title={telegramDir}
                   className="ios-input w-44 font-mono"
@@ -714,7 +900,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     })
                   }
                 >
-                  Change…
+                  {t('Change…')}
                 </Button>
               </div>
               <NumberField
@@ -732,7 +918,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(telegramParallel) => save({ telegramParallel })}
               />
               <div className="ios-note">
-                High numbers can make Telegram slow the account down (FLOOD_WAIT).
+                {t('High numbers can make Telegram slow the account down (FLOOD_WAIT).')}
               </div>
               <Row
                 checked={prefs.telegramSkipSame}
@@ -759,8 +945,8 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(telegramUseProxy) => save({ telegramUseProxy })}
                 label="Use the manual proxy from Network settings"
               />
-              <label className="ios-row">
-                <span className="ios-label">File name template</span>
+              <label className="ios-row" data-setting="File name template">
+                <span className="ios-label">{t('File name template')}</span>
                 <input
                   defaultValue={prefs.telegramTemplate}
                   spellCheck={false}
@@ -768,23 +954,26 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     const telegramTemplate = event.target.value.trim()
                     if (telegramTemplate !== prefs.telegramTemplate) save({ telegramTemplate })
                   }}
-                  className="ios-input w-44 text-left font-mono"
-                  placeholder="tdl default"
+                  className="ios-input w-44 text-start font-mono"
+                  dir="ltr"
+                  placeholder={t('tdl default')}
                 />
               </label>
               <div className="ios-note">
-                Telegram downloads use the default connection, not Lightning&apos;s networks, DNS or
-                speed limits. Only the proxy is passed on.
+                {t(
+                  'Telegram downloads use the default connection, not Lightning’s networks, DNS or speed limits. Only the proxy is passed on.'
+                )}
               </div>
             </>
           )}
           {page === 'Status bar' && (
             <>
               <div className="ios-note">
-                Choose what the bar along the bottom shows, and what the menu holds when you click
-                its count and speed.
+                {t(
+                  'Choose what the bar along the bottom shows, and what the menu holds when you click its count and speed.'
+                )}
               </div>
-              <div className="ios-title">In the bar</div>
+              <div className="ios-title">{t('In the bar')}</div>
               <Row
                 checked={bar.showCount}
                 onChange={(showCount) => setBar({ showCount })}
@@ -820,7 +1009,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(showFree) => setBar({ showFree })}
                 label="Free disk space"
               />
-              <div className="ios-title">The menu</div>
+              <div className="ios-title">{t('The menu')}</div>
               <Row
                 checked={bar.menu}
                 onChange={(menu) => setBar({ menu })}
@@ -870,12 +1059,12 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                   disabled={!bar.menu}
                 />
                 <label className="ios-row">
-                  <span className="ios-label">Running downloads listed</span>
+                  <span className="ios-label">{t('Running downloads listed')}</span>
                   <input
                     type="number"
                     min={1}
                     max={12}
-                    aria-label="Running downloads listed"
+                    aria-label={t('Running downloads listed')}
                     value={bar.menuRows}
                     disabled={!bar.menu || !bar.menuDownloads}
                     onChange={(event) => {
@@ -886,9 +1075,9 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                   />
                 </label>
               </fieldset>
-              <div className="ios-title">Menu bar icon</div>
+              <div className="ios-title">{t('Menu bar icon')}</div>
               <div className="ios-note">
-                The menu you get from the Lightning icon at the top of the screen.
+                {t('The menu you get from the Lightning icon at the top of the screen.')}
               </div>
               <Row
                 checked={bar.trayPanel}
@@ -927,9 +1116,11 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(trayQueue) => setBar({ trayQueue })}
                 label="Waiting, paused and failed counts"
               />
-              <div className="ios-title">Panel buttons</div>
+              <div className="ios-title">{t('Panel buttons')}</div>
               <div className="ios-note">
-                Up to {TRAY_BUTTONS_MAX}. You can also drag them into order from the panel (Edit).
+                {t('Up to {max}. You can also drag them into order from the panel (Edit).', {
+                  max: TRAY_BUTTONS_MAX
+                })}
               </div>
               {TRAY_BUTTON_LABELS.map(([id, label]) => {
                 const chosen = bar.trayButtons.includes(id)
@@ -959,7 +1150,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 label="The total speed as text beside the icon"
               />
               <div className="ios-row">
-                <span className="ios-label">Speed unit</span>
+                <span className="ios-label">{t('Speed unit')}</span>
                 <span className="ios-seg">
                   {(
                     [
@@ -974,18 +1165,18 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                       aria-pressed={bar.trayUnit === unit}
                       onClick={() => setBar({ trayUnit: unit })}
                     >
-                      {text}
+                      {t(text)}
                     </button>
                   ))}
                 </span>
               </div>
               <label className="ios-row">
-                <span className="ios-label">Running downloads listed</span>
+                <span className="ios-label">{t('Running downloads listed')}</span>
                 <input
                   type="number"
                   min={1}
                   max={10}
-                  aria-label="Menu bar downloads listed"
+                  aria-label={t('Menu bar downloads listed')}
                   value={bar.trayRows}
                   disabled={!bar.trayDownloads}
                   onChange={(event) => {
@@ -1002,10 +1193,11 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 className="mt-2 self-start"
                 onClick={() => setBar(DEFAULT_STATUS_BAR)}
               >
-                Reset to the defaults
+                {t('Reset to the defaults')}
               </Button>
             </>
           )}
+          {page === 'Clipboard' && <ClipboardSettings prefs={prefs} save={save} />}
           {page === 'Interface' && (
             <>
               <Row
@@ -1018,12 +1210,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(openAtLogin) => save({ openAtLogin })}
                 label="Start Lightning when I sign in (hidden in the tray)"
               />
-              <Row
-                checked={prefs.watchClipboard}
-                onChange={(watchClipboard) => save({ watchClipboard })}
-                label="Offer to download links I copy (while Lightning is in the background)"
-              />
-              <div className="ios-title">Title bar</div>
+              <div className="ios-title">{t('Title bar')}</div>
               <Row
                 checked={prefs.showLogs}
                 onChange={(showLogs) => save({ showLogs })}
@@ -1039,7 +1226,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     : 'Show the Debug button (only in development builds)'
                 }
               />
-              <div className="ios-title">Downloads</div>
+              <div className="ios-title">{t('Downloads')}</div>
               <Row
                 checked={!prefs.sidebarHidden}
                 onChange={(show) => save({ sidebarHidden: !show })}
@@ -1055,7 +1242,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 onChange={(showSourceHost) => save({ showSourceHost })}
                 label="Show the website under file names"
               />
-              <div className="ios-title">Help</div>
+              <div className="ios-title">{t('Help')}</div>
               <div>
                 <Button
                   type="button"
@@ -1065,18 +1252,18 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                     void window.lightning.runMainCommand('tour')
                   }}
                 >
-                  Show the quick tour again
+                  {t('Show the quick tour again')}
                 </Button>
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="ml-2"
+                  className="ms-2"
                   onClick={() => {
                     void window.lightning.runMainCommand('intro')
                   }}
                 >
-                  Play the intro again
+                  {t('Play the intro again')}
                 </Button>
               </div>
             </>
@@ -1096,11 +1283,11 @@ function VpnSetting(): React.JSX.Element {
       <div className="ios-label">
         <div>VPN</div>
         <div className="ios-hint">
-          {detected ? describeVpn(on, names) : 'No VPN detected on this computer.'}
+          {detected ? describeVpn(on, names) : t('No VPN detected on this computer.')}
         </div>
       </div>
       <Switch
-        aria-label="Use VPN for downloads"
+        aria-label={t('Use VPN for downloads')}
         checked={on}
         disabled={!detected}
         onCheckedChange={setOn}

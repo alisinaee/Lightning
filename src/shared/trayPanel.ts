@@ -1,4 +1,5 @@
 import type { DownloadState, NetworkPreferences, StatusBarPrefs, TrayButton } from './types'
+import type { Lang } from './i18n'
 import { percentOf, summarizeActivity, type NetworkActivity } from './trayModel'
 
 /** Everything the panel under the menu-bar icon draws, as one snapshot the main process sends it
@@ -6,6 +7,8 @@ import { percentOf, summarizeActivity, type NetworkActivity } from './trayModel'
  * the networks and the person's choices for them, as the main window has them. */
 export interface PanelState {
   version: string
+  /** The app's language now, so the panel (its own page) speaks it too. */
+  language: Lang
   accent: string
   /** Which parts to draw (Settings → Status bar). */
   show: Pick<
@@ -53,12 +56,14 @@ export function buildPanelState(input: {
   accent: string
   version: string
   toggles: { vpn: boolean; slowMode: boolean }
+  language: Lang
 }): PanelState {
   const activity = summarizeActivity(input.downloads, input.names)
   const ranked = [...activity.running].sort((a, b) => b.speedBytesPerSec - a.speedBytesPerSec)
   const listed = ranked.slice(0, input.prefs.trayRows)
   return {
     version: input.version,
+    language: input.language,
     accent: input.accent,
     show: {
       trayTotals: input.prefs.trayTotals,
