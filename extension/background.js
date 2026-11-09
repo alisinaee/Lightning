@@ -1,11 +1,33 @@
 // Lightning's browser extension: hands downloads to the desktop app over 127.0.0.1.
 // The same file runs as a service worker (Chromium) and a background script (Firefox).
 const api = typeof browser !== 'undefined' ? browser : chrome
+// Texts (Firefox loads i18n.js from the manifest's scripts list; a Chromium service worker imports it).
+if (typeof importScripts === 'function') importScripts('i18n.js')
+const I18N = self.LightningI18n
 
 const PORTS = [17891, 17892, 17893, 17894, 17895, 17896, 17897, 17898, 17899, 17900]
 const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'save' }
 
 let cachedPort = null
+// What the app said at its last ping (its version and the extension version it carries).
+let lastPing = null
+// The language for menus and notifications: Lightning's setting, else the browser's, else English.
+let lang = 'en'
+const uiLanguage = () => {
+  try {
+    return api.i18n.getUILanguage()
+  } catch {
+    return navigator.language
+  }
+}
+const tr = (key, vars) => I18N.t(lang, key, vars)
+
+/** Picks the language from what Lightning last reported (kept in storage as `lang`). */
+async function loadLang() {
+  const { lang: saved } = await api.storage.local.get({ lang: '' })
+  lang = I18N.pick(saved, uiLanguage())
+}
+const langReady = loadLang()
 // Links the browser is allowed to download itself (the app was not there to take them).
 const letThrough = new Set()
 
@@ -50,9 +72,13 @@ async function findPort(force = false) {
       const response = await fetch(`http://127.0.0.1:${port}/v1/ping`, {
         signal: AbortSignal.timeout(800)
       })
-      if (response.ok && (await response.json()).app === 'Lightning') {
-        cachedPort = port
-        return port
+      if (response.ok) {
+        const info = await response.json()
+        if (info.app === 'Lightning') {
+          cachedPort = port
+          lastPing = info
+          return port
+        }
       }
     } catch {
       // Nothing on this port.
@@ -60,6 +86,14 @@ async function findPort(force = false) {
   }
   cachedPort = null
   return null
+}
+
+/** Keeps Lightning's language (when /v1/config reports one) for the menus, popup and select bar. */
+async function rememberLanguage(code) {
+  const next = I18N.norm(code)
+  const { lang: saved } = await api.storage.local.get({ lang: '' })
+  if (next !== saved) await api.storage.local.set({ lang: next })
+  lang = I18N.pick(next, uiLanguage())
 }
 
 /** Which features Lightning's Settings has on; all on when it cannot be asked (an older Lightning). */
@@ -74,16 +108,28 @@ async function features() {
       signal: AbortSignal.timeout(1500)
     })
     if (!response.ok) return all
-    return { ...all, ...(await response.json()) }
+    const config = await response.json()
+    await rememberLanguage(config.language)
+    return { ...all, ...config }
   } catch {
     return all
   }
 }
 
+const MENU_TITLES = {
+  'lightning-download': 'm_download',
+  'lightning-youtube': 'm_youtube',
+  'lightning-select': 'm_select',
+  'lightning-near': 'm_near',
+  'lightning-clipboard': 'm_clip'
+}
+
 /** Shows or hides the right-click items to match Settings. */
 async function refreshMenus() {
+  await langReady
   const on = await features()
-  const update = (id, visible) => api.contextMenus.update(id, { visible }).catch(() => {})
+  const update = (id, visible) =>
+    api.contextMenus.update(id, { visible, title: tr(MENU_TITLES[id]) }).catch(() => {})
   update('lightning-download', on.menuDownload)
   update('lightning-youtube', on.menuDownload)
   update('lightning-select', on.menuScan)
@@ -139,12 +185,11 @@ async function cookieHeader(url) {
 }
 
 function problem(result) {
-  if (result === 'down') return 'Lightning is not running.'
-  if (result === 'key')
-    return 'Pair the extension with Lightning: open its popup and paste the key.'
-  if (result === 'off') return 'Turn on browser downloads in Lightning: Settings → Browser.'
-  if (result === 'nothing') return 'No links on the clipboard.'
-  return 'Lightning could not take the link.'
+  if (result === 'down') return tr('p_down')
+  if (result === 'key') return tr('p_key')
+  if (result === 'off') return tr('p_off')
+  if (result === 'nothing') return tr('p_nothing')
+  return tr('p_fail')
 }
 
 function notify(message) {
@@ -238,36 +283,37 @@ api.downloads.onCreated.addListener(async (item) => {
 })
 
 // Right-click menu, five items (Scan was merged into Select; see the select mode in page-select.js).
-api.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(async () => {
+  await langReady
   // A link, video, audio or image: the app takes it (a YouTube link goes to the YouTube downloader).
   api.contextMenus.create({
     id: 'lightning-download',
-    title: 'Download with Lightning',
+    title: tr(MENU_TITLES['lightning-download']),
     contexts: ['link', 'video', 'audio', 'image']
   })
   // A YouTube page: the app sends it to the YouTube downloader.
   api.contextMenus.create({
     id: 'lightning-youtube',
-    title: 'Download this video with Lightning',
+    title: tr(MENU_TITLES['lightning-youtube']),
     contexts: ['page'],
     documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*', 'https://youtu.be/*']
   })
   // Pick several links and videos on any page.
   api.contextMenus.create({
     id: 'lightning-select',
-    title: 'Select links with Lightning',
+    title: tr(MENU_TITLES['lightning-select']),
     contexts: ['page', 'frame']
   })
   // The selected links, or the link group around the spot right-clicked.
   api.contextMenus.create({
     id: 'lightning-near',
-    title: 'Download the links here with Lightning',
+    title: tr(MENU_TITLES['lightning-near']),
     contexts: ['page', 'frame', 'selection']
   })
   // Whatever links the person copied (a separate group: it does not depend on the spot clicked).
   api.contextMenus.create({
     id: 'lightning-clipboard',
-    title: 'Download copied links with Lightning',
+    title: tr(MENU_TITLES['lightning-clipboard']),
     contexts: ['page', 'frame', 'editable']
   })
 })
@@ -366,7 +412,7 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   const isAddress = (value) => !!value && /^(https?:|magnet:)/i.test(value)
   const url = [info.linkUrl, info.srcUrl].find(isAddress)
   if (!url) {
-    notify('Right-click a link or video to download it.')
+    notify(tr('n_rightclick'))
     return
   }
   // Several links selected, and the click is on one of them: all of them are offered together.
@@ -415,11 +461,11 @@ async function linksNearClick(tab, frameId) {
     )
     links = Array.isArray(reply?.links) ? reply.links : []
   } catch {
-    notify('Lightning cannot read this page.')
+    notify(tr('n_cantread'))
     return
   }
   if (links.length === 0) {
-    notify('No links near that spot.')
+    notify(tr('n_nolinks'))
     return
   }
   const result =
@@ -438,7 +484,7 @@ async function startSelect(tab, frameId) {
       files: ['page-select.js']
     })
   } catch {
-    notify('Lightning cannot select on this page.')
+    notify(tr('n_cantselect'))
   }
 }
 
@@ -474,7 +520,26 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
   }
   if (message?.type === 'status') {
     refreshMenus()
-    findPort(true).then(async (port) => respond({ port, paired: !!(await settings()).key }))
+    findPort(true).then(async (port) =>
+      respond({
+        port,
+        paired: !!(await settings()).key,
+        version: lastPing?.version ?? null,
+        // The extension version Lightning carries (older Lightning versions do not say).
+        bundledVersion: lastPing?.extensionVersion ?? null,
+        language: (await api.storage.local.get({ lang: '' })).lang
+      })
+    )
+    return true
+  }
+  // Re-reads pairing.json (the popup's "Re-pair automatically"): true when the key changed.
+  if (message?.type === 'repair') {
+    settings().then(async ({ key }) => respond({ changed: await repair(key) }))
+    return true
+  }
+  // The popup's "Scan this page".
+  if (message?.type === 'scan-page') {
+    startSelect({ id: message.tabId }).then(() => respond({ ok: true }))
     return true
   }
   if (message?.type === 'test') {

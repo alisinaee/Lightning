@@ -479,6 +479,14 @@ export interface AppPrefs {
   openAtLogin?: boolean
   /** Offer to download a link to a file when one is copied while Lightning is in the background. */
   watchClipboard?: boolean
+  /** The main switch of Settings → Clipboard: the clipboard is read (once a second) only while this
+   * is on. Absent in settings saved before it existed: on when `watchClipboard` was on. */
+  clipboardTrack?: boolean
+  /** Only read the clipboard for history and offers while Lightning is in the background. */
+  clipboardOnlyInBackground?: boolean
+  /** Track YouTube links (a sub-switch of clipboardTrack, like watchClipboard for files and
+   * telegramWatchClipboard for Telegram). */
+  clipboardYoutube?: boolean
   /** Ask what to do (quit, sleep, shut down) when the last download finishes. */
   askWhenFinished?: boolean
   /** Take a finished download out of the list when its file is deleted or moved away. */
@@ -546,7 +554,11 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   progressLine: true,
   statusBar: DEFAULT_STATUS_BAR,
   openAtLogin: false,
-  watchClipboard: false,
+  // File links: a sub-switch of clipboardTrack, which is off until the user turns it on.
+  watchClipboard: true,
+  clipboardTrack: false,
+  clipboardOnlyInBackground: true,
+  clipboardYoutube: true,
   askWhenFinished: false,
   removeMissingFiles: false,
   warnDuplicates: true,
@@ -898,4 +910,17 @@ export interface ScanPageResult {
   links: string[]
   /** Links on the page that were left out as not being files. */
   otherCount: number
+}
+
+/** What kind of link the clipboard watcher noticed. */
+export type ClipboardLinkKind = 'file' | 'youtube' | 'telegram'
+
+/** One link the clipboard watcher noticed (Settings → Clipboard keeps the latest 50). */
+export interface ClipboardHistoryEntry {
+  id: string
+  kind: ClipboardLinkKind
+  /** The link as copied (a file or YouTube link, or one Telegram message link). */
+  url: string
+  /** When it was copied (ms since the epoch). */
+  at: number
 }

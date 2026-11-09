@@ -57,6 +57,10 @@ export function installLocalApi(
 }
 
 /** Gives the clipboard watcher the window a link it offers should open in. Called once, at startup. */
+export function getClipboardWatcher(): ClipboardWatcher | null {
+  return clipboardWatcher
+}
+
 export function installClipboardWatcher(getWindow: () => BrowserWindow | null): void {
   clipboardWatcher = new ClipboardWatcher(getWindow)
 }
@@ -97,7 +101,10 @@ export async function applyBehavior(settings: AppSettings): Promise<void> {
   })
   applyLoginItem(prefs.openAtLogin)
   clipboardWatcher?.setEnabled({
+    track: prefs.clipboardTrack,
+    onlyInBackground: prefs.clipboardOnlyInBackground,
     files: prefs.watchClipboard,
+    youtube: prefs.clipboardYoutube,
     telegram: prefs.telegramWatchClipboard
   })
   browserFeatures = {

@@ -5,7 +5,7 @@ import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
 import type { TdlStatus } from '@shared/telegram'
 import { isProxyAddress } from '@shared/networks'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { applyGlass } from '../utils/syncSettings'
@@ -16,15 +16,18 @@ import {
   CalendarBlank,
   CaretRight,
   Check,
+  Clipboard,
   ChartBar,
   ClockCounterClockwise,
   Gear,
   Globe,
   Lightning,
+  MagnifyingGlass,
   PaintBrush,
   Rows,
   SlidersHorizontal,
   WifiHigh,
+  X,
   YoutubeLogo
 } from '@phosphor-icons/react'
 import { TelegramIcon } from './telegram/TelegramIcon'
@@ -32,6 +35,8 @@ import { Button } from './ui/button'
 import { Switch } from './ui/switch'
 import { HistorySettings } from './HistorySettings'
 import { UsageSettings } from './UsageSettings'
+import { ClipboardSettings } from './settings/ClipboardSettings'
+import { searchSettings, type SettingEntry } from './settings/searchIndex'
 
 const SCALES = [
   { value: '0.9', label: 'Small' },
@@ -67,6 +72,7 @@ const PAGES = [
   'Browser',
   'Telegram',
   'YouTube',
+  'Clipboard',
   'Interface',
   'Status bar'
 ] as const
@@ -83,6 +89,7 @@ const NAV: Record<(typeof PAGES)[number], { color: string; icon: React.ReactNode
   Browser: { color: '#32ade6', icon: <Globe /> },
   Telegram: { color: '#229ed9', icon: <TelegramIcon /> },
   YouTube: { color: '#e53935', icon: <YoutubeLogo /> },
+  Clipboard: { color: '#ff9f0a', icon: <Clipboard /> },
   Interface: { color: '#636366', icon: <SlidersHorizontal /> },
   'Status bar': { color: '#30b0c7', icon: <Rows /> }
 }
@@ -118,7 +125,7 @@ function Row({
   disabled?: boolean
 }): React.JSX.Element {
   return (
-    <label className={`ios-row ${disabled ? 'opacity-50' : ''}`}>
+    <label className={`ios-row ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
       <span className="ios-label">{label}</span>
       <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
     </label>
@@ -144,7 +151,7 @@ function ProxyField({
     if (text !== value) onChange(text)
   }
   return (
-    <label className="ios-row">
+    <label className="ios-row" data-setting={label}>
       <span className="ios-label">{label}</span>
       <input
         value={draft}
@@ -177,7 +184,7 @@ function NumberField({
   onChange: (value: number) => void
 }): React.JSX.Element {
   return (
-    <label className="ios-row">
+    <label className="ios-row" data-setting={label}>
       <span className="ios-label">{label}</span>
       <input
         type="number"
@@ -244,6 +251,65 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
     void window.lightning.updateSettings({ prefs: next })
   }
 
+  // Search: typing replaces the page list with matching settings; picking one opens its page and
+  // scrolls to its row (found by data-setting, or by its text for rows without one).
+  const [query, setQuery] = useState('')
+  const [target, setTarget] = useState<SettingEntry | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const results = searchSettings(query)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    if (!target || target.page !== page) return
+    let tries = 0
+    let timer: ReturnType<typeof setTimeout>
+    const find = (): void => {
+      const root = contentRef.current
+      const wanted = target.label.trim().toLowerCase()
+      const nodes = Array.from(
+        root?.querySelectorAll<HTMLElement>('[data-setting], .ios-title, .ios-row') ?? []
+      )
+      const found =
+        nodes.find((node) => node.dataset.setting === target.label) ??
+        nodes.find((node) => node.textContent?.trim().toLowerCase().startsWith(wanted))
+      if (!found) {
+        // Pages with parts that load later get a few more looks.
+        if (++tries < 10) timer = setTimeout(find, 100)
+        else setTarget(null)
+        return
+      }
+      found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      found.animate(
+        [
+          { backgroundColor: 'color-mix(in srgb, var(--color-primary, #007aff) 35%, transparent)' },
+          { backgroundColor: 'transparent' }
+        ],
+        { duration: 1600, easing: 'ease-out' }
+      )
+      setTarget(null)
+    }
+    timer = setTimeout(find, 30)
+    return () => clearTimeout(timer)
+  }, [target, page])
+
+  const openResult = (entry: SettingEntry): void => {
+    setPage(entry.page as SettingsPage)
+    setTarget(entry)
+    setQuery('')
+  }
+
   const bar = prefs.statusBar
   const setBar = (patch: Partial<StatusBarPrefs>): void => save({ statusBar: patch })
 
@@ -263,22 +329,74 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto p-3 pt-4">
           <h1 className="px-2 pb-3 text-[20px] font-semibold tracking-tight">Settings</h1>
-          {PAGES.map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              onClick={() => setPage(entry)}
-              aria-current={page === entry ? 'page' : undefined}
-              className="ios-nav"
-            >
-              <span className="ios-tile [&>svg]:size-[18px]" style={{ color: NAV[entry].color }}>
-                {NAV[entry].icon}
-              </span>
-              {entry}
-            </button>
-          ))}
+          <div className="relative mb-2">
+            <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              placeholder="Search"
+              aria-label="Search settings"
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setQuery('')
+                  event.currentTarget.blur()
+                } else if (event.key === 'Enter' && results[0]) openResult(results[0])
+              }}
+              className="h-7 w-full rounded-lg bg-black/5 pr-6 pl-7 text-[13px] outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40 dark:bg-white/10"
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => {
+                  setQuery('')
+                  searchRef.current?.focus()
+                }}
+                className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          {query.trim() !== '' &&
+            (results.length === 0 ? (
+              <div className="px-2 py-3 text-[13px] text-muted-foreground">No settings match</div>
+            ) : (
+              results.map((entry) => (
+                <button
+                  key={`${entry.page}/${entry.label}`}
+                  type="button"
+                  onClick={() => openResult(entry)}
+                  className="ios-nav !h-auto flex-col !items-start !gap-0 py-1.5 text-left"
+                >
+                  <span className="line-clamp-2 text-[13px]">{entry.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{entry.page}</span>
+                </button>
+              ))
+            ))}
+          {query.trim() === '' &&
+            PAGES.map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => setPage(entry)}
+                aria-current={page === entry ? 'page' : undefined}
+                className="ios-nav"
+              >
+                <span className="ios-tile [&>svg]:size-[18px]" style={{ color: NAV[entry].color }}>
+                  {NAV[entry].icon}
+                </span>
+                {entry}
+              </button>
+            ))}
         </nav>
-        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-5 text-[14px]">
+        <div
+          ref={contentRef}
+          className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-5 text-[14px]"
+        >
           <div className="mb-1 text-[22px] font-semibold tracking-tight">{page}</div>
           {page === 'General' && (
             <>
@@ -690,11 +808,22 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                   </Button>
                 )}
               </div>
-              <Row
-                checked={prefs.telegramWatchClipboard}
-                onChange={(telegramWatchClipboard) => save({ telegramWatchClipboard })}
-                label="Offer to download a Telegram message when its link is copied"
-              />
+              <button
+                type="button"
+                className="ios-row text-left"
+                data-setting="Telegram links in the clipboard"
+                onClick={() => setPage('Clipboard')}
+              >
+                <span className="ios-label">
+                  Telegram links in the clipboard
+                  <span className="ios-hint">
+                    {prefs.clipboardTrack && prefs.telegramWatchClipboard
+                      ? 'On: offered when copied.'
+                      : 'Off. Change it in Clipboard settings.'}
+                  </span>
+                </span>
+                <CaretRight className="size-4 text-muted-foreground" />
+              </button>
               <div className="ios-row">
                 <span className="ios-label">Telegram folder</span>
                 <input
@@ -1009,6 +1138,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
               </Button>
             </>
           )}
+          {page === 'Clipboard' && <ClipboardSettings prefs={prefs} save={save} />}
           {page === 'Interface' && (
             <>
               <Row
@@ -1020,11 +1150,6 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                 checked={prefs.openAtLogin}
                 onChange={(openAtLogin) => save({ openAtLogin })}
                 label="Start Lightning when I sign in (hidden in the tray)"
-              />
-              <Row
-                checked={prefs.watchClipboard}
-                onChange={(watchClipboard) => save({ watchClipboard })}
-                label="Offer to download links I copy (while Lightning is in the background)"
               />
               <div className="ios-title">Title bar</div>
               <Row

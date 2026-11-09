@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lightning",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Send downloads to the Lightning desktop app, which fetches them over every network at once.",
   "icons": { "16": "icons/icon.png", "48": "icons/icon.png", "128": "icons/icon.png" },
   "action": {
@@ -11,12 +11,12 @@
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "scripts": ["i18n.js", "background.js"]
   },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
-      "js": ["youtube-select.js"],
+      "js": ["i18n.js", "youtube-select.js"],
       "run_at": "document_idle"
     },
     {

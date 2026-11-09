@@ -225,6 +225,9 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'openAtLogin',
     'watchClipboard',
     'telegramWatchClipboard',
+    'clipboardTrack',
+    'clipboardOnlyInBackground',
+    'clipboardYoutube',
     'telegramSkipSame',
     'telegramSortByKind',
     'telegramGroupAlbums',
@@ -278,6 +281,8 @@ export function prefsOf(settings: AppSettings): ResolvedPrefs {
   return {
     ...DEFAULT_PREFS,
     ...saved,
+    // Settings saved before the main switch existed: tracking was on when file links were.
+    clipboardTrack: saved.clipboardTrack ?? saved.watchClipboard === true,
     // A part left out of what was saved stays as the default.
     statusBar: { ...DEFAULT_STATUS_BAR, ...saved.statusBar }
   }
