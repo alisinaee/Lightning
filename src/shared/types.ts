@@ -1,4 +1,5 @@
 import type { ScheduleSettings, ScheduleStatus } from './schedule'
+import type { LanguageSetting } from './i18n/types'
 export type NetworkInterfaceKind = 'wifi' | 'usb' | 'ethernet' | 'bridge' | 'vpn' | 'other'
 export type IpFamily = 4 | 6
 
@@ -475,6 +476,8 @@ export interface AppPrefs {
   progressLine?: boolean
   /** The status bar's items and menu; a part left out is as in DEFAULT_STATUS_BAR. */
   statusBar?: Partial<StatusBarPrefs>
+  /** The app's language; 'system' follows the computer's preferred languages. */
+  language?: LanguageSetting
   /** Start Lightning when the user signs in, hidden in the tray. */
   openAtLogin?: boolean
   /** Offer to download a link to a file when one is copied while Lightning is in the background. */
@@ -554,6 +557,7 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   progressLine: true,
   statusBar: DEFAULT_STATUS_BAR,
   openAtLogin: false,
+  language: 'system',
   // File links: a sub-switch of clipboardTrack, which is off until the user turns it on.
   watchClipboard: true,
   clipboardTrack: false,

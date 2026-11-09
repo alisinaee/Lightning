@@ -208,6 +208,9 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
   }
   const scale = parsed.uiScale
   if (typeof scale === 'number' && scale >= 0.8 && scale <= 1.4) prefs.uiScale = scale
+  if (['system', 'en', 'fa', 'ru'].includes(parsed.language as string)) {
+    prefs.language = parsed.language as AppPrefs['language']
+  }
   if (['amber', 'blue', 'teal', 'green', 'violet', 'rose'].includes(parsed.accent as string)) {
     prefs.accent = parsed.accent as AppPrefs['accent']
   }
