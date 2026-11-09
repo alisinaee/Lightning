@@ -1,25 +1,50 @@
 import { registerGlassWindow } from './glass'
-import { BrowserWindow, nativeTheme } from 'electron'
+import { BrowserWindow, nativeTheme, screen, type Display } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'path'
 import { IpcChannels } from '../shared/ipc-channels'
 
 let current: BrowserWindow | null = null
 
+const SIZE = { width: 900, height: 680 }
+
+/** The display Lightning is on: the window that asked, else the one the pointer is on. */
+function displayFor(host: BrowserWindow | null | undefined): Display {
+  if (host && !host.isDestroyed()) return screen.getDisplayMatching(host.getBounds())
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+}
+
+/** Where a window of this size sits centered on that display's work area. */
+function centeredOn(display: Display, width: number, height: number): { x: number; y: number } {
+  const area = display.workArea
+  return {
+    x: area.x + Math.max(0, Math.round((area.width - width) / 2)),
+    y: area.y + Math.max(0, Math.round((area.height - height) / 2))
+  }
+}
+
 /** Settings in a window of its own, so the main window stays usable beside it. One at a time:
- * asked again, the open one comes forward (on the page asked for). */
-export function openSettingsWindow(page?: string): void {
+ * asked again, the open one comes forward (on the page asked for). It opens on the display the
+ * asking window is on, not whichever display macOS picks. */
+export function openSettingsWindow(page?: string, host?: BrowserWindow | null): void {
   const hash = `settings/${encodeURIComponent(page ?? 'General')}`
+  const display = displayFor(host)
   if (current && !current.isDestroyed()) {
     if (current.isMinimized()) current.restore()
+    if (screen.getDisplayMatching(current.getBounds()).id !== display.id) {
+      const { x, y } = centeredOn(display, SIZE.width, SIZE.height)
+      current.setBounds({ x, y, ...SIZE })
+    }
     current.show()
     current.focus()
     if (page) current.webContents.send(IpcChannels.appCommand, 'settings-page', page)
     return
   }
+  const { x, y } = centeredOn(display, SIZE.width, SIZE.height)
   const window = new BrowserWindow({
-    width: 900,
-    height: 680,
+    ...SIZE,
+    x,
+    y,
     // Smaller than this and the pages' rows no longer fit.
     minWidth: 860,
     minHeight: 620,

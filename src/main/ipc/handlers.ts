@@ -10,7 +10,7 @@ import {
   nativeTheme,
   powerMonitor,
   shell,
-  type BrowserWindow,
+  BrowserWindow,
   type IpcMainInvokeEvent
 } from 'electron'
 import { describeError } from '../../shared/errors'
@@ -330,7 +330,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   }
   setSettingsApplier(applySettings)
   handle('updateSettings', async (_event, patch) => applySettings(patch))
-  handle('openSettingsWindow', async (_event, page) => openSettingsWindow(page))
+  handle('openSettingsWindow', async (event, page) =>
+    openSettingsWindow(page, BrowserWindow.fromWebContents(event.sender))
+  )
   handle('runMainCommand', async (_event, command) => {
     const window = getWindow()
     if (!window || window.isDestroyed()) return
