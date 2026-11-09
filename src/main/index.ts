@@ -30,6 +30,7 @@ import { testKnobs } from './testKnobs'
 import { migrateLegacyUserData } from './legacyData'
 import { appVariant } from './variant'
 import { refreshInstalledExtension } from './integration'
+import { raiseSettingsWindow } from './settingsWindow'
 import type { DownloadManager } from './download/downloadManager'
 
 // In dev mode the app runs as the raw `electron` binary, which otherwise shows "Electron" in
@@ -190,6 +191,8 @@ function createWindow(): void {
 
   // The page's own <title> would otherwise rename the window back to "Lightning".
   mainWindow.on('page-title-updated', (event) => event.preventDefault())
+  // Back from the Dock, the main window would cover an open Settings window.
+  mainWindow.on('restore', raiseSettingsWindow)
   log.info('window', 'created')
   mainWindow.webContents.on('did-finish-load', () => log.info('window', 'page loaded'))
   mainWindow.on('closed', () => {

@@ -58,6 +58,17 @@ export function openSettingsWindow(page?: string): void {
   }
 }
 
+/** Puts an open Settings window back above the main window, without taking focus. The main
+ * window coming back from the Dock otherwise covers it. */
+export function raiseSettingsWindow(): void {
+  if (!current || current.isDestroyed() || current.isMinimized() || !current.isVisible()) return
+  const window = current
+  // After the restore animation, or macOS orders the main window over it again.
+  setTimeout(() => {
+    if (!window.isDestroyed() && window.isVisible()) window.moveTop()
+  }, 350)
+}
+
 /** Tells every window that settings were saved, so each reads them again. */
 export function broadcastSettingsRefresh(): void {
   for (const window of BrowserWindow.getAllWindows()) {
