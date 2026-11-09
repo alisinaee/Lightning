@@ -533,7 +533,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="rounded-full"
+                  className="shrink-0 rounded-full whitespace-nowrap"
                   onClick={() =>
                     void window.lightning.chooseDestinationFolder(destinationDir).then((picked) => {
                       if (picked) setDestinationDir(picked)

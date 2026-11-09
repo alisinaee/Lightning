@@ -149,7 +149,9 @@
    property *values* (e.g. --color-accent) without colliding with their names, since only the
    left-hand names below become Tailwind tokens. */
 @theme inline {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica,
+    sans-serif;
   --font-mono: 'Roboto Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 
   --color-background: var(--bg);
@@ -788,7 +790,8 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
   --ios-line: rgb(84 84 88 / 0.5);
 }
 .settings-ios .ios-title {
-  margin: 10px 0 -4px 14px;
+  margin: 10px 0 -4px;
+  margin-inline-start: 14px;
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -798,6 +801,7 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
 .settings-ios .ios-note {
   margin: -4px 14px 0;
   font-size: 12px;
+  /* 14px on both sides, so it mirrors correctly in right-to-left languages */
   line-height: 1.4;
   color: var(--muted-foreground);
 }
@@ -827,8 +831,8 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
   content: '';
   position: absolute;
   top: 0;
-  left: 14px;
-  right: 0;
+  inset-inline-start: 14px;
+  inset-inline-end: 0;
   height: 0.5px;
   background: var(--ios-line);
 }
@@ -850,7 +854,7 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
   background: rgb(120 120 128 / 0.12);
   padding: 0 10px;
   font-size: 13px;
-  text-align: right;
+  text-align: end;
   outline: none;
 }
 .settings-ios .ios-input:focus-visible {
@@ -864,7 +868,7 @@ svg[viewBox='0 0 256 256'] [fill='none'] {
   border-radius: 9px;
   padding: 0 8px;
   font-size: 13.5px;
-  text-align: left;
+  text-align: start;
   transition: background 0.15s;
 }
 .settings-ios .ios-nav:hover {
@@ -938,6 +942,6 @@ html[data-vibrancy] {
 /* Persian: the system font stack already covers Arabic script on macOS; the stack is spelled out
    so a Persian-capable face is always picked, and the digits read evenly. */
 :lang(fa) {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Geeza Pro', 'Tahoma', 'Vazirmatn',
-    sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Geeza Pro', 'Tahoma', 'Vazirmatn', sans-serif;
 }
