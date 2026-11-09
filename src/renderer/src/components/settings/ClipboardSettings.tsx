@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react'
 import { Copy, DownloadSimple, Trash } from '@phosphor-icons/react'
 import type { ClipboardHistoryEntry, ClipboardLinkKind, ResolvedPrefs } from '@shared/types'
 import { redactUrl } from '@shared/urlTools'
+import { t, formatDate, formatTime } from '@shared/i18n/react'
 import { Button } from '../ui/button'
 import { Switch } from '../ui/switch'
 
-const KIND_LABEL: Record<ClipboardLinkKind, string> = {
-  file: 'File',
-  youtube: 'YouTube',
-  telegram: 'Telegram'
-}
+const kindLabel = (kind: ClipboardLinkKind): string =>
+  kind === 'file' ? t('File') : kind === 'youtube' ? 'YouTube' : 'Telegram'
 
 function Toggle({
   label,
@@ -27,21 +25,21 @@ function Toggle({
   return (
     <label className={`ios-row ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
       <span className="ios-label">
-        {label}
-        {hint && <span className="ios-hint">{hint}</span>}
+        {t(label)}
+        {hint && <span className="ios-hint">{t(hint)}</span>}
       </span>
-      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        aria-label={t(label)}
+      />
     </label>
   )
 }
 
 function when(at: number): string {
-  return new Date(at).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return `${formatDate(at, { month: 'short', day: 'numeric' })} ${formatTime(at, { hour: '2-digit', minute: '2-digit' })}`
 }
 
 /** Settings → Clipboard: whether (and for which links) the clipboard is read, and the links it noticed. */
@@ -70,7 +68,7 @@ export function ClipboardSettings({
         checked={tracking}
         onChange={(clipboardTrack) => save({ clipboardTrack })}
       />
-      <div className="ios-title">Which links</div>
+      <div className="ios-title">{t('Which links')}</div>
       <Toggle
         label="File links"
         hint="Links to archives, videos, installers, magnet links and the like."
@@ -90,7 +88,7 @@ export function ClipboardSettings({
         disabled={!tracking}
         onChange={(telegramWatchClipboard) => save({ telegramWatchClipboard })}
       />
-      <div className="ios-title">When</div>
+      <div className="ios-title">{t('When')}</div>
       <Toggle
         label="Only while Lightning is in the background"
         hint="Off: links copied while Lightning is in front are added to the list too. Offers are always notifications."
@@ -99,31 +97,34 @@ export function ClipboardSettings({
         onChange={(clipboardOnlyInBackground) => save({ clipboardOnlyInBackground })}
       />
       <div className="ios-title" data-setting="Recent links">
-        Recent links
+        {t('Recent links')}
       </div>
       {entries.length === 0 ? (
-        <div className="ios-note">No links yet. The last 50 links Lightning noticed show here.</div>
+        <div className="ios-note">
+          {t('No links yet. The last 50 links Lightning noticed show here.')}
+        </div>
       ) : (
         <>
           {entries.map((entry) => (
             <div key={entry.id} className="ios-row">
               <span className="ios-label min-w-0">
                 <span
-                  className="block truncate font-mono text-[12.5px]"
+                  dir="ltr"
+                  className="block truncate text-start font-mono text-[12.5px]"
                   title={redactUrl(entry.url)}
                 >
                   {redactUrl(entry.url)}
                 </span>
                 <span className="ios-hint">
-                  {KIND_LABEL[entry.kind]} · {when(entry.at)}
+                  {kindLabel(entry.kind)} · {when(entry.at)}
                 </span>
               </span>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Download"
-                title="Download"
+                aria-label={t('Download')}
+                title={t('Download')}
                 onClick={() => void window.lightning.downloadClipboardEntry(entry.id)}
               >
                 <DownloadSimple className="size-4" />
@@ -132,8 +133,8 @@ export function ClipboardSettings({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Copy"
-                title="Copy"
+                aria-label={t('Copy')}
+                title={t('Copy')}
                 onClick={() => void navigator.clipboard.writeText(entry.url)}
               >
                 <Copy className="size-4" />
@@ -142,8 +143,8 @@ export function ClipboardSettings({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Remove"
-                title="Remove"
+                aria-label={t('Remove')}
+                title={t('Remove')}
                 onClick={() => void window.lightning.removeClipboardEntry(entry.id)}
               >
                 <Trash className="size-4" />
@@ -157,7 +158,7 @@ export function ClipboardSettings({
             className="mt-2 self-start"
             onClick={() => void window.lightning.clearClipboardHistory()}
           >
-            Clear history
+            {t('Clear history')}
           </Button>
         </>
       )}

@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { randomUUID } from 'node:crypto'
 import { Resolver } from 'node:dns/promises'
 import { isIP } from 'node:net'
@@ -111,8 +112,8 @@ export class DnsService {
   }): Promise<DnsProfile> {
     const servers = parseServers(input.servers)
     const name = input.name.trim().slice(0, 40)
-    if (!name) throw new Error('Give the DNS a name')
-    if (servers.length === 0) throw new Error('Enter at least one valid DNS server address')
+    if (!name) throw new Error(t('Give the DNS a name'))
+    if (servers.length === 0) throw new Error(t('Enter at least one valid DNS server address'))
     const id = input.id ?? randomUUID()
     const profile: DnsProfile = { id, name, servers, usedAt: Date.now() }
     const others = this.config.profiles.filter((one) => one.id !== id)

@@ -1,5 +1,6 @@
 import type { BrowserInfo, IntegrationInfo } from '@shared/types'
 import { useEffect, useState } from 'react'
+import { t } from '@shared/i18n/react'
 import { describeError } from '../utils/format'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
@@ -68,21 +69,24 @@ export function BrowserPage({
     <div className="flex flex-col gap-3 text-[13px]">
       <label className="flex items-start gap-3 py-1.5 leading-5">
         <Checkbox checked={enabled} onCheckedChange={(on) => onEnabledChange(on === true)} />
-        <span>Let the browser extension send links to Lightning</span>
+        <span>{t('Let the browser extension send links to Lightning')}</span>
       </label>
       <p className="text-[12px] leading-snug text-muted-foreground">
-        Lightning listens on this computer only (127.0.0.1) and answers only the extension, and only
-        with the key below. The extension Lightning sets up already has the key: nothing to paste.
+        {t(
+          'Lightning listens on this computer only (127.0.0.1) and answers only the extension, and only with the key below. The extension Lightning sets up already has the key: nothing to paste.'
+        )}
       </p>
       <div className="mt-1 flex flex-col gap-2.5 rounded-xl border-[0.5px] border-border p-3">
-        <div className="text-[12px] font-medium text-muted-foreground">Add the extension</div>
+        <div className="text-[12px] font-medium text-muted-foreground">
+          {t('Add the extension')}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {browsers?.map((browser) => (
             <Button key={browser.id} type="button" variant="outline" onClick={() => addTo(browser)}>
               {browser.icon && (
                 <img src={browser.icon} alt="" className="size-4" draggable={false} />
               )}
-              Add to {browser.name}
+              {t('Add to {browser}', { browser: browser.name })}
             </Button>
           ))}
           <Button
@@ -95,45 +99,48 @@ export function BrowserPage({
                 .catch((cause) => setError(describeError(cause)))
             }
           >
-            Show the extension folder
+            {t('Show the extension folder')}
           </Button>
         </div>
         {opened && <BrowserSteps guide={guideFor(opened.id)} />}
         <div className="text-[12px] text-muted-foreground">
-          The extension is kept in Documents → Lightning Extension, updated with the app, and pairs
-          by itself.
+          {t(
+            'The extension is kept in Documents → Lightning Extension, updated with the app, and pairs by itself.'
+          )}
         </div>
         <details className="group text-[12px]">
           <summary className="cursor-default list-none text-muted-foreground select-none hover:text-foreground">
-            <span className="inline-block transition-transform group-open:rotate-90">›</span> Steps
-            for every browser
+            <span className="inline-block transition-transform group-open:rotate-90 rtl:-scale-x-100 rtl:group-open:rotate-90">
+              ›
+            </span>{' '}
+            {t('Steps for every browser')}
           </summary>
           <div className="mt-2 flex flex-col gap-3">
-            {GUIDES.map((guide) => (
+            {getGuides().map((guide) => (
               <BrowserSteps key={guide.id} guide={guide} titled />
             ))}
           </div>
         </details>
       </div>
       <div className="mt-1 text-[12px] font-medium text-muted-foreground">
-        What the extension may do
+        {t('What the extension may do')}
       </div>
       {(
         [
           [
             'browserCapture',
             features.capture,
-            'Take over the browser’s own downloads (the browser downloads normally when off)'
+            t('Take over the browser’s own downloads (the browser downloads normally when off)')
           ],
           [
             'browserMenuDownload',
             features.menuDownload,
-            'Right-click a link → Download with Lightning (also several selected links)'
+            t('Right-click a link → Download with Lightning (also several selected links)')
           ],
           [
             'browserMenuScan',
             features.menuScan,
-            'Right-click a page → Scan this page with Lightning'
+            t('Right-click a page → Scan this page with Lightning')
           ]
         ] as const
       ).map(([key, on, label]) => (
@@ -149,21 +156,27 @@ export function BrowserPage({
       <div className="text-[12.5px]">
         {info?.port ? (
           <span>
-            Listening on <span className="font-mono">127.0.0.1:{info.port}</span>
+            {t('Listening on')}{' '}
+            <span dir="ltr" className="inline-block font-mono">
+              127.0.0.1:{info.port}
+            </span>
           </span>
         ) : (
-          <span className="text-muted-foreground">{enabled ? 'Starting…' : 'Off'}</span>
+          <span className="text-muted-foreground">{enabled ? t('Starting…') : t('Off')}</span>
         )}
       </div>
       {info && (
         <div className="flex flex-col gap-1.5">
-          <div className="text-[12px] text-muted-foreground">Pairing key</div>
+          <div className="text-[12px] text-muted-foreground">{t('Pairing key')}</div>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-lg border border-input px-2.5 py-1.5 font-mono text-[11.5px]">
+            <code
+              dir="ltr"
+              className="min-w-0 flex-1 truncate rounded-lg border border-input px-2.5 py-1.5 font-mono text-[11.5px]"
+            >
               {info.key}
             </code>
             <Button type="button" variant="outline" onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('Copied') : t('Copy')}
             </Button>
             <Button
               type="button"
@@ -175,11 +188,11 @@ export function BrowserPage({
                   .catch((cause) => setError(describeError(cause)))
               }
             >
-              New key
+              {t('New key')}
             </Button>
           </div>
           <div className="text-[12px] text-muted-foreground">
-            A new key unpairs any extension that has the old one.
+            {t('A new key unpairs any extension that has the old one.')}
           </div>
         </div>
       )}
@@ -196,13 +209,15 @@ interface BrowserGuide {
 }
 
 const CHROMIUM_STEPS = (page: string): string[] => [
-  `Open ${page} (the Add button does this for you).`,
-  'Turn on Developer mode (a switch on that page).',
-  'Drag the “Lightning Extension” folder from Finder onto the page, or click Load unpacked and choose it.'
+  t('Open {page} (the Add button does this for you).', { page }),
+  t('Turn on Developer mode (a switch on that page).'),
+  t(
+    'Drag the “Lightning Extension” folder from Finder onto the page, or click Load unpacked and choose it.'
+  )
 ]
 
-/** How to add the extension in each widely used browser. */
-const GUIDES: BrowserGuide[] = [
+/** How to add the extension in each widely used browser (built at render time so it is translated). */
+const getGuides = (): BrowserGuide[] => [
   { id: 'chrome', name: 'Chrome', steps: CHROMIUM_STEPS('chrome://extensions') },
   { id: 'edge', name: 'Edge', steps: CHROMIUM_STEPS('edge://extensions') },
   { id: 'brave', name: 'Brave', steps: CHROMIUM_STEPS('brave://extensions') },
@@ -213,26 +228,29 @@ const GUIDES: BrowserGuide[] = [
     id: 'firefox',
     name: 'Firefox',
     steps: [
-      'Open about:debugging (the Add button does this for you) and click “This Firefox”.',
-      'Click “Load Temporary Add-on…” and choose manifest.json inside “Lightning Extension”.'
+      t('Open about:debugging (the Add button does this for you) and click “This Firefox”.'),
+      t('Click “Load Temporary Add-on…” and choose manifest.json inside “Lightning Extension”.')
     ],
-    note: 'Firefox removes it when it quits: add it again after a restart.'
+    note: t('Firefox removes it when it quits: add it again after a restart.')
   },
   {
     id: 'safari',
     name: 'Safari',
     steps: [
-      'Safari → Settings → Advanced: turn on “Show features for web developers”.',
-      'Safari → Settings → Developer: turn on “Allow unsigned extensions”.',
-      'On the same tab, click “Add Temporary Extension…” and choose the “Lightning Extension” folder.',
-      'Safari → Settings → Extensions: switch Lightning on and allow it on all websites.'
+      t('Safari → Settings → Advanced: turn on “Show features for web developers”.'),
+      t('Safari → Settings → Developer: turn on “Allow unsigned extensions”.'),
+      t(
+        'On the same tab, click “Add Temporary Extension…” and choose the “Lightning Extension” folder.'
+      ),
+      t('Safari → Settings → Extensions: switch Lightning on and allow it on all websites.')
     ],
-    note: 'Needs Safari 18 or later. Safari removes it when it quits.'
+    note: t('Needs Safari 18 or later. Safari removes it when it quits.')
   }
 ]
 
 function guideFor(id: string): BrowserGuide {
-  return GUIDES.find((guide) => guide.id === id) ?? GUIDES[0]
+  const guides = getGuides()
+  return guides.find((guide) => guide.id === id) ?? guides[0]
 }
 
 function BrowserSteps({
@@ -245,12 +263,12 @@ function BrowserSteps({
   return (
     <div className="flex flex-col gap-1">
       {titled && <div className="font-medium text-foreground">{guide.name}</div>}
-      <ol className="list-decimal pl-5 leading-relaxed text-muted-foreground">
+      <ol className="list-decimal ps-5 leading-relaxed text-muted-foreground">
         {guide.steps.map((step) => (
           <li key={step}>{step}</li>
         ))}
       </ol>
-      {guide.note && <div className="pl-5 text-muted-foreground">{guide.note}</div>}
+      {guide.note && <div className="ps-5 text-muted-foreground">{guide.note}</div>}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatDuration, formatSpeed } from '../utils/format'
 import { rankRunning } from '../utils/statusMenu'
 import { SpeedGraph } from './SpeedGraph'
+import { formatNumber, t, tn } from '@shared/i18n/react'
 
 /** One row of the menu: a name and what it holds. */
 function Line({
@@ -35,7 +36,7 @@ function Section({
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-1.5 border-t-[0.5px] border-border pt-2.5 first:border-t-0 first:pt-0">
-      <h3 className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <h3 className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase rtl:tracking-normal">
         {title}
       </h3>
       {children}
@@ -129,29 +130,33 @@ export function StatusMenuContent({
   const nothing = running.length === 0
 
   return (
-    <div role="region" aria-label="Download activity" className="flex flex-col gap-3 font-sans">
+    <div
+      role="region"
+      aria-label={t('Download activity')}
+      className="flex flex-col gap-3 font-sans"
+    >
       {prefs.menuGraph && (
-        <Section title="Speed">
+        <Section title={t('Speed')}>
           <SpeedGraph points={points} />
         </Section>
       )}
 
       {prefs.menuTotals && (
-        <Section title="Total">
-          <Line name="Speed now" value={formatSpeed(speed)} strong />
-          <Line name="Running" value={running.length} />
-          <Line name="Received" value={formatBytes(received)} />
-          {left > 0 && <Line name="Left" value={formatBytes(left)} />}
+        <Section title={t('Total')}>
+          <Line name={t('Speed now')} value={formatSpeed(speed)} strong />
+          <Line name={t('Running')} value={formatNumber(running.length)} />
+          <Line name={t('Received')} value={formatBytes(received)} />
+          {left > 0 && <Line name={t('Left')} value={formatBytes(left)} />}
           {left > 0 && speed > 0 && (
-            <Line name="Time left (all)" value={formatDuration(left / speed)} />
+            <Line name={t('Time left (all)')} value={formatDuration(left / speed)} />
           )}
         </Section>
       )}
 
       {prefs.menuNetworks && (
-        <Section title="Networks">
+        <Section title={t('Networks')}>
           {rows.length === 0 && (
-            <div className="text-[12.5px] text-muted-foreground">Nothing moving</div>
+            <div className="text-[12.5px] text-muted-foreground">{t('Nothing moving')}</div>
           )}
           {rows.map((row) => (
             <div key={row.id} className="flex flex-col gap-1">
@@ -171,31 +176,41 @@ export function StatusMenuContent({
               </div>
               {prefs.menuConnections && (
                 <div className="text-[11px] text-muted-foreground">
-                  {row.open} {row.open === 1 ? 'connection' : 'connections'} · {row.active} moving ·{' '}
-                  {row.downloads} {row.downloads === 1 ? 'download' : 'downloads'}
+                  {t('{connections} · {moving} moving · {downloads}', {
+                    connections: tn(row.open, '{count} connection', '{count} connections'),
+                    moving: row.active,
+                    downloads: tn(row.downloads, '{count} download', '{count} downloads')
+                  })}
                 </div>
               )}
             </div>
           ))}
           {prefs.menuConnections && rows.length > 1 && (
-            <Line name="All networks" value={`${connectionTotal} connections`} />
+            <Line
+              name={t('All networks')}
+              value={tn(connectionTotal, '{count} connection', '{count} connections')}
+            />
           )}
         </Section>
       )}
 
       {prefs.menuDownloads && (
         <Section
-          title={`Running${listed.length > shown.length ? ` · ${shown.length} of ${listed.length}` : ''}`}
+          title={
+            listed.length > shown.length
+              ? t('Running · {shown} of {total}', { shown: shown.length, total: listed.length })
+              : t('Running')
+          }
         >
           {nothing && (
-            <div className="text-[12.5px] text-muted-foreground">Nothing is downloading</div>
+            <div className="text-[12.5px] text-muted-foreground">{t('Nothing is downloading')}</div>
           )}
           {shown.map((download) => (
             <button
               key={download.id}
               type="button"
               onClick={() => setView({ name: 'download', id: download.id })}
-              className="flex flex-col gap-1 rounded-md px-1.5 py-1 text-left outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex flex-col gap-1 rounded-md px-1.5 py-1 text-start outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-baseline justify-between gap-2 text-[12.5px]">
                 <span className="min-w-0 truncate">{download.fileName}</span>
@@ -210,10 +225,10 @@ export function StatusMenuContent({
                     style={{ width: `${Math.max(2, percentOf(download))}%` }}
                   />
                 </span>
-                <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                <span className="w-9 shrink-0 text-end text-[11px] tabular-nums text-muted-foreground">
                   {percentOf(download)}%
                 </span>
-                <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                <span className="w-14 shrink-0 text-end text-[11px] tabular-nums text-muted-foreground">
                   {download.timeLeftSeconds ? formatDuration(download.timeLeftSeconds) : '–'}
                 </span>
               </span>
@@ -223,17 +238,17 @@ export function StatusMenuContent({
       )}
 
       {prefs.menuQueue && (
-        <Section title="Queue">
+        <Section title={t('Queue')}>
           <Line
-            name="Waiting · paused · failed"
+            name={t('Waiting · paused · failed')}
             value={`${count('queued')} · ${count('paused')} · ${count('error')}`}
           />
         </Section>
       )}
 
       {prefs.menuDisk && (
-        <Section title="Disk">
-          <Line name="Free space" value={free === null ? '–' : formatBytes(free)} strong />
+        <Section title={t('Disk')}>
+          <Line name={t('Free space')} value={free === null ? '–' : formatBytes(free)} strong />
           <div className="truncate text-[11px] text-muted-foreground" title={destinationDir}>
             {destinationDir}
           </div>

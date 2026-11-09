@@ -12,6 +12,7 @@ import {
   AlertDialogTitle
 } from './ui/alert-dialog'
 import { buttonVariants } from './ui/button'
+import { t } from '@shared/i18n/react'
 
 export function UpdateDialog(): React.JSX.Element | null {
   const availableUpdate = useAppStore((store) => store.availableUpdate)
@@ -30,11 +31,15 @@ export function UpdateDialog(): React.JSX.Element | null {
       {/* Focus Download, not the first button (Not now), so the primary action is the default. */}
       <AlertDialogContent initialFocus={downloadRef}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Lightning {availableUpdate.version} is available</AlertDialogTitle>
-          <AlertDialogDescription>A new version is ready to download.</AlertDialogDescription>
+          <AlertDialogTitle>
+            {t('Lightning {version} is available', { version: availableUpdate.version })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {t('A new version is ready to download.')}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Not now</AlertDialogCancel>
+          <AlertDialogCancel>{t('Not now')}</AlertDialogCancel>
           {/* target="_blank" routes through the main process's window-open handler, which hands
            * http(s) links to the OS browser instead of opening a second app window. */}
           <AlertDialogAction
@@ -43,7 +48,7 @@ export function UpdateDialog(): React.JSX.Element | null {
               <a ref={downloadRef} href={availableUpdate.url} target="_blank" rel="noreferrer" />
             }
           >
-            <DownloadIcon /> Download
+            <DownloadIcon /> {t('Download')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

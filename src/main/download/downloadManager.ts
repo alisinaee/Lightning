@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { prefsOf } from '../settings'
 import { trashDownload } from './trashDownload'
 import { describeError } from '../../shared/errors'
@@ -825,7 +826,8 @@ export class DownloadManager {
   async updateHistory(id: string, fileName: string): Promise<void> {
     await this.initialization
     // Still held by a run (just completed, not moved to the history yet): its file is in use.
-    if (this.runtimes.has(id)) throw new Error('That download is still finishing. Try again soon.')
+    if (this.runtimes.has(id))
+      throw new Error(t('That download is still finishing. Try again soon.'))
     await updateHistoryEntry(id, fileName)
     this.historyChanged()
   }
@@ -992,7 +994,7 @@ export class DownloadManager {
       requestPayload.interfaceIds.includes(iface.id)
     )
     if (selected.length === 0) {
-      throw new Error('Select at least one network')
+      throw new Error(t('Select at least one network'))
     }
     await ensureDirectory(requestPayload.destinationDir)
     const id = randomUUID()
@@ -1000,7 +1002,7 @@ export class DownloadManager {
     let runtime: DownloadRuntime
     if (requestPayload.kind === 'torrent') {
       const torrentFile = probedTorrentFile(requestPayload.infoHash)
-      if (!torrentFile) throw new Error('Add the torrent again to start downloading.')
+      if (!torrentFile) throw new Error(t('Add the torrent again to start downloading.'))
       const torrentProbe = await describeTorrent(torrentFile, requestPayload.url)
       if (torrentProbe.kind !== 'torrent') throw new Error('Invalid torrent metadata')
       const torrent = torrentProbe.torrent
@@ -1111,12 +1113,12 @@ export class DownloadManager {
       this.pushUpdate(runtime)
       this.notify(
         'added',
-        'Download added',
-        `${runtime.state.fileName} is waiting for you to start it.`
+        t('Download added'),
+        t('{name} is waiting for you to start it.', { name: runtime.state.fileName })
       )
       return id
     }
-    this.notify('added', 'Download added', runtime.state.fileName)
+    this.notify('added', t('Download added'), runtime.state.fileName)
     // Decided only now: other starts may have taken the room while this one was set up.
     const room =
       this.scheduleAllows &&
@@ -1186,12 +1188,12 @@ export class DownloadManager {
    * its bytes are the same is checked as on any resume (see HttpTransfer's version check). */
   async relink(id: string, url: string): Promise<void> {
     const runtime = this.runtimes.get(id)
-    if (runtime?.kind !== 'http') throw new Error('Only web downloads support replacing a link.')
+    if (runtime?.kind !== 'http') throw new Error(t('Only web downloads support replacing a link.'))
     const { status, resumable, totalBytes } = runtime.state
     if (status !== 'error' && status !== 'paused') {
-      throw new Error('Pause the download before replacing its link.')
+      throw new Error(t('Pause the download before replacing its link.'))
     }
-    if (resumable === false) throw new Error('This download can’t resume. Start it again.')
+    if (resumable === false) throw new Error(t('This download can’t resume. Start it again.'))
     // Sign-in details typed into the new link replace the saved ones; otherwise the saved ones carry on.
     const { auth } = splitUrlCredentials(url)
     const probe = await probeUrl(
@@ -1199,7 +1201,7 @@ export class DownloadManager {
       auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload,
       () => this.networks.selectable()
     )
-    if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
+    if (probe.kind !== 'http') throw new Error(t('That isn’t a link to a file'))
     if ((probe.totalBytes ?? 0) !== totalBytes) {
       throw new Error(
         `That link is to a different file: ${formatGigabytes(probe.totalBytes ?? 0)}, not ${formatGigabytes(totalBytes)}`
@@ -1207,7 +1209,7 @@ export class DownloadManager {
     }
     if (splittable(runtime.requestPayload) && !probe.supportsRanges) {
       throw new Error(
-        'This server doesn’t support resuming downloads. Try another link to the same file.'
+        t('This server doesn’t support resuming downloads. Try another link to the same file.')
       )
     }
     runtime.requestPayload.url = probe.finalUrl
@@ -1222,10 +1224,10 @@ export class DownloadManager {
    * file over is handed back. The size and validators come from the new look, not the old one. */
   async startOver(id: string): Promise<StartDownloadRequest> {
     const runtime = this.runtimes.get(id)
-    if (runtime?.kind !== 'http') throw new Error('Only web downloads can be started over.')
+    if (runtime?.kind !== 'http') throw new Error(t('Only web downloads can be started over.'))
     const payload = runtime.requestPayload
     const probe = await probeUrl(payload.url, payload, () => this.networks.selectable())
-    if (probe.kind !== 'http') throw new Error('That link is no longer a file.')
+    if (probe.kind !== 'http') throw new Error(t('That link is no longer a file.'))
     await this.remove(id)
     const { groupLane, startPaused, ...rest } = payload
     void groupLane
@@ -1504,24 +1506,24 @@ export class DownloadManager {
    * that's in can't be dropped: it's done, and dropping it would delete it once the download is. */
   async chooseTorrentFiles(id: string, selected: number[]): Promise<void> {
     const runtime = this.runtimes.get(id)
-    if (runtime?.kind !== 'torrent') throw new Error('This download has no files to choose')
+    if (runtime?.kind !== 'torrent') throw new Error(t('This download has no files to choose'))
     // Ticks come quicker than the disk answers: one overtaken by a later one gives way to it.
     const turn = ++runtime.fileChoices
     const torrent = await this.torrentInfo(id)
-    if (!torrent) throw new Error('This download has no files to choose')
+    if (!torrent) throw new Error(t('This download has no files to choose'))
     // Done or going: its files are what they are. Checked again after waiting on the disk.
     const settled = (): boolean =>
       runtime.publishing ||
       runtime.state.status === 'completed' ||
       runtime.state.status === 'cancelled' ||
       this.runtimes.get(id) !== runtime
-    if (settled()) throw new Error('This download’s files can’t change now')
+    if (settled()) throw new Error(t('This download’s files can’t change now'))
 
     const chosen = chosenFiles(selected, torrent.files.length)
     const completed = runtime.pieces.map((piece) => piece.status === 'completed')
     const finished = finishedFiles(torrent.files, torrent.pieceLength, completed)
     if (chosen && [...finished].some((index) => !chosen.has(index))) {
-      throw new Error('A file that’s already downloaded stays')
+      throw new Error(t('A file that’s already downloaded stays'))
     }
     const wanted = chosen && wantedPieces(torrent.files, torrent.pieceLength, chosen)
     let adding = 0
@@ -1531,7 +1533,7 @@ export class DownloadManager {
       }
     }
     await ensureDiskSpace(runtime.requestPayload.destinationDir, adding)
-    if (settled()) throw new Error('This download’s files can’t change now')
+    if (settled()) throw new Error(t('This download’s files can’t change now'))
     if (turn !== runtime.fileChoices) return
 
     runtime.state.files = choiceOf(chosen, torrent.files.length)
@@ -1782,8 +1784,8 @@ export class DownloadManager {
       await runtime.file.discardLeftover().catch(() => {})
       this.notify(
         'completed',
-        'Download complete',
-        `${runtime.state.fileName} has finished downloading.`
+        t('Download complete'),
+        t('{name} has finished downloading.', { name: runtime.state.fileName })
       )
       this.openWhenDone(runtime)
     } catch (error) {
@@ -1792,7 +1794,7 @@ export class DownloadManager {
       log.error('download', `error ${runtime.state.fileName}: ${runtime.state.error}`)
       this.notify(
         'failed',
-        'Download failed',
+        t('Download failed'),
         `${runtime.state.fileName}: ${describeError(runtime.state.error)}`
       )
     }
@@ -1891,8 +1893,8 @@ export class DownloadManager {
     if (state.checksum.status === 'mismatch') {
       this.notify(
         'failed',
-        'Checksum does not match',
-        `${state.fileName} is not the file it should be. Download it again.`
+        t('Checksum does not match'),
+        t('{name} is not the file it should be. Download it again.', { name: state.fileName })
       )
     }
     this.pushUpdate(runtime)
@@ -1942,7 +1944,11 @@ export class DownloadManager {
     runtime.state.error = message
     log.error('download', `error ${runtime.state.fileName}: ${message}`)
     runtime.state.resumable = !discard
-    this.notify('failed', 'Download failed', `${runtime.state.fileName}: ${describeError(message)}`)
+    this.notify(
+      'failed',
+      t('Download failed'),
+      `${runtime.state.fileName}: ${describeError(message)}`
+    )
     this.stopRun(runtime)
   }
 

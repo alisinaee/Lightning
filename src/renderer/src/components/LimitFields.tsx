@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { useContext, useEffect, useId, useState } from 'react'
 import { FieldValidityContext, SPEED_UNITS, parseBytes } from './limitUnits'
 import { Input } from './ui/input'
@@ -40,7 +41,7 @@ export function NumberInput({
       <Input
         aria-label={label}
         aria-invalid={invalid || undefined}
-        title={invalid ? 'Enter a number above 0, or choose No limit.' : undefined}
+        title={invalid ? t('Enter a number above 0, or choose No limit.') : undefined}
         inputMode="decimal"
         disabled={disabled}
         value={text}
@@ -49,7 +50,8 @@ export function NumberInput({
           const converted = parseBytes(event.target.value, unitBytes)
           if (converted !== null) onChange(converted)
         }}
-        className="w-20 text-right font-mono tabular-nums"
+        dir="ltr"
+        className="w-20 text-end font-mono tabular-nums"
       />
       {showUnit && <span className="font-mono text-[12px] text-muted-foreground">{unit}</span>}
     </span>
@@ -81,13 +83,13 @@ export function UnitField({
         bytes={bytes}
         unit={active.name}
         unitBytes={active.bytes}
-        label={`${label}, in ${active.name}`}
+        label={t('{label}, in {unit}', { label, unit: active.name })}
         disabled={disabled}
         showUnit={false}
         onChange={onChange}
       />
       <ToggleGroup
-        aria-label={`${label} unit`}
+        aria-label={t('{label} unit', { label })}
         value={[active.name]}
         disabled={disabled}
         onValueChange={(values) => {

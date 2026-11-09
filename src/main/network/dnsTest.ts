@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { Resolver } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { buildHeaders } from '../../shared/requestHeaders'
@@ -135,9 +136,9 @@ export async function testDnsForUrl(
 ): Promise<DnsTestResult> {
   const target = new URL(url)
   if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-    throw new Error('Only links to files on the web can be tested')
+    throw new Error(t('Only links to files on the web can be tested'))
   }
-  if (!network) throw new Error('No network is connected to test with')
+  if (!network) throw new Error(t('No network is connected to test with'))
   const host = target.hostname.replace(/^\[|\]$/g, '')
   const literal = isIP(host) === 4
   const found = await Promise.all(

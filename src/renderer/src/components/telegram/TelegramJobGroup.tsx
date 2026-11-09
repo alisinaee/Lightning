@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { TdlItem, TdlJob } from '@shared/telegram'
 import { cn } from 'cn'
 import { CaretDown as ChevronDown, CaretRight as ChevronRight, Folder } from '@phosphor-icons/react'
@@ -65,19 +66,27 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
             <RowProgressLine info={info} />
             <div role="cell" className="flex items-center justify-center">
               <Checkbox
-                aria-label={`Select ${title}`}
+                aria-label={t('Select {name}', { name: title })}
                 checked={selected}
                 onCheckedChange={onSelect}
               />
             </div>
-            <div role="cell" className={cn(cellClass, 'gap-2.5 pl-0')}>
+            <div role="cell" className={cn(cellClass, 'gap-2.5 ps-0')}>
               <button
                 type="button"
-                aria-label={open ? `Collapse ${title}` : `Expand ${title}`}
+                aria-label={
+                  open ? t('Collapse {name}', { name: title }) : t('Expand {name}', { name: title })
+                }
                 onClick={onToggle}
                 className="flex size-6 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Chevron aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                <Chevron
+                  aria-hidden
+                  className={cn(
+                    'size-4 shrink-0 text-muted-foreground',
+                    !open && 'rtl:-scale-x-100'
+                  )}
+                />
               </button>
               <FileKindIcon kind="other" icon={Folder} />
               <div data-title className="flex min-w-0 flex-1 flex-col gap-1">
@@ -89,10 +98,13 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
                   <Badge variant="secondary" className="shrink-0">
                     {items.length === job.items.length
                       ? items.length
-                      : `${items.length} of ${job.items.length}`}
+                      : t('{shown} of {total}', { shown: items.length, total: job.items.length })}
                   </Badge>
                 </span>
-                <span className="truncate text-[11px] leading-none text-muted-foreground">
+                <span
+                  dir="ltr"
+                  className="truncate text-start text-[11px] leading-none text-muted-foreground"
+                >
                   {toDisplayPath(job.dir, homeDir)}
                 </span>
               </div>
@@ -107,7 +119,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
             <SpeedCell speed={info.speed} />
             {columns.eta && <EtaCell seconds={info.etaSeconds} />}
             {columns.added && <AddedCell at={info.addedAt} />}
-            <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+            <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
               <RowActionsMenu label={title} actions={actions} />
             </div>
           </div>

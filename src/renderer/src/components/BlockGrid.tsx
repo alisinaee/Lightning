@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
 import { cn } from 'cn'
 import { ArrowDown, ArrowUp } from '@phosphor-icons/react'
@@ -173,7 +174,9 @@ export function BlockGrid({
   isPaused = false,
   pieces = false
 }: BlockGridProps): React.JSX.Element {
-  const unit = pieces ? 'Piece' : 'Chunk'
+  const showActiveLabel = pieces
+    ? t('Show the pieces in progress')
+    : t('Show the chunks in progress')
   const [gridWidth, setGridWidth] = useState(0)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
@@ -265,17 +268,30 @@ export function BlockGrid({
       const where =
         describeContributors(hoveredCell, visualByInterfaceId) ??
         (hoveredCell.status === 'pending'
-          ? 'queued'
+          ? t('queued')
           : hoveredCell.status === 'skipped'
-            ? 'skipped: in no file chosen'
+            ? t('skipped: in no file chosen')
             : '—')
       const provisional =
         hoveredCell.provisionalBytes > 0
-          ? ` · ${formatBytes(hoveredCell.provisionalBytes)} received, awaiting verification`
+          ? t(' · {size} received, awaiting verification', {
+              size: formatBytes(hoveredCell.provisionalBytes)
+            })
           : ''
-      readout = `${unit} #${hoveredCell.chunkNumber} · ${formatBytes(hoveredCell.bytesDownloaded)} verified${provisional} / ${formatBytes(hoveredCell.totalBytes)} · ${where}`
+      readout = t('{unit} · {done} verified{extra} / {total} · {where}', {
+        unit: pieces
+          ? t('Piece #{number}', { number: String(hoveredCell.chunkNumber) })
+          : t('Chunk #{number}', { number: String(hoveredCell.chunkNumber) }),
+        done: formatBytes(hoveredCell.bytesDownloaded),
+        extra: provisional,
+        total: formatBytes(hoveredCell.totalBytes),
+        where
+      })
     } else {
-      readout = `${blocks.length} ${unit.toLowerCase()}s · ${formatBytes(chunkBytes)} each`
+      const size = formatBytes(chunkBytes)
+      readout = pieces
+        ? tn(blocks.length, '{count} piece · {size} each', '{count} pieces · {size} each', { size })
+        : tn(blocks.length, '{count} chunk · {size} each', '{count} chunks · {size} each', { size })
     }
 
     return (
@@ -297,7 +313,10 @@ export function BlockGrid({
             )
           })}
           {cells.length > 0 && chunkBytes > 0 && (
-            <div className="ml-auto font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground">
+            <div
+              dir="auto"
+              className="ms-auto font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground"
+            >
               {readout}
             </div>
           )}
@@ -311,9 +330,9 @@ export function BlockGrid({
                   <button
                     type="button"
                     onClick={goToActive}
-                    aria-label={`Show the ${unit.toLowerCase()}s in progress`}
+                    aria-label={showActiveLabel}
                     className={cn(
-                      'absolute right-4 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:text-foreground dark:shadow-[0_2px_8px_rgba(0,0,0,0.55)] focus-visible:outline-2 focus-visible:outline-ring',
+                      'absolute end-4 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full border-[0.5px] border-[var(--border-strong)] bg-card text-[var(--text-secondary)] shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:text-foreground dark:shadow-[0_2px_8px_rgba(0,0,0,0.55)] focus-visible:outline-2 focus-visible:outline-ring',
                       nearestActive < firstInView ? '-top-1' : '-bottom-1'
                     )}
                   >
@@ -325,11 +344,12 @@ export function BlockGrid({
                   </button>
                 }
               />
-              <TooltipContent>{`Show the ${unit.toLowerCase()}s in progress`}</TooltipContent>
+              <TooltipContent>{showActiveLabel}</TooltipContent>
             </Tooltip>
           )}
           <div
             ref={scrollerRef}
+            dir="ltr"
             onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
             onMouseLeave={() => setHoveredIndex(null)}
             style={{
@@ -437,7 +457,10 @@ export function BlockGrid({
 
   // Fallback for single stream / non-splittable download: clean horizontal bar
   return (
-    <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] border-[0.5px] border-[var(--border-strong)] bg-[var(--track-bg)]">
+    <div
+      dir="ltr"
+      className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] border-[0.5px] border-[var(--border-strong)] bg-[var(--track-bg)]"
+    >
       {knownSize ? (
         <>
           {groups.map((group, index) => (

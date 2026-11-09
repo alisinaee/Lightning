@@ -3,6 +3,7 @@ import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { describeVpn, useVpnLayer } from '../hooks/useConnections'
 import { Switch } from './ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t } from '@shared/i18n/react'
 
 /** The VPN, as its own labelled switch beside the networks menu: a tunnel is not a connection,
  * only something downloads go through or skip. Always shown; with no VPN detected it is dimmed and off until one connects. */
@@ -30,7 +31,7 @@ export function VpnControl(): React.JSX.Element | null {
             <Icon aria-hidden className="size-4 shrink-0" />
             <span>VPN</span>
             <Switch
-              aria-label="Use VPN for downloads"
+              aria-label={t('Use VPN for downloads')}
               checked={active}
               disabled={!detected}
               onCheckedChange={setOn}
@@ -39,13 +40,14 @@ export function VpnControl(): React.JSX.Element | null {
         }
       />
       <TooltipContent className="max-w-[280px] text-balance">
-        <div className="font-medium">Use VPN for downloads</div>
+        <div className="font-medium">{t('Use VPN for downloads')}</div>
         <div className="mt-1 opacity-90">
-          On: downloads may also go through your active VPN, on top of your real connections. Off:
-          downloads skip VPN tunnels and use only your real connections.
+          {t(
+            'On: downloads may also go through your active VPN, on top of your real connections. Off: downloads skip VPN tunnels and use only your real connections.'
+          )}
         </div>
         <div className="mt-1 opacity-75">
-          {detected ? describeVpn(on, names) : 'No VPN is connected right now.'}
+          {detected ? describeVpn(on, names) : t('No VPN is connected right now.')}
         </div>
       </TooltipContent>
     </Tooltip>

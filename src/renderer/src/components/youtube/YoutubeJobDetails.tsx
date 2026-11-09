@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
 import type { YoutubeJob } from '@shared/youtube'
 import { formatBytes, formatSpeed } from '../../utils/format'
@@ -9,42 +10,56 @@ export function YoutubeJobDetails({ job }: { job: YoutubeJob }): React.JSX.Eleme
   const options = useYoutubeStore((store) => store.options)
   const signIn =
     options.cookieMode === 'manual' && options.manualCookiesFile
-      ? 'A cookies.txt file'
+      ? t('A cookies.txt file')
       : options.cookieMode === 'saved'
-        ? 'Cookies saved in Lightning'
+        ? t('Cookies saved in Lightning')
         : options.cookiesBrowser
-          ? `Your ${options.cookiesBrowser[0].toUpperCase()}${options.cookiesBrowser.slice(1)} sign-in`
-          : 'Not signed in'
-  const rows: [string, string][] = [
-    ['Connection', 'One connection, the system default (YouTube cannot be split across networks)'],
+          ? t('Your {browser} sign-in', {
+              browser: `${options.cookiesBrowser[0].toUpperCase()}${options.cookiesBrowser.slice(1)}`
+            })
+          : t('Not signed in')
+  const rows: [string, string, boolean?][] = [
     [
-      'Parallel parts',
-      options.concurrentFragments > 1
-        ? `${options.concurrentFragments} fragments at a time`
-        : '1 at a time (raise it in YouTube options)'
+      t('Connection'),
+      t('One connection, the system default (YouTube cannot be split across networks)')
     ],
-    ['Quality', job.resolution],
     [
-      'Progress',
+      t('Parallel parts'),
+      options.concurrentFragments > 1
+        ? t('{count} fragments at a time', { count: options.concurrentFragments })
+        : t('1 at a time (raise it in YouTube options)')
+    ],
+    [t('Quality'), job.resolution],
+    [
+      t('Progress'),
       job.total > 0
-        ? `${formatBytes(job.received)} of ${formatBytes(job.total)}${
-            job.speed > 0 ? ` at ${formatSpeed(job.speed)}` : ''
-          }`
+        ? job.speed > 0
+          ? t('{received} of {total} at {speed}', {
+              received: formatBytes(job.received),
+              total: formatBytes(job.total),
+              speed: formatSpeed(job.speed)
+            })
+          : t('{received} of {total}', {
+              received: formatBytes(job.received),
+              total: formatBytes(job.total)
+            })
         : job.speed > 0
           ? formatSpeed(job.speed)
-          : 'Waiting for the size'
+          : t('Waiting for the size')
     ],
-    ['Sign-in', signIn],
-    ['Saved to', job.destDir],
-    ['Link', job.url]
+    [t('Sign-in'), signIn],
+    [t('Saved to'), job.destDir, true],
+    [t('Link'), job.url, true]
   ]
   return (
-    <div className="border-b-[0.5px] border-border/50 bg-card/50 py-3 pr-4 pl-[60px]">
+    <div className="border-b-[0.5px] border-border/50 bg-card/50 py-3 pe-4 ps-[60px]">
       <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12px] leading-snug">
-        {rows.map(([label, value]) => (
+        {rows.map(([label, value, ltr]) => (
           <div key={label} className="contents">
             <dt className="text-muted-foreground">{label}</dt>
-            <dd className="min-w-0 break-words text-foreground">{value}</dd>
+            <dd className="min-w-0 break-words text-foreground" dir={ltr ? 'ltr' : undefined}>
+              {value}
+            </dd>
           </div>
         ))}
       </dl>

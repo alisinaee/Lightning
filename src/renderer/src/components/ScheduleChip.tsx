@@ -1,3 +1,4 @@
+import { formatTime, t } from '@shared/i18n/react'
 import type { ScheduleStatus } from '@shared/schedule'
 import { useEffect, useState } from 'react'
 import { formatSpeed } from '../utils/format'
@@ -8,13 +9,18 @@ export function ScheduleChip(): React.JSX.Element | null {
   useEffect(() => window.lightning.onScheduleChanged(setStatus), [])
   if (status.allow && status.cap === null) return null
   const until = status.nextChange
-    ? new Date(status.nextChange).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    ? formatTime(status.nextChange, { hour: '2-digit', minute: '2-digit' })
     : null
   return (
     <span className="shrink-0 text-foreground">
       {status.allow
-        ? `schedule: ${formatSpeed(status.cap!)} until ${until}`
-        : `held by schedule${until ? ` until ${until}` : ''}`}
+        ? t('schedule: {speed} until {time}', {
+            speed: formatSpeed(status.cap!),
+            time: until ?? ''
+          })
+        : until
+          ? t('held by schedule until {time}', { time: until })
+          : t('held by schedule')}
     </span>
   )
 }

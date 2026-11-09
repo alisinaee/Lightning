@@ -1,3 +1,4 @@
+import { t, tn } from '../shared/i18n'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, Notification } from 'electron'
@@ -198,21 +199,19 @@ export class ClipboardWatcher {
   }
 
   private offerYoutube(url: string): void {
-    this.notify('Download this YouTube video?', redactUrl(url), () => this.openYoutube(url))
+    this.notify(t('Download this YouTube video?'), redactUrl(url), () => this.openYoutube(url))
   }
 
   private offerMessages(links: string[]): void {
     this.notify(
-      links.length === 1
-        ? 'Download this Telegram message?'
-        : `Download ${links.length} Telegram messages?`,
-      links.length === 1 ? redactUrl(links[0]) : 'Click to review the links.',
+      tn(links.length, 'Download this Telegram message?', 'Download {count} Telegram messages?'),
+      links.length === 1 ? redactUrl(links[0]) : t('Click to review the links.'),
       () => offerTelegram(links, this.getWindow())
     )
   }
 
   private offer(link: string): void {
-    this.notify('Download this link?', redactUrl(link), () => offerLink(link, this.getWindow()))
+    this.notify(t('Download this link?'), redactUrl(link), () => offerLink(link, this.getWindow()))
   }
 
   stop(): void {

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { t } from '@shared/i18n/react'
 import { reloadSavedSettings } from '../utils/syncSettings'
 import { SettingsView, type SettingsPage } from './SettingsDialog'
 import { TooltipProvider } from './ui/tooltip'
@@ -7,7 +8,7 @@ import { TooltipProvider } from './ui/tooltip'
 export function SettingsWindow(): React.JSX.Element {
   const requested = decodeURIComponent(window.location.hash.split('/')[1] ?? '')
   useEffect(() => {
-    document.title = 'Settings'
+    document.title = t('Settings')
     const { prefs } = window.lightning.initialState
     window.lightning.setZoom(prefs.uiScale)
     document.documentElement.dataset.accent = prefs.accent

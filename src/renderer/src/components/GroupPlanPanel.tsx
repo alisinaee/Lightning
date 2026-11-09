@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadState, GroupInfo } from '@shared/types'
 import { cn } from 'cn'
 import { CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react'
@@ -8,11 +9,26 @@ import { bytesByNetwork, type WithNetworks } from '../utils/groupBytes'
 
 const ago = (at: number, now: number): string => {
   const seconds = Math.max(0, Math.round((now - at) / 1000))
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
+  if (seconds < 5) return t('just now')
+  if (seconds < 60) return t('{count}s ago', { count: seconds })
   const minutes = Math.round(seconds / 60)
-  return minutes < 60 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`
+  return minutes < 60
+    ? t('{count} min ago', { count: minutes })
+    : t('{count} h ago', { count: Math.round(minutes / 60) })
 }
+
+type Role = 'lost' | 'slow' | 'helper' | 'main' | 'idle'
+/** A network's part in the plan, as a word. */
+const roleLabel = (role: Role): string =>
+  role === 'lost'
+    ? t('lost')
+    : role === 'slow'
+      ? t('slow')
+      : role === 'helper'
+        ? t('helper')
+        : role === 'main'
+          ? t('main')
+          : t('idle')
 
 /** Each connection's share of the data downloaded, for a manual group, whose plan panel isn't
  * shown. */
@@ -26,7 +42,10 @@ export function GroupConnectionTotals({
   if (totals.length === 0) return null
   const sum = totals.reduce((total, [, bytes]) => total + bytes, 0)
   return (
-    <div className="mt-2 flex flex-col gap-1 text-[12px]" aria-label="Downloaded by connection">
+    <div
+      className="mt-2 flex flex-col gap-1 text-[12px]"
+      aria-label={t('Downloaded by connection')}
+    >
       {totals
         .sort((a, b) => b[1] - a[1])
         .map(([id, bytes]) => (
@@ -40,7 +59,7 @@ export function GroupConnectionTotals({
             <span className="w-32 shrink-0 truncate">
               {options.find((o) => o.id === id)?.name ?? id}
             </span>
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span dir="ltr" className="font-mono text-[11px] text-muted-foreground">
               {formatBytes(bytes)} · {Math.round((bytes / sum) * 100)}%
             </span>
           </div>
@@ -100,18 +119,18 @@ export function GroupPlanPanel({
   return (
     <div
       className="mb-2 flex flex-col gap-2 rounded-lg border-[0.5px] border-border bg-card px-3 py-2.5 text-[12px]"
-      aria-label="How Lightning is downloading this group"
+      aria-label={t('How Lightning is downloading this group')}
     >
-      <div className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        How Lightning is downloading this group
+      <div className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase rtl:tracking-normal">
+        {t('How Lightning is downloading this group')}
       </div>
-      <div className="leading-snug">{plan.summary || 'Nothing to plan yet.'}</div>
+      <div className="leading-snug">{plan.summary || t('Nothing to plan yet.')}</div>
       {plan.networks.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {plan.networks.map((network) => {
             const option = options.find((o) => o.id === network.id)
             const speed = running.length > 0 ? speedOn(network.id) : network.speedBps
-            const role =
+            const role: Role =
               network.state === 'lost'
                 ? 'lost'
                 : network.state === 'slow'
@@ -137,24 +156,28 @@ export function GroupPlanPanel({
                     }}
                   />
                 </div>
-                <span className="w-20 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+                <span
+                  dir="ltr"
+                  className="w-20 shrink-0 text-end font-mono text-[11px] text-muted-foreground"
+                >
                   {speed > 0 ? formatSpeed(speed) : '—'}
                 </span>
                 <span
-                  className="w-20 shrink-0 text-right font-mono text-[11px]"
-                  title="Downloaded over this connection"
+                  dir="ltr"
+                  className="w-20 shrink-0 text-end font-mono text-[11px]"
+                  title={t('Downloaded over this connection')}
                 >
                   {formatBytes(downloaded.get(network.id) ?? 0)}
                 </span>
                 <span
                   className={cn(
-                    'w-12 shrink-0 text-right text-[11px]',
+                    'w-12 shrink-0 text-end text-[11px]',
                     role === 'slow' || role === 'lost'
                       ? 'text-[var(--color-danger)]'
                       : 'text-muted-foreground'
                   )}
                 >
-                  {role}
+                  {roleLabel(role)}
                 </span>
               </div>
             )
@@ -169,8 +192,12 @@ export function GroupPlanPanel({
             onClick={() => toggle(group.id, 'decisions')}
             className="flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground"
           >
-            {showLog ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-            Recent decisions ({plan.log.length})
+            {showLog ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3 rtl:-scale-x-100" />
+            )}
+            {t('Recent decisions ({count})', { count: plan.log.length })}
           </button>
           {showLog && (
             <ul className="mt-1 flex max-h-40 flex-col gap-1 overflow-y-auto">

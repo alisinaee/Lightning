@@ -1,4 +1,5 @@
 import { formatSpeed } from '../utils/format'
+import { t } from '@shared/i18n/react'
 
 const WIDTH = 560
 const HEIGHT = 130
@@ -60,7 +61,10 @@ export function ThroughputChart({
       preserveAspectRatio="none"
       className="mt-[7px] block h-[104px] w-full"
       role="img"
-      aria-label={`Combined throughput over time. Currently ${formatSpeed(latestTotal)}, peak ${formatSpeed(peakTotal)}.`}
+      aria-label={t('Combined throughput over time. Currently {current}, peak {peak}.', {
+        current: formatSpeed(latestTotal),
+        peak: formatSpeed(peakTotal)
+      })}
     >
       <g stroke="var(--border)" strokeWidth={1}>
         <line x1={0} y1={HEIGHT * 0.33} x2={WIDTH} y2={HEIGHT * 0.33} />

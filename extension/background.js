@@ -151,7 +151,10 @@ async function sendToLightning(payload) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(payload)
     })
-    if (response.status === 401) { await repair(key); return 'key' }
+    if (response.status === 401) {
+      await repair(key)
+      return 'key'
+    }
     return response.ok ? 'ok' : 'error'
   } catch {
     cachedPort = null
@@ -296,7 +299,11 @@ api.runtime.onInstalled.addListener(async () => {
     id: 'lightning-youtube',
     title: tr(MENU_TITLES['lightning-youtube']),
     contexts: ['page'],
-    documentUrlPatterns: ['https://www.youtube.com/*', 'https://m.youtube.com/*', 'https://youtu.be/*']
+    documentUrlPatterns: [
+      'https://www.youtube.com/*',
+      'https://m.youtube.com/*',
+      'https://youtu.be/*'
+    ]
   })
   // Pick several links and videos on any page.
   api.contextMenus.create({
@@ -365,7 +372,10 @@ async function sendLinksToLightning(links, pageUrl) {
         userAgent: navigator.userAgent
       })
     })
-    if (response.status === 401) { await repair(key); return 'key' }
+    if (response.status === 401) {
+      await repair(key)
+      return 'key'
+    }
     return response.ok ? 'ok' : 'error'
   } catch {
     cachedPort = null
@@ -439,7 +449,10 @@ async function sendClipboard() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: '{}'
     })
-    if (response.status === 401) { await repair(key); return 'key' }
+    if (response.status === 401) {
+      await repair(key)
+      return 'key'
+    }
     if (response.status === 403) return 'off'
     if (response.status === 400) return 'nothing'
     return response.ok ? 'ok' : 'error'
@@ -481,7 +494,7 @@ async function startSelect(tab, frameId) {
   try {
     await api.scripting.executeScript({
       target: frameId ? { tabId: tab.id, frameIds: [frameId] } : { tabId: tab.id },
-      files: ['page-select.js']
+      files: ['i18n.js', 'page-select.js']
     })
   } catch {
     notify(tr('n_cantselect'))
@@ -499,7 +512,10 @@ async function sendYoutubeBatch(videos) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ videos: videos.slice(0, 200) })
     })
-    if (response.status === 401) { await repair(key); return { result: 'key' } }
+    if (response.status === 401) {
+      await repair(key)
+      return { result: 'key' }
+    }
     if (response.status === 403) return { result: 'off' }
     if (!response.ok) return { result: 'error' }
     const body = await response.json().catch(() => ({}))
@@ -548,7 +564,9 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
   }
   // The select mode on a page sends its picked links here (the page cannot reach the app itself).
   if (message?.type === 'send-links') {
-    const links = Array.isArray(message.links) ? message.links.filter((link) => /^https?:/i.test(link)) : []
+    const links = Array.isArray(message.links)
+      ? message.links.filter((link) => /^https?:/i.test(link))
+      : []
     sendLinksToLightning(links, _sender?.tab?.url).then((result) =>
       respond({ result, message: problem(result) })
     )

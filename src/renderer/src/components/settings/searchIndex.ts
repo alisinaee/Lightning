@@ -1,3 +1,5 @@
+import { t } from '@shared/i18n/react'
+
 /** The index behind the search field in Settings, as data: one entry per setting (or section title)
  * on every page. `page` is a page ID of SettingsDialog (the same IDs as in the `settings/<page>`
  * address, never renamed here). `label` is the plain English text the row shows, and the search
@@ -11,6 +13,11 @@ export interface SettingEntry {
 
 export const SETTINGS_INDEX: SettingEntry[] = [
   // General
+  {
+    page: 'General',
+    label: 'Language',
+    keywords: ['english', 'persian', 'farsi', 'russian', 'فارسی', 'русский', 'locale', 'translate']
+  },
   { page: 'General', label: 'Telegram settings', keywords: ['tdl'] },
   { page: 'General', label: 'YouTube options', keywords: ['video', 'yt-dlp'] },
   {
@@ -282,11 +289,17 @@ export function searchSettings(
   if (words.length === 0) return []
   const scored: { entry: SettingEntry; score: number }[] = []
   for (const entry of index) {
-    const label = normalise(entry.label)
-    const rest = normalise(`${entry.page} ${entry.keywords.join(' ')}`)
+    // The English label and the translated one (plus page names) both match.
+    const label = normalise(`${entry.label} ${t(entry.label)}`)
+    const rest = normalise(`${entry.page} ${t(entry.page)} ${entry.keywords.join(' ')}`)
     if (!words.every((word) => label.includes(word) || rest.includes(word))) continue
     const inLabel = words.every((word) => label.includes(word))
-    scored.push({ entry, score: (inLabel ? 0 : 10) + (label.startsWith(words[0]) ? 0 : 1) })
+    scored.push({
+      entry,
+      score:
+        (inLabel ? 0 : 10) +
+        (normalise(t(entry.label)).startsWith(words[0]) || label.startsWith(words[0]) ? 0 : 1)
+    })
   }
   return scored.sort((a, b) => a.score - b.score).map((item) => item.entry)
 }

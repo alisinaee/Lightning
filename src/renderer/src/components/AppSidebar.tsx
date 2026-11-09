@@ -48,9 +48,10 @@ import {
   AlertDialogTitle
 } from './ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { formatNumber, isRtl, t } from '@shared/i18n/react'
 
 export const labelClass =
-  'px-2 pt-3 pb-1 font-sans text-[10.5px] leading-none font-semibold tracking-[0.1em] text-muted-foreground uppercase'
+  'px-2 pt-3 pb-1 font-sans text-[10.5px] leading-none font-semibold tracking-[0.1em] text-muted-foreground uppercase rtl:tracking-normal'
 
 // Every entry icon sits in the same 20px box, so labels line up whatever the icon.
 const ICON_BOX = 'flex size-5 shrink-0 items-center justify-center'
@@ -78,19 +79,25 @@ export function Item({
   collapsed: boolean
   children: React.ReactNode
 }): React.JSX.Element {
-  const hint = collapsed ? (count === undefined ? label : `${label} (${count})`) : title
+  const hint = collapsed
+    ? count === undefined
+      ? label
+      : `${label} (${formatNumber(count)})`
+    : title
   const button = (
     <button
       type="button"
       aria-current={expanded === undefined && active ? 'true' : undefined}
       aria-expanded={expanded}
-      aria-label={collapsed ? (count === undefined ? label : `${label}, ${count}`) : undefined}
+      aria-label={
+        collapsed ? (count === undefined ? label : `${label}, ${formatNumber(count)}`) : undefined
+      }
       onClick={onClick}
       className={cn(
         // One weight in every state: a bolder active item is wider, so its row reflowed.
         collapsed
           ? 'flex h-8 w-full items-center justify-center rounded-lg'
-          : 'flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors duration-150 text-[12.5px] font-medium outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
+          : 'flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors duration-150 text-[12.5px] font-medium outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'bg-primary/10 text-foreground hover:bg-primary/15'
           : 'text-[var(--text-secondary)]'
@@ -104,7 +111,7 @@ export function Item({
             count === 0 ? 'text-muted-foreground/60' : 'text-muted-foreground'
           )}
         >
-          {count}
+          {formatNumber(count)}
         </span>
       )}
     </button>
@@ -113,7 +120,7 @@ export function Item({
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
-      <TooltipContent side="right">{hint}</TooltipContent>
+      <TooltipContent side="inline-end">{hint}</TooltipContent>
     </Tooltip>
   )
 }
@@ -201,7 +208,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
   return (
     <div className="contents">
       <Item
-        label="All"
+        label={t('All')}
         collapsed={collapsed}
         active={kind === null && jobFilter === 'all'}
         count={kindCounts.all}
@@ -213,12 +220,12 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
           size="sm"
           className="-mx-0.5 size-6 [&>svg]:size-[14px]"
         />
-        {!collapsed && <span className="min-w-0 flex-1 truncate">All</span>}
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{t('All')}</span>}
       </Item>
       {MEDIA_KINDS.map((entry) => (
         <Item
           key={entry.kind}
-          label={entry.label}
+          label={t(entry.label)}
           collapsed={collapsed}
           active={kind === entry.kind}
           count={kindCounts[entry.kind]}
@@ -229,7 +236,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
             size="sm"
             className="-mx-0.5 size-6 [&>svg]:size-[14px]"
           />
-          {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+          {!collapsed && <span className="min-w-0 flex-1 truncate">{t(entry.label)}</span>}
         </Item>
       ))}
       {TELEGRAM_JOBS.map((entry) => {
@@ -237,7 +244,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
         return (
           <Item
             key={entry.value}
-            label={entry.label}
+            label={t(entry.label)}
             collapsed={collapsed}
             active={jobFilter === entry.value}
             count={jobCounts[entry.value]}
@@ -246,7 +253,7 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
             <span className={ICON_BOX}>
               <Icon aria-hidden className="size-4" style={{ color: entry.color }} />
             </span>
-            {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+            {!collapsed && <span className="min-w-0 flex-1 truncate">{t(entry.label)}</span>}
           </Item>
         )
       })}
@@ -273,7 +280,7 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
         return (
           <Item
             key={entry.value}
-            label={entry.label}
+            label={t(entry.label)}
             collapsed={collapsed}
             active={jobFilter === entry.value}
             count={counts[entry.value]}
@@ -282,7 +289,7 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
             <span className={ICON_BOX}>
               <Icon aria-hidden className="size-4" style={{ color: entry.color }} />
             </span>
-            {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+            {!collapsed && <span className="min-w-0 flex-1 truncate">{t(entry.label)}</span>}
           </Item>
         )
       })}
@@ -350,6 +357,7 @@ export function AppSidebar(): React.JSX.Element {
     setSelected(new Set())
   }
   const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose
+  const rtl = isRtl()
   const buttonClass = cn(
     'flex h-8 shrink-0 items-center rounded-md text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
     collapsed ? 'w-full justify-center' : 'w-8 justify-center'
@@ -358,9 +366,9 @@ export function AppSidebar(): React.JSX.Element {
   return (
     <>
       <nav
-        aria-label="Download categories"
+        aria-label={t('Download categories')}
         className={cn(
-          'flex shrink-0 flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r-[0.5px] border-border bg-[var(--bg-secondary)] p-2.5',
+          'flex shrink-0 flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-e-[0.5px] border-border bg-[var(--bg-secondary)] p-2.5',
           'transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
           collapsed ? 'w-14' : 'w-[184px]'
         )}
@@ -374,16 +382,16 @@ export function AppSidebar(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={toggle}
-                  aria-label={collapsed ? 'Expand side panel' : 'Collapse side panel'}
+                  aria-label={collapsed ? t('Expand side panel') : t('Collapse side panel')}
                   aria-expanded={!collapsed}
                   className={buttonClass}
                 >
-                  <Toggle aria-hidden className="size-4" />
+                  <Toggle aria-hidden className="size-4 rtl:-scale-x-100" />
                 </button>
               }
             />
-            <TooltipContent side="right">
-              {collapsed ? 'Expand side panel' : 'Collapse side panel'}
+            <TooltipContent side="inline-end">
+              {collapsed ? t('Expand side panel') : t('Collapse side panel')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -392,21 +400,21 @@ export function AppSidebar(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setHideOpen(true)}
-                  aria-label="Hide side panel"
+                  aria-label={t('Hide side panel')}
                   className={buttonClass}
                 >
                   <EyeOff aria-hidden className="size-4" />
                 </button>
               }
             />
-            <TooltipContent side="right">Hide side panel</TooltipContent>
+            <TooltipContent side="inline-end">{t('Hide side panel')}</TooltipContent>
           </Tooltip>
         </div>
 
         {/* The three sections as a fixed row of icons; only the entries below change. */}
         <div
           role="tablist"
-          aria-label="Section"
+          aria-label={t('Section')}
           aria-orientation={collapsed ? 'vertical' : 'horizontal'}
           className={cn(
             'relative flex shrink-0 gap-0.5 border-b-[0.5px] border-border pb-1.5',
@@ -416,18 +424,18 @@ export function AppSidebar(): React.JSX.Element {
           {/* The highlight glides to the chosen section instead of jumping. */}
           <span
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-8 rounded-lg bg-primary/10 transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            className="pointer-events-none absolute start-0 top-0 h-8 rounded-lg bg-primary/10 transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{
               width: collapsed ? '100%' : 'calc((100% - 4px) / 3)',
               transform: collapsed
                 ? `translateY(${sectionIndex * 34}px)`
-                : `translateX(calc(${sectionIndex} * (100% + 2px)))`
+                : `translateX(calc(${rtl ? -sectionIndex : sectionIndex} * (100% + 2px)))`
             }}
           />
           {(
             [
               {
-                label: 'Downloads',
+                label: t('Downloads'),
                 color: '#a65b04',
                 open: downloadsOpen,
                 count: counts.statuses.downloading ?? 0,
@@ -459,7 +467,11 @@ export function AppSidebar(): React.JSX.Element {
                     type="button"
                     role="tab"
                     aria-selected={tab.open}
-                    aria-label={tab.count > 0 ? `${tab.label}, ${tab.count} active` : tab.label}
+                    aria-label={
+                      tab.count > 0
+                        ? t('{label}, {count} active', { label: tab.label, count: tab.count })
+                        : tab.label
+                    }
                     onClick={() => void tab.go()}
                     className={cn(
                       'relative flex h-8 shrink-0 items-center justify-center rounded-lg',
@@ -483,14 +495,14 @@ export function AppSidebar(): React.JSX.Element {
                     {!collapsed && tab.count > 0 && (
                       <span
                         aria-hidden
-                        className="ml-1 size-1.5 shrink-0 animate-pulse rounded-full"
+                        className="ms-1 size-1.5 shrink-0 animate-pulse rounded-full"
                         style={{ backgroundColor: tab.color }}
                       />
                     )}
                   </button>
                 }
               />
-              <TooltipContent side="right">{tab.label}</TooltipContent>
+              <TooltipContent side="inline-end">{tab.label}</TooltipContent>
             </Tooltip>
           ))}
         </div>
@@ -509,9 +521,11 @@ export function AppSidebar(): React.JSX.Element {
                       (entry.value !== 'all' || kindFilter === null)
                     }
                     count={counts.statuses[entry.value] ?? 0}
-                    label={entry.label}
+                    label={t(entry.label)}
                     collapsed={collapsed}
-                    title={entry.value === 'failed' ? 'Failed, or needing a new link' : undefined}
+                    title={
+                      entry.value === 'failed' ? t('Failed, or needing a new link') : undefined
+                    }
                     onClick={() => chooseFilter(entry.value)}
                   >
                     <span className={ICON_BOX}>
@@ -521,7 +535,9 @@ export function AppSidebar(): React.JSX.Element {
                         style={{ color: entry.color ?? 'var(--text-secondary)' }}
                       />
                     </span>
-                    {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                    {!collapsed && (
+                      <span className="min-w-0 flex-1 truncate">{t(entry.label)}</span>
+                    )}
                   </Item>
                 )
               })}
@@ -529,12 +545,15 @@ export function AppSidebar(): React.JSX.Element {
               {collapsed ? (
                 <button
                   type="button"
-                  aria-label="File type"
+                  aria-label={t('File type')}
                   aria-expanded={kindsOpen}
                   onClick={() => setKindsOpen((open) => !open)}
                   className="mt-1 flex h-6 w-full items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <ChevronDown aria-hidden className={cn('size-3.5', !kindsOpen && '-rotate-90')} />
+                  <ChevronDown
+                    aria-hidden
+                    className={cn('size-3.5', !kindsOpen && '-rotate-90 rtl:rotate-90')}
+                  />
                 </button>
               ) : (
                 <button
@@ -546,15 +565,18 @@ export function AppSidebar(): React.JSX.Element {
                     'flex w-full items-center justify-between rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
                   )}
                 >
-                  File type
-                  <ChevronDown aria-hidden className={cn('size-3', !kindsOpen && '-rotate-90')} />
+                  {t('File type')}
+                  <ChevronDown
+                    aria-hidden
+                    className={cn('size-3', !kindsOpen && '-rotate-90 rtl:rotate-90')}
+                  />
                 </button>
               )}
               {kindsOpen &&
                 FILE_KINDS.map((entry) => (
                   <Item
                     key={entry.kind}
-                    label={entry.label}
+                    label={t(entry.label)}
                     collapsed={collapsed}
                     active={view.name === 'list' && kindFilter === entry.kind}
                     count={counts.kinds[entry.kind] ?? 0}
@@ -565,7 +587,9 @@ export function AppSidebar(): React.JSX.Element {
                       size="sm"
                       className="-mx-0.5 size-6 [&>svg]:size-[14px]"
                     />
-                    {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                    {!collapsed && (
+                      <span className="min-w-0 flex-1 truncate">{t(entry.label)}</span>
+                    )}
                   </Item>
                 ))}
             </>
@@ -586,29 +610,30 @@ export function AppSidebar(): React.JSX.Element {
                 disabled={history.length === 0}
                 tabIndex={history.length > 0 ? 0 : -1}
                 aria-hidden={history.length === 0}
-                aria-label="Clear finished list"
-                className={`mt-2 flex h-8 shrink-0 items-center ${collapsed ? 'justify-center' : 'gap-2 px-2 text-left'} rounded-md text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${history.length > 0 ? '' : 'invisible'}`}
+                aria-label={t('Clear finished list')}
+                className={`mt-2 flex h-8 shrink-0 items-center ${collapsed ? 'justify-center' : 'gap-2 px-2 text-start'} rounded-md text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${history.length > 0 ? '' : 'invisible'}`}
               >
                 <Archive aria-hidden className="size-3.5" />
-                {!collapsed && 'Clear finished list'}
+                {!collapsed && t('Clear finished list')}
               </button>
             }
           />
-          <TooltipContent>Downloaded files stay on your computer</TooltipContent>
+          <TooltipContent>{t('Downloaded files stay on your computer')}</TooltipContent>
         </Tooltip>
       </nav>
       <AlertDialog open={hideOpen} onOpenChange={setHideOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Hide the side panel?</AlertDialogTitle>
+            <AlertDialogTitle>{t('Hide the side panel?')}</AlertDialogTitle>
             <AlertDialogDescription>
-              The side panel will be hidden completely. You can bring it back any time in Settings →
-              Interface.
+              {t(
+                'The side panel will be hidden completely. You can bring it back any time in Settings → Interface.'
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={hideSidebar}>Hide</AlertDialogAction>
+            <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={hideSidebar}>{t('Hide')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

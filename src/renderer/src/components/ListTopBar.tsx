@@ -18,13 +18,14 @@ import {
 } from './ui/dropdown-menu'
 import { Input } from './ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t } from '@shared/i18n/react'
 
 /** The shared top bar of the Downloads, Telegram and YouTube lists: the same controls, in the same
  * places, so the three screens read as one system. */
 
 /** The settings button at the right end of the top bar. */
 export function SettingsButton({
-  label = 'Settings',
+  label = t('Settings'),
   onClick
 }: {
   label?: string
@@ -62,7 +63,7 @@ export function PauseAllButton({
   /** Retry (a circular arrow) when only failures can be tried again, Play when paused work waits. */
   resumeIcon?: 'play' | 'retry'
 }): React.JSX.Element {
-  const label = pausing ? 'Pause all' : resumeLabel
+  const label = pausing ? t('Pause all') : resumeLabel
   return (
     <Tooltip>
       <TooltipTrigger
@@ -156,14 +157,14 @@ export function SearchField({
     <div className="relative w-[260px] min-w-[140px] shrink">
       <Search
         aria-hidden
-        className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute top-1/2 start-2 size-3.5 -translate-y-1/2 text-muted-foreground"
       />
       <Input
         ref={inputRef}
         type="search"
         disabled={disabled}
         aria-label={label}
-        placeholder="Search"
+        placeholder={t('Search')}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -175,10 +176,10 @@ export function SearchField({
             onStep(event.shiftKey ? -1 : 1)
           }
         }}
-        className={`h-8 pl-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden ${stepping ? 'pr-[92px]' : ''}`}
+        className={`h-8 ps-7 text-[12.5px] [&::-webkit-search-cancel-button]:hidden ${stepping ? 'pe-[92px]' : ''}`}
       />
       {stepping && (
-        <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
+        <span className="absolute top-1/2 end-1 flex -translate-y-1/2 items-center gap-0.5">
           <span className="px-1 font-mono text-[11px] tabular-nums text-muted-foreground">
             {matches === 0 ? '0/0' : `${matchIndex + 1}/${matches}`}
           </span>
@@ -186,7 +187,7 @@ export function SearchField({
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label="Previous result"
+            aria-label={t('Previous result')}
             disabled={matches === 0}
             onClick={() => onStep(-1)}
           >
@@ -196,7 +197,7 @@ export function SearchField({
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label="Next result"
+            aria-label={t('Next result')}
             disabled={matches === 0}
             onClick={() => onStep(1)}
           >

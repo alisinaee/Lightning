@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { explainYoutubeError } from './youtubeErrors'
 
 /** A plain sentence about what went wrong, with the raw message one click away. */
@@ -16,7 +17,7 @@ export function YoutubeErrorText({
       <span className="block">{summary}</span>
       {detail && (
         <details className="mt-0.5 text-[11.5px] opacity-80">
-          <summary className="cursor-pointer select-none">Details</summary>
+          <summary className="cursor-pointer select-none">{t('Details')}</summary>
           <span className="mt-1 block font-mono break-words whitespace-pre-wrap">{detail}</span>
         </details>
       )}

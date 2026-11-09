@@ -1,3 +1,4 @@
+import { t, tn } from '../shared/i18n'
 import { execFile } from 'node:child_process'
 import { app, BrowserWindow, dialog } from 'electron'
 import { log } from './logger'
@@ -48,7 +49,6 @@ export async function runFinishedAction(
     app.quit()
     return
   }
-  const verb = action === 'sleep' ? 'go to sleep' : 'shut down'
   const abort = new AbortController()
   let timer: NodeJS.Timeout | undefined
   const expired = new Promise<'time'>((resolve) => {
@@ -56,9 +56,12 @@ export async function runFinishedAction(
   })
   const options = {
     type: 'warning' as const,
-    message: `The computer will ${verb} in ${COUNTDOWN_SECONDS} seconds`,
-    detail: 'Downloads are finished. Cancel to keep working.',
-    buttons: ['Cancel'],
+    message:
+      action === 'sleep'
+        ? t('The computer will go to sleep in {seconds} seconds', { seconds: COUNTDOWN_SECONDS })
+        : t('The computer will shut down in {seconds} seconds', { seconds: COUNTDOWN_SECONDS }),
+    detail: t('Downloads are finished. Cancel to keep working.'),
+    buttons: [t('Cancel')],
     defaultId: 0,
     cancelId: 0,
     signal: abort.signal
@@ -87,9 +90,13 @@ export async function askWhatNext(
   if (testKnobs.finishedAction === 'nothing') return 'nothing'
   const options = {
     type: 'info' as const,
-    message: 'All downloads have finished',
-    detail: `${finished} ${finished === 1 ? 'download' : 'downloads'} completed. What now?`,
-    buttons: ['Do nothing', 'Quit Lightning', 'Sleep', 'Shut down'],
+    message: t('All downloads have finished'),
+    detail: tn(
+      finished,
+      '{count} download completed. What now?',
+      '{count} downloads completed. What now?'
+    ),
+    buttons: [t('Do nothing'), t('Quit Lightning'), t('Sleep'), t('Shut down')],
     defaultId: 0,
     cancelId: 0,
     noLink: true

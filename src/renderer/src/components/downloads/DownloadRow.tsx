@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { RowProgressLine } from './RowProgressLine'
 import { describeItem, statusKeyOf, type Item } from '../../utils/status'
 import { sourceOf } from '../../utils/format'
@@ -24,7 +25,7 @@ import { FormatBadge } from './FileKindIcon'
 import {
   chipsOf,
   onControl,
-  REVEAL_LABEL,
+  revealLabel,
   ROW_CLASS,
   stateEdge,
   type RowHandlers
@@ -91,25 +92,25 @@ export const DownloadRow = memo(function DownloadRow({
   const name = item.fileName
   const showSourceHost = useAppStore((store) => store.showSourceHost)
   // A torrent's label stays; only the website is left out when it is turned off.
-  const host = item.kind === 'torrent' ? 'Torrent' : showSourceHost ? sourceOf(item.url) : ''
+  const host = item.kind === 'torrent' ? t('Torrent') : showSourceHost ? sourceOf(item.url) : ''
   const primary = primaryActionOf(item, info, handlers)
   const fixLink = fixLinkOf(item, info)
   const menu = buildDownloadActions({ item, info, handlers, primary, fixLink })
 
   const cells: Record<string, React.JSX.Element> = {
     name: (
-      <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 pl-0')}>
+      <div key="name" role="cell" className={cn(cellClass, 'gap-2.5 ps-0')}>
         <FormatBadge name={name} kind={item.kind === 'torrent' ? 'torrent' : undefined} />
         <button
           type="button"
           data-title
-          aria-label={`Open ${name}`}
+          aria-label={t('Open {name}', { name })}
           onClick={(event) => {
             if (event.shiftKey) handlers.click(item.id, 'range')
             else if (event.metaKey || event.ctrlKey) handlers.click(item.id, 'toggle')
             else handlers.open(item.id)
           }}
-          className="flex min-w-0 flex-1 flex-col gap-1 pb-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 flex-col gap-1 pb-2 rounded-sm text-start outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ClippedText
             text={name}
@@ -120,8 +121,9 @@ export const DownloadRow = memo(function DownloadRow({
           />
           {/* A non-breaking space when empty, so the row keeps its height without the host. */}
           <span className="truncate text-[11px] leading-none text-muted-foreground">
-            {[host, info.missing && 'The file was moved or deleted'].filter(Boolean).join(' · ') ||
-              ' '}
+            {[host, info.missing && t('The file was moved or deleted')]
+              .filter(Boolean)
+              .join(' · ') || ' '}
           </span>
         </button>
       </div>
@@ -175,18 +177,24 @@ export const DownloadRow = memo(function DownloadRow({
           <RowProgressLine info={info} />
           <div role="cell" className="flex items-center justify-center">
             <Checkbox
-              aria-label={`Select ${name}`}
+              aria-label={t('Select {name}', { name })}
               checked={selected}
               onCheckedChange={(on) => handlers.select(item.id, on)}
             />
           </div>
           {columns.map((id) => cells[id])}
-          <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+          <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
             {primary && (
               <IconAction
                 label={primary.label}
                 tip={
-                  primary.label.startsWith('Download') ? primary.label : primary.label.split(' ')[0]
+                  primary.kind === 'pause'
+                    ? t('Pause')
+                    : primary.kind === 'resume'
+                      ? t('Resume')
+                      : primary.kind === 'retry'
+                        ? t('Retry')
+                        : primary.label
                 }
                 icon={primary.icon ?? Download}
                 onClick={primary.run}
@@ -194,16 +202,16 @@ export const DownloadRow = memo(function DownloadRow({
             )}
             {fixLink && (
               <IconAction
-                label="Fix link"
-                tip="Fix link"
+                label={t('Fix link')}
+                tip={t('Fix link')}
                 icon={Link2}
                 onClick={() => handlers.fix(item)}
               />
             )}
             {finished && !info.missing && (
               <IconAction
-                label={`${REVEAL_LABEL} ${name}`}
-                tip={REVEAL_LABEL}
+                label={`${revealLabel()} ${name}`}
+                tip={revealLabel()}
                 icon={FolderOpen}
                 onClick={() => void window.lightning.revealDownload(item.id)}
               />

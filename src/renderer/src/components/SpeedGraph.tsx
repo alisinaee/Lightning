@@ -1,4 +1,5 @@
 import { formatSpeed } from '../utils/format'
+import { t } from '@shared/i18n/react'
 
 /** How many seconds of speed the graph holds. */
 export const HISTORY_POINTS = 60
@@ -18,7 +19,7 @@ export function SpeedGraph({ points }: { points: number[] }): React.JSX.Element 
     <div>
       <svg
         role="img"
-        aria-label="Total speed over the last minute"
+        aria-label={t('Total speed over the last minute')}
         viewBox={`0 0 ${width} ${height}`}
         className="h-11 w-full text-primary"
         preserveAspectRatio="none"
@@ -40,10 +41,10 @@ export function SpeedGraph({ points }: { points: number[] }): React.JSX.Element 
           </>
         )}
       </svg>
-      <div className="flex justify-between text-[10.5px] text-muted-foreground">
-        <span>1 min ago</span>
-        <span>peak {formatSpeed(peak === 1 ? 0 : peak)}</span>
-        <span>now</span>
+      <div dir="ltr" className="flex justify-between text-[10.5px] text-muted-foreground">
+        <span>{t('1 min ago')}</span>
+        <span>{t('peak {speed}', { speed: formatSpeed(peak === 1 ? 0 : peak) })}</span>
+        <span>{t('now')}</span>
       </div>
     </div>
   )

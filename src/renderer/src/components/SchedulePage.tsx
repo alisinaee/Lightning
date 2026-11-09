@@ -1,18 +1,19 @@
 import { DEFAULT_SCHEDULE, type ScheduleRule, type ScheduleSettings } from '@shared/schedule'
 import { Trash as Trash2 } from '@phosphor-icons/react'
+import { t } from '@shared/i18n/react'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { SpeedInput } from './LimitFields'
 
 /** Monday first, as the week is read; the numbers are Date.getDay()'s. */
-const DAYS: [number, string][] = [
-  [1, 'Mon'],
-  [2, 'Tue'],
-  [3, 'Wed'],
-  [4, 'Thu'],
-  [5, 'Fri'],
-  [6, 'Sat'],
-  [0, 'Sun']
+const DAYS = (): [number, string][] => [
+  [1, t('Mon')],
+  [2, t('Tue')],
+  [3, t('Wed')],
+  [4, t('Thu')],
+  [5, t('Fri')],
+  [6, t('Sat')],
+  [0, t('Sun')]
 ]
 const DEFAULT_CAP = 1024 * 1024
 
@@ -47,12 +48,12 @@ export function SchedulePage({
           checked={value.enabled}
           onCheckedChange={(enabled) => onChange({ ...value, enabled: enabled === true })}
         />
-        <span>Use a schedule for downloads</span>
+        <span>{t('Use a schedule for downloads')}</span>
       </label>
       <p className="text-[12px] leading-snug text-muted-foreground">
-        With a <b>Run</b> window, downloads go only inside it (and wait in the queue outside). A{' '}
-        <b>Pause</b> window holds them. A window may cross midnight, such as 22:00 to 06:00.
-        Lightning has to be running: it holds a computer awake only while a download is going.
+        {t(
+          'With a Run window, downloads go only inside it (and wait in the queue outside). A Pause window holds them. A window may cross midnight, such as 22:00 to 06:00. Lightning has to be running: it holds a computer awake only while a download is going.'
+        )}
       </p>
       {value.rules.map((rule) => (
         <div
@@ -62,7 +63,7 @@ export function SchedulePage({
           }`}
         >
           <div className="flex flex-wrap items-center gap-1.5">
-            {DAYS.map(([day, label]) => {
+            {DAYS().map(([day, label]) => {
               const on = rule.days.includes(day)
               return (
                 <button
@@ -85,30 +86,30 @@ export function SchedulePage({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
             <select
-              aria-label="What this window does"
+              aria-label={t('What this window does')}
               value={rule.action}
               onChange={(event) =>
                 update(rule.id, { action: event.target.value as 'run' | 'pause' })
               }
               className="h-8 rounded-lg border border-input bg-transparent px-2 text-[13px]"
             >
-              <option value="run">Run</option>
-              <option value="pause">Pause</option>
+              <option value="run">{t('Run')}</option>
+              <option value="pause">{t('Pause')}</option>
             </select>
-            <span className="text-muted-foreground">from</span>
+            <span className="text-muted-foreground">{t('from')}</span>
             <input
               type="time"
-              aria-label="Start time"
+              aria-label={t('Start time')}
               value={rule.start}
               onChange={(event) =>
                 event.target.value && update(rule.id, { start: event.target.value })
               }
               className="h-8 rounded-lg border border-input bg-transparent px-2 text-[13px]"
             />
-            <span className="text-muted-foreground">to</span>
+            <span className="text-muted-foreground">{t('to')}</span>
             <input
               type="time"
-              aria-label="End time"
+              aria-label={t('End time')}
               value={rule.end}
               onChange={(event) =>
                 event.target.value && update(rule.id, { end: event.target.value })
@@ -120,7 +121,7 @@ export function SchedulePage({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Remove this window"
+              aria-label={t('Remove this window')}
               onClick={() => remove(rule.id)}
             >
               <Trash2 className="size-4" />
@@ -134,11 +135,11 @@ export function SchedulePage({
                   update(rule.id, { speedCap: on === true ? DEFAULT_CAP : undefined })
                 }
               />
-              <span className="text-muted-foreground">Limit speed to</span>
+              <span className="text-muted-foreground">{t('Limit speed to')}</span>
               {rule.speedCap !== undefined && (
                 <SpeedInput
                   bytes={rule.speedCap}
-                  label="Speed in this window"
+                  label={t('Speed in this window')}
                   onChange={(speedCap) => update(rule.id, { speedCap })}
                 />
               )}
@@ -154,7 +155,7 @@ export function SchedulePage({
             onChange({ ...(value ?? DEFAULT_SCHEDULE), rules: [...value.rules, newRule()] })
           }
         >
-          Add a window
+          {t('Add a window')}
         </Button>
       </div>
     </div>

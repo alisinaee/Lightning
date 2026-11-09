@@ -1,4 +1,5 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
+import { formatNumber, t, tn } from '@shared/i18n/react'
 import { ThroughVpn } from '../components/ThroughVpn'
 import { HeroBand } from '../components/HeroBand'
 import { DetailHeader } from '../components/DetailHeader'
@@ -69,11 +70,11 @@ export function CompleteScreen({
     <div className="flex h-full flex-col bg-background">
       <DetailHeader download={download}>
         <Button type="button" onClick={handleReveal} disabled={missing}>
-          {window.lightning.platform === 'darwin' ? 'Show in Finder' : 'Show in folder'}
+          {window.lightning.platform === 'darwin' ? t('Show in Finder') : t('Show in folder')}
         </Button>
       </DetailHeader>
       <div role="status" className="sr-only">
-        Download complete: {download.fileName}
+        {t('Download complete: {name}', { name: download.fileName })}
       </div>
       <HeroBand>
         <div className="flex items-center gap-[18px]">
@@ -96,14 +97,16 @@ export function CompleteScreen({
             <div className="mt-[5px] truncate font-mono text-[11.5px] leading-[1.3] text-muted-foreground">
               {files && `${describeFileCount(files.chosen, files.total)} · `}
               {formatBytes(finalSize)} ·{' '}
-              {missing
-                ? 'moved or deleted since'
-                : toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
+              {missing ? (
+                t('moved or deleted since')
+              ) : (
+                <bdi dir="ltr">{toDisplayPath(dirnameOf(download.destinationPath), homeDir)}</bdi>
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-[5px]">
             <div className="font-mono text-[9px] leading-none font-medium tracking-[0.16em] text-muted-foreground">
-              AVERAGE
+              {t('AVERAGE')}
             </div>
             <div className="flex items-baseline gap-1.5">
               <div className="font-mono text-[26px] leading-[0.9] font-semibold tracking-[-0.02em] tabular-nums text-foreground">
@@ -119,26 +122,26 @@ export function CompleteScreen({
 
       <div className="mx-5 my-[18px] grid grid-cols-5 overflow-hidden rounded-[10px] border-[0.5px] border-border bg-card">
         {[
-          { label: 'Size', value: formatBytes(finalSize) },
-          { label: 'Time', value: formatDuration(elapsedSeconds) },
+          { label: t('Size'), value: formatBytes(finalSize) },
+          { label: t('Time'), value: formatDuration(elapsedSeconds) },
           {
-            label: 'Peak',
+            label: t('Peak'),
             value:
               download.peakSpeedBytesPerSec === undefined
                 ? '—'
                 : formatSpeed(download.peakSpeedBytesPerSec)
           },
-          { label: 'Networks', value: String(groups.length) },
+          { label: t('Networks'), value: formatNumber(groups.length) },
           // The most it ran at once: streams that didn't make it faster were closed along the way.
           {
-            label: isTorrent ? 'Peers' : 'Streams',
-            value: String(isTorrent ? download.peakPeers : download.peakStreams)
+            label: isTorrent ? t('Peers') : t('Streams'),
+            value: formatNumber(isTorrent ? download.peakPeers : download.peakStreams)
           }
         ].map((stat, index) => (
           <div
             key={stat.label}
             className={`flex flex-col gap-[5px] p-[11px_14px] ${
-              index > 0 ? 'border-l-[0.5px] border-border' : ''
+              index > 0 ? 'border-s-[0.5px] border-border' : ''
             }`}
           >
             <div className="font-mono text-[9px] leading-none font-medium tracking-[0.14em] text-muted-foreground uppercase">
@@ -152,7 +155,7 @@ export function CompleteScreen({
       </div>
 
       <div className="mx-5 mb-4 flex flex-col gap-2">
-        <h2 className={sectionHeaderClass}>Speed over the download</h2>
+        <h2 className={sectionHeaderClass}>{t('Speed over the download')}</h2>
         <ThroughputChart
           order={groups.map((g, i) => ({ interfaceId: g.id, solid: visuals[i].solid }))}
           historyByInterface={download.speedHistory ?? {}}
@@ -160,7 +163,7 @@ export function CompleteScreen({
       </div>
 
       <div className="mx-5 mb-5 flex flex-1 flex-col gap-[9px]">
-        <h2 className={sectionHeaderClass}>Contribution by network</h2>
+        <h2 className={sectionHeaderClass}>{t('Contribution by network')}</h2>
         <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted">
           {groups.map((group, index) => (
             <div
@@ -182,7 +185,9 @@ export function CompleteScreen({
               <div className="flex-1" />
               <div className="font-mono text-[11.5px] leading-none text-[var(--text-secondary)]">
                 {formatBytes(group.bytesDownloaded)} ·{' '}
-                {Math.round((group.bytesDownloaded / totalWeight) * 100)}%
+                {t('{percent}%', {
+                  percent: Math.round((group.bytesDownloaded / totalWeight) * 100)
+                })}
               </div>
             </div>
           ))}
@@ -190,10 +195,12 @@ export function CompleteScreen({
         {throughVpn && <ThroughVpn {...throughVpn} className="pt-1" />}
         <div className="mt-auto pt-3 font-mono text-[11px] leading-[1.4] text-muted-foreground">
           {[
-            `written in ${totalChunkCount} ${isTorrent ? 'pieces' : 'chunks'}`,
+            isTorrent
+              ? tn(totalChunkCount, 'written in {count} piece', 'written in {count} pieces')
+              : tn(totalChunkCount, 'written in {count} chunk', 'written in {count} chunks'),
             // What its peers got from it while it downloaded.
-            isTorrent && `uploaded ${formatBytes(download.bytesUploaded ?? 0)}`,
-            `${totalRetries} ${totalRetries === 1 ? 'retry' : 'retries'}`
+            isTorrent && t('uploaded {size}', { size: formatBytes(download.bytesUploaded ?? 0) }),
+            tn(totalRetries, '{count} retry', '{count} retries')
           ]
             .filter(Boolean)
             .join(' · ')}

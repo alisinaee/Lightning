@@ -9,6 +9,7 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t } from '@shared/i18n/react'
 
 interface NetworkEditPopoverProps {
   interfaceId: string
@@ -21,7 +22,7 @@ interface NetworkEditPopoverProps {
 }
 
 const fieldLabelClass =
-  'font-mono text-[9px] leading-none font-medium tracking-[0.12em] text-muted-foreground uppercase'
+  'font-mono text-[9px] leading-none font-medium tracking-[0.12em] text-muted-foreground uppercase rtl:tracking-normal'
 
 const MAX_NETWORK_NAME_LENGTH = 40
 
@@ -124,7 +125,7 @@ export function NetworkEditPopover({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label="Edit network"
+                    aria-label={t('Edit network')}
                     className={cn('shrink-0 text-muted-foreground', className)}
                   >
                     <Pencil className="size-3" />
@@ -137,14 +138,19 @@ export function NetworkEditPopover({
         <TooltipContent>
           {tooltip ??
             (preference?.proxy?.enabled && preference?.proxy?.host
-              ? `Proxy active (${preference!.proxy!.type.toUpperCase()}) — click to configure`
-              : `Edit network or set a proxy`)}
+              ? t('Proxy active ({type}) — click to configure', {
+                  type: preference!.proxy!.type.toUpperCase()
+                })
+              : t('Edit network or set a proxy'))}
         </TooltipContent>
       </Tooltip>
-      <PopoverContent aria-label={`Edit ${visual.name}`} className="w-[320px] gap-3 p-3">
+      <PopoverContent
+        aria-label={t('Edit {name}', { name: visual.name })}
+        className="w-[320px] gap-3 p-3"
+      >
         <div className="flex flex-col gap-[6px]">
           <label htmlFor={`network-name-${interfaceId}`} className={fieldLabelClass}>
-            Name
+            {t('Name')}
           </label>
           <input
             id={`network-name-${interfaceId}`}
@@ -156,6 +162,7 @@ export function NetworkEditPopover({
               if (event.key === 'Enter') close()
             }}
             placeholder={osName}
+            dir="auto"
             maxLength={MAX_NETWORK_NAME_LENGTH}
             autoFocus={!defaultFocusProxy}
             className="rounded-[6px] border border-input bg-background px-[9px] py-1.5 font-sans text-[12px] leading-[1.3] font-medium text-foreground outline-none focus-visible:border-ring"
@@ -163,7 +170,7 @@ export function NetworkEditPopover({
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <span className={fieldLabelClass}>Color</span>
+          <span className={fieldLabelClass}>{t('Color')}</span>
           <div className="flex items-center justify-between px-1 py-1">
             {NETWORK_COLOR_SWATCHES.map((swatch) => {
               const isSelected = draftColorId === swatch.id
@@ -202,14 +209,14 @@ export function NetworkEditPopover({
         {/* Proxy configuration section */}
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
-            <span className={fieldLabelClass}>Proxy</span>
+            <span className={fieldLabelClass}>{t('Proxy')}</span>
             <label className="group flex cursor-pointer items-center gap-1.5 select-none">
               <Checkbox
                 checked={proxyEnabled}
                 onCheckedChange={(checked) => setProxyEnabled(Boolean(checked))}
               />
               <span className="font-sans text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
-                Enable proxy
+                {t('Enable proxy')}
               </span>
             </label>
           </div>
@@ -218,21 +225,21 @@ export function NetworkEditPopover({
             <div className="flex flex-col gap-2.5 pt-0.5">
               {/* Proxy Type Segmented Control */}
               <div className="flex flex-col gap-1">
-                <span className={fieldLabelClass}>Protocol</span>
+                <span className={fieldLabelClass}>{t('Protocol')}</span>
                 <div className="grid grid-cols-4 gap-1 rounded-md bg-muted/50 p-0.5">
-                  {PROXY_TYPES.map((t) => (
+                  {PROXY_TYPES.map((proxy) => (
                     <button
-                      key={t.id}
+                      key={proxy.id}
                       type="button"
-                      onClick={() => setProxyType(t.id)}
+                      onClick={() => setProxyType(proxy.id)}
                       className={cn(
                         'rounded-[4px] py-1 text-center font-mono text-[10px] font-semibold transition-all',
-                        proxyType === t.id
+                        proxyType === proxy.id
                           ? 'bg-background text-foreground shadow-xs'
                           : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
-                      {t.label}
+                      {proxy.label}
                     </button>
                   ))}
                 </div>
@@ -242,7 +249,7 @@ export function NetworkEditPopover({
               <div className="grid grid-cols-[1fr_80px] gap-2">
                 <div className="flex flex-col gap-1">
                   <label htmlFor={`proxy-host-${interfaceId}`} className={fieldLabelClass}>
-                    Host / IP
+                    {t('Host / IP')}
                   </label>
                   <input
                     id={`proxy-host-${interfaceId}`}
@@ -253,12 +260,13 @@ export function NetworkEditPopover({
                       if (event.key === 'Enter') close()
                     }}
                     placeholder="127.0.0.1"
+                    dir="ltr"
                     className="rounded-[6px] border border-input bg-background px-[9px] py-1.5 font-mono text-[11px] leading-[1.3] text-foreground outline-none focus-visible:border-ring placeholder:text-muted-foreground/50"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label htmlFor={`proxy-port-${interfaceId}`} className={fieldLabelClass}>
-                    Port
+                    {t('Port')}
                   </label>
                   <input
                     id={`proxy-port-${interfaceId}`}
@@ -270,6 +278,7 @@ export function NetworkEditPopover({
                       if (event.key === 'Enter') close()
                     }}
                     placeholder={proxyType.startsWith('socks') ? '1080' : '8080'}
+                    dir="ltr"
                     className="rounded-[6px] border border-input bg-background px-[9px] py-1.5 font-mono text-[11px] leading-[1.3] text-foreground outline-none focus-visible:border-ring placeholder:text-muted-foreground/50"
                   />
                 </div>
@@ -279,7 +288,10 @@ export function NetworkEditPopover({
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
                   <label htmlFor={`proxy-user-${interfaceId}`} className={fieldLabelClass}>
-                    User <span className="text-[8px] font-normal lowercase opacity-70">(opt)</span>
+                    {t('User')}{' '}
+                    <span className="text-[8px] font-normal lowercase opacity-70">
+                      {t('(opt)')}
+                    </span>
                   </label>
                   <input
                     id={`proxy-user-${interfaceId}`}
@@ -290,14 +302,17 @@ export function NetworkEditPopover({
                       if (event.key === 'Enter') close()
                     }}
                     placeholder="username"
+                    dir="ltr"
                     autoComplete="off"
                     className="rounded-[6px] border border-input bg-background px-[9px] py-1.5 font-sans text-[11px] leading-[1.3] text-foreground outline-none focus-visible:border-ring placeholder:text-muted-foreground/50"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label htmlFor={`proxy-pass-${interfaceId}`} className={fieldLabelClass}>
-                    Password{' '}
-                    <span className="text-[8px] font-normal lowercase opacity-70">(opt)</span>
+                    {t('Password')}{' '}
+                    <span className="text-[8px] font-normal lowercase opacity-70">
+                      {t('(opt)')}
+                    </span>
                   </label>
                   <input
                     id={`proxy-pass-${interfaceId}`}
@@ -307,7 +322,8 @@ export function NetworkEditPopover({
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') close()
                     }}
-                    placeholder={proxyType === 'socks4' ? 'N/A' : '••••••••'}
+                    placeholder={proxyType === 'socks4' ? t('N/A') : '••••••••'}
+                    dir="ltr"
                     autoComplete="off"
                     disabled={proxyType === 'socks4'}
                     className={cn(
@@ -323,7 +339,7 @@ export function NetworkEditPopover({
 
         <div className="flex justify-end pt-1">
           <Button type="button" size="xs" onClick={close}>
-            Done
+            {t('Done')}
           </Button>
         </div>
       </PopoverContent>

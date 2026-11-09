@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { NetworkInterfaceKind, NetworkPreference, NetworkPreferences } from '@shared/types'
 
 interface KindPalette {
@@ -63,23 +64,30 @@ export const NETWORK_ROW_GRID_COLUMNS =
 /** A swatch's colors, as CSS custom properties (main.css): a light and a dark value each. */
 function swatch<Id extends string>(
   id: Id,
-  label: string
+  label: () => string
 ): { id: Id; label: string; solid: string; onSolid: string } {
-  return { id, label, solid: `var(--swatch-${id})`, onSolid: `var(--swatch-${id}-onsolid)` }
+  return {
+    id,
+    get label() {
+      return label()
+    },
+    solid: `var(--swatch-${id})`,
+    onSolid: `var(--swatch-${id}-onsolid)`
+  }
 }
 
 // A curated set of user-selectable network colors, distinct from (and in addition to) the
 // kind defaults above — each ships its own on-solid text color so it's legible without having
 // to compute contrast for an arbitrary user-picked hue at runtime, in light mode and dark.
 export const NETWORK_COLOR_SWATCHES = [
-  swatch('teal', 'Teal'),
-  swatch('amber', 'Amber'),
-  swatch('steel', 'Steel'),
-  swatch('rose', 'Rose'),
-  swatch('violet', 'Violet'),
-  swatch('lime', 'Lime'),
-  swatch('cyan', 'Cyan'),
-  swatch('coral', 'Coral')
+  swatch('teal', () => t('Teal')),
+  swatch('amber', () => t('Amber')),
+  swatch('steel', () => t('Steel')),
+  swatch('rose', () => t('Rose')),
+  swatch('violet', () => t('Violet')),
+  swatch('lime', () => t('Lime')),
+  swatch('cyan', () => t('Cyan')),
+  swatch('coral', () => t('Coral'))
 ] as const
 
 export type NetworkColorId = (typeof NETWORK_COLOR_SWATCHES)[number]['id']

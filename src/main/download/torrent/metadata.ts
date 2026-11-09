@@ -1,3 +1,4 @@
+import { t } from '../../../shared/i18n'
 import { open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,8 +10,6 @@ import { safeTorrentPaths } from './paths'
 
 /** A .torrent file is metadata only; a link answering with more than this isn't one. */
 const MAX_TORRENT_FILE_BYTES = 10 * 1024 * 1024
-const TOO_LARGE = 'Lightning supports .torrent files up to 10 MB.'
-const V2_ONLY = 'This torrent uses BitTorrent v2 only, which Lightning doesn’t support yet'
 const NO_PEERS = 'No peers responded to this magnet link. Try again later or open a .torrent file.'
 const NO_ONE_FOUND =
   'Couldn’t find anyone sharing this magnet link. A VPN or firewall may be blocking BitTorrent; ' +
@@ -57,8 +56,11 @@ export async function describeTorrent(torrentFile: Uint8Array, link: string): Pr
   const { default: parseTorrent } = await import('parse-torrent')
   const parsed = await parseTorrent(torrentFile).catch((error: unknown) => {
     // parse-torrent's check for the v1 piece hashes, which a v2-only torrent doesn't have.
-    if (error instanceof Error && error.message.endsWith('info.pieces')) throw new Error(V2_ONLY)
-    throw new Error('This isn’t a torrent Lightning can read')
+    if (error instanceof Error && error.message.endsWith('info.pieces'))
+      throw new Error(
+        t('This torrent uses BitTorrent v2 only, which Lightning doesn’t support yet')
+      )
+    throw new Error(t('This isn’t a torrent Lightning can read'))
   })
   const files = safeTorrentPaths(parsed.files ?? [])
   remember(parsed.infoHash, torrentFile)
@@ -80,7 +82,8 @@ export async function describeTorrent(torrentFile: Uint8Array, link: string): Pr
 export async function readTorrentFile(path: string): Promise<Uint8Array> {
   const handle = await open(path, 'r')
   try {
-    if ((await handle.stat()).size > MAX_TORRENT_FILE_BYTES) throw new Error(TOO_LARGE)
+    if ((await handle.stat()).size > MAX_TORRENT_FILE_BYTES)
+      throw new Error(t('Lightning supports .torrent files up to 10 MB.'))
     return await handle.readFile()
   } finally {
     await handle.close()
@@ -100,7 +103,8 @@ export async function downloadTorrentFile(url: string, timeoutMs: number): Promi
   let total = 0
   for await (const chunk of response.body) {
     total += chunk.length
-    if (total > MAX_TORRENT_FILE_BYTES) throw new Error(TOO_LARGE)
+    if (total > MAX_TORRENT_FILE_BYTES)
+      throw new Error(t('Lightning supports .torrent files up to 10 MB.'))
     chunks.push(chunk)
   }
   return Buffer.concat(chunks)
@@ -128,7 +132,7 @@ function tellStatus(status: MagnetCheckStatus): void {
 export async function fetchMagnetMetadata(magnet: string): Promise<Uint8Array> {
   const { default: parseTorrent } = await import('parse-torrent')
   const { infoHash, announce, peerAddresses, xs } = (await parseTorrent(magnet).catch(() => {
-    throw new Error('This magnet link isn’t valid')
+    throw new Error(t('This magnet link isn’t valid'))
   })) as MagnetParts
   // Only the DHT can help a link that names no tracker, no peer and no .torrent to fetch (xs).
   const dhtOnly = !announce?.length && !peerAddresses?.length && !xs?.length

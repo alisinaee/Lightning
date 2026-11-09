@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { ChecksumResult } from '@shared/types'
 import {
   CircleNotch as Loader2,
@@ -10,10 +11,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 export function ChecksumChip({ result }: { result: ChecksumResult }): React.JSX.Element {
   const name = result.algo.toUpperCase()
   const view = {
-    verifying: { icon: Loader2, text: `Checking ${name}…`, tone: 'text-muted-foreground' },
-    verified: { icon: ShieldCheck, text: `${name} matches`, tone: 'text-emerald-600' },
-    mismatch: { icon: ShieldAlert, text: `${name} does not match`, tone: 'text-destructive' },
-    unreadable: { icon: ShieldAlert, text: `${name} not checked`, tone: 'text-muted-foreground' }
+    verifying: {
+      icon: Loader2,
+      text: t('Checking {name}…', { name }),
+      tone: 'text-muted-foreground'
+    },
+    verified: { icon: ShieldCheck, text: t('{name} matches', { name }), tone: 'text-emerald-600' },
+    mismatch: {
+      icon: ShieldAlert,
+      text: t('{name} does not match', { name }),
+      tone: 'text-destructive'
+    },
+    unreadable: {
+      icon: ShieldAlert,
+      text: t('{name} not checked', { name }),
+      tone: 'text-muted-foreground'
+    }
   }[result.status]
   const Icon = view.icon
   return (
@@ -27,7 +40,7 @@ export function ChecksumChip({ result }: { result: ChecksumResult }): React.JSX.
         }
       />
       <TooltipContent>
-        <div className="font-mono text-[11px]">
+        <div dir="ltr" className="font-mono text-[11px]">
           <div>expected {result.expected}</div>
           {result.actual && <div>actual&nbsp;&nbsp; {result.actual}</div>}
         </div>

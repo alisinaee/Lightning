@@ -6,17 +6,18 @@ import { Switch } from '../ui/switch'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../ui/sheet'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
 import { cn } from 'cn'
+import { t } from '@shared/i18n/react'
 import type { YoutubeOptions, YoutubeQuality } from '@shared/youtube'
 
-const QUALITIES: { value: YoutubeQuality; label: string }[] = [
-  { value: 'best', label: 'Best available' },
+const qualities = (): { value: YoutubeQuality; label: string }[] => [
+  { value: 'best', label: t('Best available') },
   { value: '2160', label: '4K (2160p)' },
   { value: '1440', label: '2K (1440p)' },
   { value: '1080', label: 'Full HD (1080p)' },
   { value: '720', label: 'HD (720p)' },
   { value: '480', label: 'SD (480p)' },
   { value: '360', label: 'Low (360p)' },
-  { value: 'audio', label: 'Audio only' }
+  { value: 'audio', label: t('Audio only') }
 ]
 
 const SELECT =
@@ -148,28 +149,30 @@ function CommonSettings({
   }
   return (
     <div className="flex flex-col gap-5">
-      <Section title="Quality">
-        <Row title="Default quality" hint="Picked first in the add dialog">
+      <Section title={t('Quality')}>
+        <Row title={t('Default quality')} hint={t('Picked first in the add dialog')}>
           <Choice
-            label="Default quality"
+            label={t('Default quality')}
             value={options.quality}
-            choices={QUALITIES}
+            choices={qualities()}
             onChange={(quality) => change({ quality })}
           />
         </Row>
         <Row
-          title="Start with these defaults"
-          hint="When a link is fetched, download it at the default quality without asking. Off: you choose each time."
+          title={t('Start with these defaults')}
+          hint={t(
+            'When a link is fetched, download it at the default quality without asking. Off: you choose each time.'
+          )}
         >
           <Toggle
-            label="Start with these defaults"
+            label={t('Start with these defaults')}
             checked={options.autoStartDefault}
             onChange={(autoStartDefault) => change({ autoStartDefault })}
           />
         </Row>
-        <Row title="Video container" hint="Format of merged video files">
+        <Row title={t('Video container')} hint={t('Format of merged video files')}>
           <Choice
-            label="Video container"
+            label={t('Video container')}
             value={options.mergeFormat}
             choices={[
               { value: 'mp4', label: 'MP4' },
@@ -179,9 +182,9 @@ function CommonSettings({
             onChange={(mergeFormat) => change({ mergeFormat })}
           />
         </Row>
-        <Row title="Audio format" hint="Used for audio-only downloads">
+        <Row title={t('Audio format')} hint={t('Used for audio-only downloads')}>
           <Choice
-            label="Audio format"
+            label={t('Audio format')}
             value={options.audioFormat}
             choices={[
               { value: 'm4a', label: 'M4A' },
@@ -195,57 +198,60 @@ function CommonSettings({
         </Row>
       </Section>
 
-      <Section title="Saving">
-        <Row title="Download folder" hint={options.folder || 'Your Downloads folder'}>
+      <Section title={t('Saving')}>
+        <Row title={t('Download folder')} hint={options.folder || t('Your Downloads folder')}>
           <Button variant="secondary" size="sm" onClick={() => void chooseFolder()}>
             <FolderOpen />
-            Choose
+            {t('Choose')}
           </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Use the Downloads folder"
+            aria-label={t('Use the Downloads folder')}
             disabled={!options.folder}
             onClick={() => change({ folder: '' })}
           >
             <RotateCcw />
           </Button>
         </Row>
-        <Row title="Playlists" hint="A whole playlist goes into its own folder">
+        <Row title={t('Playlists')} hint={t('A whole playlist goes into its own folder')}>
           <Choice
-            label="Playlists"
+            label={t('Playlists')}
             value={options.playlist}
             choices={[
-              { value: 'single', label: 'Only the video' },
-              { value: 'full', label: 'Whole playlist' }
+              { value: 'single', label: t('Only the video') },
+              { value: 'full', label: t('Whole playlist') }
             ]}
             onChange={(playlist) => change({ playlist })}
           />
         </Row>
       </Section>
 
-      <Section title="Cookies">
-        <Row title="Sign-in cookies" hint="Needed for age-restricted or members-only videos">
+      <Section title={t('Cookies')}>
+        <Row
+          title={t('Sign-in cookies')}
+          hint={t('Needed for age-restricted or members-only videos')}
+        >
           <Choice
-            label="Sign-in cookies"
+            label={t('Sign-in cookies')}
             value={options.cookieMode}
             choices={[
-              { value: 'none', label: "Don't use" },
-              { value: 'saved', label: 'Saved in Lightning' },
+              { value: 'none', label: t("Don't use") },
+              { value: 'saved', label: t('Saved in Lightning') },
               { value: 'manual', label: 'cookies.txt file' }
             ]}
             onChange={(cookieMode) => change({ cookieMode })}
           />
         </Row>
         <Row
-          title="Browser cookies"
-          hint="Read the sign-in from this browser. macOS may ask for Keychain access"
+          title={t('Browser cookies')}
+          hint={t('Read the sign-in from this browser. macOS may ask for Keychain access')}
         >
           <Choice
-            label="Browser cookies"
+            label={t('Browser cookies')}
             value={options.cookiesBrowser}
             choices={[
-              { value: '', label: 'Off' },
+              { value: '', label: t('Off') },
               { value: 'chrome', label: 'Chrome' },
               { value: 'safari', label: 'Safari' },
               { value: 'firefox', label: 'Firefox' },
@@ -256,61 +262,64 @@ function CommonSettings({
           />
         </Row>
         {options.cookieMode === 'manual' && (
-          <Row title="cookies.txt file" hint={options.manualCookiesFile || 'No file chosen'}>
+          <Row title="cookies.txt file" hint={options.manualCookiesFile || t('No file chosen')}>
             <Button variant="secondary" size="sm" onClick={() => void chooseCookies()}>
-              Choose
+              {t('Choose')}
             </Button>
           </Row>
         )}
       </Section>
 
-      <Section title="Extras">
-        <Row title="Subtitles" hint="Downloaded and embedded in the video">
+      <Section title={t('Extras')}>
+        <Row title={t('Subtitles')} hint={t('Downloaded and embedded in the video')}>
           <Toggle
-            label="Download subtitles"
+            label={t('Download subtitles')}
             checked={options.subtitles}
             onChange={(subtitles) => change({ subtitles })}
           />
         </Row>
         {options.subtitles && (
-          <Row title="Subtitle languages" hint="Comma-separated, e.g. en.*,fa">
+          <Row title={t('Subtitle languages')} hint={t('Comma-separated, e.g. en.*,fa')}>
             <Field
-              label="Subtitle languages"
+              label={t('Subtitle languages')}
               value={options.subtitleLangs}
               placeholder="en.*"
               onSave={(subtitleLangs) => change({ subtitleLangs })}
             />
           </Row>
         )}
-        <Row title="Metadata" hint="Title, channel and date inside the file">
+        <Row title={t('Metadata')} hint={t('Title, channel and date inside the file')}>
           <Toggle
-            label="Embed metadata"
+            label={t('Embed metadata')}
             checked={options.metadata}
             onChange={(metadata) => change({ metadata })}
           />
         </Row>
-        <Row title="Thumbnail" hint="Use the video picture as the file's cover">
+        <Row title={t('Thumbnail')} hint={t("Use the video picture as the file's cover")}>
           <Toggle
-            label="Embed thumbnail"
+            label={t('Embed thumbnail')}
             checked={options.embedThumbnail}
             onChange={(embedThumbnail) => change({ embedThumbnail })}
           />
         </Row>
-        <Row title="Chapters" hint="Chapter markers inside the file">
+        <Row title={t('Chapters')} hint={t('Chapter markers inside the file')}>
           <Toggle
-            label="Embed chapters"
+            label={t('Embed chapters')}
             checked={options.embedChapters}
             onChange={(embedChapters) => change({ embedChapters })}
           />
         </Row>
-        <Row title="SponsorBlock" hint="Sponsor and intro segments: marked as chapters, or cut out">
+        <Row
+          title="SponsorBlock"
+          hint={t('Sponsor and intro segments: marked as chapters, or cut out')}
+        >
           <Choice
             label="SponsorBlock"
             value={options.sponsorBlock}
             choices={[
-              { value: 'off', label: 'Off' },
-              { value: 'mark', label: 'Mark as chapters' },
-              { value: 'remove', label: 'Remove segments' }
+              { value: 'off', label: t('Off') },
+              { value: 'mark', label: t('Mark as chapters') },
+              { value: 'remove', label: t('Remove segments') }
             ]}
             onChange={(sponsorBlock) => change({ sponsorBlock })}
           />
@@ -329,33 +338,33 @@ function AdvancedSettings({
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-5">
-      <Section title="Format">
+      <Section title={t('Format')}>
         <Row
-          title="Format selector"
-          hint="Replaces the quality choice. Leave empty for normal use."
+          title={t('Format selector')}
+          hint={t('Replaces the quality choice. Leave empty for normal use.')}
         >
           <Field
-            label="Format selector"
+            label={t('Format selector')}
             value={options.formatOverride}
             placeholder="bestvideo[ext=mp4]+bestaudio"
             width="w-56"
             onSave={(formatOverride) => change({ formatOverride })}
           />
         </Row>
-        <Row title="Sort formats" hint="yt-dlp -S order, e.g. res:1080,fps">
+        <Row title={t('Sort formats')} hint={t('yt-dlp -S order, e.g. res:1080,fps')}>
           <Field
-            label="Sort formats"
+            label={t('Sort formats')}
             value={options.formatSort}
             placeholder="res:1080,fps"
             onSave={(formatSort) => change({ formatSort })}
           />
         </Row>
-        <Row title="Impersonate browser" hint="For sites that block plain clients">
+        <Row title={t('Impersonate browser')} hint={t('For sites that block plain clients')}>
           <Choice
-            label="Impersonate browser"
+            label={t('Impersonate browser')}
             value={options.impersonate}
             choices={[
-              { value: '', label: 'Off' },
+              { value: '', label: t('Off') },
               { value: 'chrome', label: 'Chrome' },
               { value: 'safari', label: 'Safari' },
               { value: 'firefox', label: 'Firefox' }
@@ -363,30 +372,42 @@ function AdvancedSettings({
             onChange={(impersonate) => change({ impersonate })}
           />
         </Row>
-        <Row title="Live streams" hint="Download a live stream from its start, not from now">
+        <Row
+          title={t('Live streams')}
+          hint={t('Download a live stream from its start, not from now')}
+        >
           <Toggle
-            label="Live from start"
+            label={t('Live from start')}
             checked={options.liveFromStart}
             onChange={(liveFromStart) => change({ liveFromStart })}
           />
         </Row>
-        <Row title="Auto-made subtitles" hint="Use YouTube's own captions when the video has none">
+        <Row
+          title={t('Auto-made subtitles')}
+          hint={t("Use YouTube's own captions when the video has none")}
+        >
           <Toggle
-            label="Auto-made subtitles"
+            label={t('Auto-made subtitles')}
             checked={options.writeAutoSubs}
             onChange={(writeAutoSubs) => change({ writeAutoSubs })}
           />
         </Row>
-        <Row title="Split by chapter" hint="One file per chapter, for videos with chapters">
+        <Row
+          title={t('Split by chapter')}
+          hint={t('One file per chapter, for videos with chapters')}
+        >
           <Toggle
-            label="Split by chapter"
+            label={t('Split by chapter')}
             checked={options.splitChapters}
             onChange={(splitChapters) => change({ splitChapters })}
           />
         </Row>
-        <Row title="Match filter" hint="yt-dlp expression, e.g. duration < 900. Empty: every video">
+        <Row
+          title={t('Match filter')}
+          hint={t('yt-dlp expression, e.g. duration < 900. Empty: every video')}
+        >
           <Field
-            label="Match filter"
+            label={t('Match filter')}
             value={options.matchFilter}
             placeholder="duration < 900"
             onSave={(matchFilter) => change({ matchFilter })}
@@ -394,109 +415,118 @@ function AdvancedSettings({
         </Row>
       </Section>
 
-      <Section title="File names">
-        <Row title="File name template" hint="Relative to the folder. yt-dlp fields like %(title)s">
+      <Section title={t('File names')}>
+        <Row
+          title={t('File name template')}
+          hint={t('Relative to the folder. yt-dlp fields like %(title)s')}
+        >
           <Field
-            label="File name template"
+            label={t('File name template')}
             value={options.outputTemplate}
             width="w-56"
             onSave={(outputTemplate) => change({ outputTemplate })}
           />
         </Row>
-        <Row title="ASCII names only" hint="Replace non-English characters">
+        <Row title={t('ASCII names only')} hint={t('Replace non-English characters')}>
           <Toggle
-            label="ASCII names only"
+            label={t('ASCII names only')}
             checked={options.restrictFilenames}
             onChange={(restrictFilenames) => change({ restrictFilenames })}
           />
         </Row>
-        <Row title="Windows-safe names" hint="Remove characters Windows does not allow">
+        <Row title={t('Windows-safe names')} hint={t('Remove characters Windows does not allow')}>
           <Toggle
-            label="Windows-safe names"
+            label={t('Windows-safe names')}
             checked={options.windowsFilenames}
             onChange={(windowsFilenames) => change({ windowsFilenames })}
           />
         </Row>
-        <Row title="Keep file date" hint="Set the file's date from the upload date">
+        <Row title={t('Keep file date')} hint={t("Set the file's date from the upload date")}>
           <Toggle
-            label="Keep file date"
+            label={t('Keep file date')}
             checked={options.useRemoteTime}
             onChange={(useRemoteTime) => change({ useRemoteTime })}
           />
         </Row>
-        <Row title="Don't overwrite" hint="Skip a file that is already there">
+        <Row title={t("Don't overwrite")} hint={t('Skip a file that is already there')}>
           <Toggle
-            label="Don't overwrite"
+            label={t("Don't overwrite")}
             checked={options.noOverwrites}
             onChange={(noOverwrites) => change({ noOverwrites })}
           />
         </Row>
       </Section>
 
-      <Section title="Extra files">
-        <Row title="Info file (.info.json)" hint="Metadata next to each file">
+      <Section title={t('Extra files')}>
+        <Row title={t('Info file (.info.json)')} hint={t('Metadata next to each file')}>
           <Toggle
-            label="Write info file"
+            label={t('Write info file')}
             checked={options.writeInfoJson}
             onChange={(writeInfoJson) => change({ writeInfoJson })}
           />
         </Row>
-        <Row title="Description file" hint="The video description as text">
+        <Row title={t('Description file')} hint={t('The video description as text')}>
           <Toggle
-            label="Write description"
+            label={t('Write description')}
             checked={options.writeDescription}
             onChange={(writeDescription) => change({ writeDescription })}
           />
         </Row>
-        <Row title="Thumbnail file" hint="The picture as its own image">
+        <Row title={t('Thumbnail file')} hint={t('The picture as its own image')}>
           <Toggle
-            label="Write thumbnail"
+            label={t('Write thumbnail')}
             checked={options.writeThumbnail}
             onChange={(writeThumbnail) => change({ writeThumbnail })}
           />
         </Row>
       </Section>
 
-      <Section title="Speed and reliability">
-        <Row title="Speed limit" hint="e.g. 2M or 500K. Empty means no limit">
+      <Section title={t('Speed and reliability')}>
+        <Row title={t('Speed limit')} hint={t('e.g. 2M or 500K. Empty means no limit')}>
           <Field
-            label="Speed limit"
+            label={t('Speed limit')}
             value={options.limitRate}
-            placeholder="No limit"
+            placeholder={t('No limit')}
             numeric={false}
             onSave={(limitRate) => change({ limitRate })}
           />
         </Row>
-        <Row title="Parallel fragments" hint="For streams split into pieces (1-16)">
+        <Row title={t('Parallel fragments')} hint={t('For streams split into pieces (1-16)')}>
           <Field
-            label="Parallel fragments"
+            label={t('Parallel fragments')}
             value={options.concurrentFragments}
             numeric
             width="w-24"
             onSave={(value) => change({ concurrentFragments: Number(value) })}
           />
         </Row>
-        <Row title="Retries" hint="Attempts after a failed request (0-50)">
+        <Row title={t('Retries')} hint={t('Attempts after a failed request (0-50)')}>
           <Field
-            label="Retries"
+            label={t('Retries')}
             value={options.retries}
             numeric
             width="w-24"
             onSave={(value) => change({ retries: Number(value) })}
           />
         </Row>
-        <Row title="Timeout (seconds)" hint="Give up on a silent connection after this long">
+        <Row
+          title={t('Timeout (seconds)')}
+          hint={t('Give up on a silent connection after this long')}
+        >
           <Field
-            label="Timeout"
+            label={t('Timeout')}
             value={options.socketTimeout}
             numeric
             width="w-24"
             onSave={(value) => change({ socketTimeout: Number(value) })}
           />
         </Row>
-        <Row title="Pause between requests" hint="Seconds (0-60). Useful against rate limits">
+        <Row
+          title={t('Pause between requests')}
+          hint={t('Seconds (0-60). Useful against rate limits')}
+        >
           <Field
-            label="Pause between requests"
+            label={t('Pause between requests')}
             value={options.sleepInterval}
             numeric
             width="w-24"
@@ -505,46 +535,46 @@ function AdvancedSettings({
         </Row>
       </Section>
 
-      <Section title="Selection">
-        <Row title="Uploaded after" hint="YYYYMMDD. Empty means no limit">
+      <Section title={t('Selection')}>
+        <Row title={t('Uploaded after')} hint={t('YYYYMMDD. Empty means no limit')}>
           <Field
-            label="Uploaded after"
+            label={t('Uploaded after')}
             value={options.dateAfter}
             placeholder="20240101"
             width="w-32"
             onSave={(dateAfter) => change({ dateAfter })}
           />
         </Row>
-        <Row title="Uploaded before" hint="YYYYMMDD. Empty means no limit">
+        <Row title={t('Uploaded before')} hint={t('YYYYMMDD. Empty means no limit')}>
           <Field
-            label="Uploaded before"
+            label={t('Uploaded before')}
             value={options.dateBefore}
             placeholder="20251231"
             width="w-32"
             onSave={(dateBefore) => change({ dateBefore })}
           />
         </Row>
-        <Row title="Playlist items" hint="e.g. 1-10,15. Empty means all">
+        <Row title={t('Playlist items')} hint={t('e.g. 1-10,15. Empty means all')}>
           <Field
-            label="Playlist items"
+            label={t('Playlist items')}
             value={options.playlistItems}
             placeholder="1-10,15"
             width="w-32"
             onSave={(playlistItems) => change({ playlistItems })}
           />
         </Row>
-        <Row title="Stop after" hint="Videos per playlist. 0 means no limit">
+        <Row title={t('Stop after')} hint={t('Videos per playlist. 0 means no limit')}>
           <Field
-            label="Stop after"
+            label={t('Stop after')}
             value={options.maxDownloads}
             numeric
             width="w-24"
             onSave={(value) => change({ maxDownloads: Number(value) })}
           />
         </Row>
-        <Row title="Skip already downloaded" hint="Keeps a list of finished videos">
+        <Row title={t('Skip already downloaded')} hint={t('Keeps a list of finished videos')}>
           <Toggle
-            label="Skip already downloaded"
+            label={t('Skip already downloaded')}
             checked={options.skipDownloaded}
             onChange={(skipDownloaded) => change({ skipDownloaded })}
           />
@@ -565,7 +595,11 @@ export function YoutubeOptionsPanel(): React.JSX.Element {
   return (
     <>
       <div className="px-4 pt-3">
-        <div role="tablist" aria-label="Option groups" className="flex rounded-md bg-muted p-0.5">
+        <div
+          role="tablist"
+          aria-label={t('Option groups')}
+          className="flex rounded-md bg-muted p-0.5"
+        >
           {(['common', 'advanced'] as const).map((value) => (
             <button
               key={value}
@@ -574,13 +608,13 @@ export function YoutubeOptionsPanel(): React.JSX.Element {
               aria-selected={tab === value}
               onClick={() => setTab(value)}
               className={cn(
-                'h-7 flex-1 rounded-[5px] text-[12px] font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'h-7 flex-1 rounded-[5px] text-[12px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 tab === value
                   ? 'bg-background text-foreground shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {value}
+              {value === 'common' ? t('Common') : t('Advanced')}
             </button>
           ))}
         </div>
@@ -608,8 +642,8 @@ export function YoutubeOptionsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[440px] max-w-full gap-0 overflow-y-auto">
         <SheetHeader className="border-b-[0.5px] border-border">
-          <SheetTitle>YouTube options</SheetTitle>
-          <SheetDescription>Used by every new YouTube download.</SheetDescription>
+          <SheetTitle>{t('YouTube options')}</SheetTitle>
+          <SheetDescription>{t('Used by every new YouTube download.')}</SheetDescription>
         </SheetHeader>
         <YoutubeOptionsPanel />
       </SheetContent>

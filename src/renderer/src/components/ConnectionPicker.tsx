@@ -4,6 +4,7 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { formatNumber, t } from '@shared/i18n/react'
 
 /** Which networks one file uses: all of them, or the ones ticked. At least one stays ticked.
  * `single`: a file that can't be split across networks, so it is one or the other. */
@@ -32,12 +33,12 @@ export function ConnectionPicker({
   const chosen = options.filter((option) => value.includes(option.id))
   const summary =
     chosen.length === 0
-      ? 'No network'
+      ? t('No network')
       : chosen.length === options.length && options.length > 1
-        ? 'All networks'
+        ? t('All networks')
         : chosen.length === 1
           ? chosen[0].name
-          : `${chosen[0].name} +${chosen.length - 1}`
+          : `${chosen[0].name} +${formatNumber(chosen.length - 1)}`
 
   const toggle = (id: string, on: boolean): void => {
     if (single) onChange([id])
@@ -58,7 +59,7 @@ export function ConnectionPicker({
                     size="icon-sm"
                     variant="ghost"
                     disabled={disabled || options.length === 0}
-                    aria-label={`Networks for ${label}`}
+                    aria-label={t('Networks for {label}', { label })}
                     className={auto?.pinned ? 'text-primary' : 'text-muted-foreground'}
                   >
                     <Cable />
@@ -69,7 +70,7 @@ export function ConnectionPicker({
                     size="sm"
                     variant="secondary"
                     disabled={disabled || options.length === 0}
-                    aria-label={`Networks for ${label}`}
+                    aria-label={t('Networks for {label}', { label })}
                     className="max-w-[170px] shrink-0 justify-between"
                   >
                     <span className="truncate">{summary}</span>
@@ -81,14 +82,14 @@ export function ConnectionPicker({
           }
         />
         <TooltipContent>
-          {auto && !auto.pinned ? 'Choose connections (now Auto)' : 'Choose connections'}
+          {auto && !auto.pinned ? t('Choose connections (now Auto)') : t('Choose connections')}
         </TooltipContent>
       </Tooltip>
       <PopoverContent align="end" className="w-56 gap-1">
         {auto && (
           <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] font-medium hover:bg-muted">
             <Checkbox checked={!auto.pinned} onCheckedChange={(on) => on && auto.onAuto()} />
-            Auto (Lightning decides)
+            {t('Auto (Lightning decides)')}
           </label>
         )}
         {!single && options.length > 1 && (
@@ -97,7 +98,7 @@ export function ConnectionPicker({
               checked={chosen.length === options.length}
               onCheckedChange={(on) => on && onChange(options.map((option) => option.id))}
             />
-            All networks
+            {t('All networks')}
           </label>
         )}
         {options.map((option) => (

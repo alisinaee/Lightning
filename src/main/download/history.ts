@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { rename, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
@@ -104,14 +105,14 @@ export function addToHistory(entry: FinishedDownload): Promise<void> {
 export async function updateHistoryEntry(id: string, fileName: string): Promise<void> {
   const name = fileName.trim()
   if (!name || /[\\/]/.test(name) || name === '.' || name === '..') {
-    throw new Error('Use a file name, not a folder path.')
+    throw new Error(t('Use a file name, not a folder path.'))
   }
   if (sanitizeFileName(name) !== name) {
-    throw new Error('That name has characters a file name can’t have here.')
+    throw new Error(t('That name has characters a file name can’t have here.'))
   }
   const current = entriesOf(await readJson(historyPath()).catch(() => undefined))
   const entry = current.find((other) => other.id === id)
-  if (!entry) throw new Error('That download is no longer in the history.')
+  if (!entry) throw new Error(t('That download is no longer in the history.'))
   if (name === entry.fileName) return
   const nextPath = join(dirname(entry.destinationPath), name)
   const present = await stat(entry.destinationPath).then(
@@ -130,7 +131,7 @@ export async function updateHistoryEntry(id: string, fileName: string): Promise<
       there.ino === mine.ino &&
       there.dev === mine.dev
     const taken = there !== null && !sameFile
-    if (taken) throw new Error('Something in that folder already has this name.')
+    if (taken) throw new Error(t('Something in that folder already has this name.'))
     await rename(entry.destinationPath, nextPath)
   }
   try {

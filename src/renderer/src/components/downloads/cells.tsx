@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { useAppStore } from '../../store/useAppStore'
 import { cn } from 'cn'
 import { useEffect, useState, useSyncExternalStore } from 'react'
@@ -48,6 +49,7 @@ export function ClippedText({
       <TooltipTrigger
         render={
           <span
+            dir="auto"
             className={cn(
               'truncate group-data-[wrap=true]/table:leading-snug group-data-[wrap=true]/table:break-all group-data-[wrap=true]/table:whitespace-normal',
               className
@@ -75,11 +77,11 @@ export function SizeCell({
 }): React.JSX.Element {
   return (
     <div role="cell" className={cn(cellClass, 'justify-end font-mono text-[11.5px] tabular-nums')}>
-      <span className={cn('truncate', done && 'text-[var(--text-secondary)]')}>
+      <span dir="ltr" className={cn('truncate', done && 'text-[var(--text-secondary)]')}>
         {total <= 0
           ? running || received > 0
-            ? `${formatBytes(received)} / unknown`
-            : 'unknown'
+            ? t('{size} / unknown', { size: formatBytes(received) })
+            : t('unknown')
           : running && !done
             ? `${formatBytes(received)} / ${formatBytes(total)}`
             : formatBytes(total)}
@@ -109,10 +111,9 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
   const moving = info.status === 'downloading'
   const waitSeconds = useCountdown(info.retryAt)
   // The percentage has its own place beside the bar, not in the word.
-  const label = (waitSeconds === null ? info.label : `Retrying in ${waitSeconds} s`).replace(
-    /\s*\d+%$/,
-    ''
-  )
+  const label = (
+    waitSeconds === null ? info.label : t('Retrying in {seconds} s', { seconds: waitSeconds })
+  ).replace(/\s*\d+%$/, '')
   const progressLine = useAppStore((store) => store.progressLine)
   const showBar = !info.reason && info.bar
   const icon = (
@@ -120,7 +121,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
   )
   const word = (
     <span
-      title={info.missing ? 'The file was moved or deleted' : undefined}
+      title={info.missing ? t('The file was moved or deleted') : undefined}
       className={cn('truncate', info.status === 'completed' && 'text-[var(--text-secondary)]')}
       style={
         info.status === 'failed' || info.status === 'attention' ? { color: style.color } : undefined
@@ -142,7 +143,7 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
         {progressLine ? null : (
           <div
             role="progressbar"
-            aria-label="Progress"
+            aria-label={t('Progress')}
             title={moving ? info.label : undefined}
             aria-valuenow={info.percent}
             aria-valuemin={0}
@@ -174,10 +175,10 @@ export function StatusCell({ info }: { info: RowInfo }): React.JSX.Element {
             'shrink-0 font-mono leading-none tabular-nums',
             progressLine
               ? 'text-[12.5px] font-medium text-foreground'
-              : 'w-[34px] text-right text-[11.5px] text-[var(--text-secondary)]'
+              : 'w-[34px] text-end text-[11.5px] text-[var(--text-secondary)]'
           )}
         >
-          {Math.round(info.percent)}%
+          <bdi dir="ltr">{Math.round(info.percent)}%</bdi>
         </span>
       </div>
     )
@@ -214,7 +215,9 @@ export function SpeedCell({ speed }: { speed: number }): React.JSX.Element {
         speed <= 0 && 'text-muted-foreground'
       )}
     >
-      <span className="truncate">{speed > 0 ? formatSpeed(speed) : '—'}</span>
+      <span dir="ltr" className="truncate">
+        {speed > 0 ? formatSpeed(speed) : '—'}
+      </span>
     </div>
   )
 }
@@ -229,7 +232,7 @@ export function EtaCell({ seconds }: { seconds: number | null }): React.JSX.Elem
         seconds === null && 'text-muted-foreground'
       )}
     >
-      {formatSeconds(seconds)}
+      <span dir="ltr">{formatSeconds(seconds)}</span>
     </div>
   )
 }
@@ -283,9 +286,11 @@ export function ConnectionsCell({ chips }: { chips: ConnectionChip[] }): React.J
             }
           />
           <TooltipContent>
-            {chips
-              .map((chip) => chip.name + (chip.speed ? ` ${formatSpeed(chip.speed)}` : ''))
-              .join(' · ')}
+            <bdi>
+              {chips
+                .map((chip) => chip.name + (chip.speed ? ` ${formatSpeed(chip.speed)}` : ''))
+                .join(' · ')}
+            </bdi>
           </TooltipContent>
         </Tooltip>
       )}

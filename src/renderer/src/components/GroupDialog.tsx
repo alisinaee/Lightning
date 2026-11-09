@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import { cn } from 'cn'
 import { Warning as AlertTriangle, Plus, X } from '@phosphor-icons/react'
@@ -199,24 +200,25 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-col gap-2 border-b-[0.5px] border-border py-4 pr-12 pl-5">
-        <DialogTitle className="text-[16px] font-semibold">Edit group</DialogTitle>
+      <div className="flex flex-col gap-2 border-b-[0.5px] border-border py-4 pe-12 ps-5">
+        <DialogTitle className="text-[16px] font-semibold">{t('Edit group')}</DialogTitle>
         <div className="flex items-center gap-2 text-[12.5px]">
-          <span className="w-24 shrink-0 text-[var(--text-secondary)]">Name</span>
+          <span className="w-24 shrink-0 text-[var(--text-secondary)]">{t('Name')}</span>
           <input
             type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && void saveAndClose()}
             spellCheck={false}
-            aria-label="Group name"
+            aria-label={t('Group name')}
             className="h-9 min-w-0 flex-1 rounded-[9px] border border-input bg-[var(--input-bg)] px-3 text-[13px] text-foreground outline-none"
           />
         </div>
         <div className="flex items-center gap-2 text-[12.5px]">
-          <span className="w-24 shrink-0 text-[var(--text-secondary)]">Saved to</span>
+          <span className="w-24 shrink-0 text-[var(--text-secondary)]">{t('Saved to')}</span>
           <span
-            className="min-w-0 flex-1 truncate font-mono text-[12px]"
+            dir="ltr"
+            className="min-w-0 flex-1 truncate text-end font-mono text-[12px]"
             title={group.destinationDir}
           >
             {toDisplayPath(group.destinationDir, homeDir)}
@@ -238,7 +240,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
         <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
           {rows.length === 0 && (
             <div className="px-3 py-6 text-center text-[12.5px] text-muted-foreground">
-              No files in this group.
+              {t('No files in this group.')}
             </div>
           )}
           {rows.map((row) => (
@@ -289,7 +291,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
               )}
               {!manual && group.pinned.includes(row.key) && (
                 <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-px text-[10.5px] text-primary">
-                  pinned by you
+                  {t('pinned by you')}
                 </span>
               )}
               <Tooltip>
@@ -299,7 +301,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`Remove ${row.name}`}
+                      aria-label={t('Remove {name}', { name: row.name })}
                       onClick={() => handleRemove(row)}
                       className="text-muted-foreground hover:text-foreground"
                     >
@@ -308,7 +310,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
                   }
                 />
                 <TooltipContent>
-                  {row.kind === 'done' ? 'Remove from list' : 'Remove from group'}
+                  {row.kind === 'done' ? t('Remove from list') : t('Remove from group')}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -316,25 +318,26 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-[12.5px] font-medium">Add links</span>
+          <span className="text-[12.5px] font-medium">{t('Add links')}</span>
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="Paste more links here, one on each line"
+            dir="ltr"
+            placeholder={t('Paste more links here, one on each line')}
             spellCheck={false}
-            aria-label="Links to add"
+            aria-label={t('Links to add')}
             rows={3}
             className="w-full resize-none rounded-[9px] border border-input bg-[var(--input-bg)] p-3 font-mono text-[12.5px] text-foreground outline-none"
           />
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">
-              {found > 0 ? `${found} ${found === 1 ? 'link' : 'links'} found` : ''}
+              {found > 0 ? tn(found, '{count} link found', '{count} links found') : ''}
             </span>
             {manual && !ruled && (
               <ConnectionPicker
                 options={networkOptions}
                 value={newConnection}
-                label="the new files"
+                label={t('the new files')}
                 onChange={setNewConnection}
               />
             )}
@@ -345,14 +348,17 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
               onClick={handleAdd}
             >
               <Plus data-icon="inline-start" />
-              {adding ? 'Adding…' : 'Add to group'}
+              {adding ? t('Adding…') : t('Add to group')}
             </Button>
           </div>
           {addErrors.length > 0 && (
             <div className="flex items-start gap-2 text-[12px] text-[var(--color-danger)]">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span className="min-w-0 break-words">
-                {addErrors.length} could not be added. {addErrors[0]}
+                {t('{count} could not be added. {reason}', {
+                  count: addErrors.length,
+                  reason: addErrors[0]
+                })}
               </span>
             </div>
           )}
@@ -366,23 +372,25 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
         <Button type="button" variant="secondary" onClick={onDone}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button type="button" onClick={() => void saveAndClose()}>
-          Done
+          {t('Done')}
         </Button>
       </div>
 
       <AlertDialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {removing?.fileName}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('Remove {name}?', { name: removing?.fileName ?? '' })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This stops the download and deletes the part of it already downloaded.
+              {t('This stops the download and deletes the part of it already downloaded.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogCancel>{t('Keep it')}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: 'destructive', size: 'sm' })}
               onClick={() => {
@@ -390,7 +398,7 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
                 setRemoving(null)
               }}
             >
-              Remove
+              {t('Remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -400,9 +408,11 @@ function GroupForm({ group, onDone }: { group: GroupInfo; onDone: () => void }):
 }
 
 function statusOf(row: FileRow): string {
-  if (row.kind === 'waiting') return row.item.error ?? 'Queued'
+  if (row.kind === 'waiting') return row.item.error ?? t('Queued')
   if (row.kind === 'done')
-    return `${formatBytes(wantedBytes(row.download) || row.download.bytesDownloaded)} · finished`
+    return t('{size} · finished', {
+      size: formatBytes(wantedBytes(row.download) || row.download.bytesDownloaded)
+    })
   const { download } = row
   const wanted = wantedBytes(download)
   const percent = formatPercent(download.bytesDownloaded, wanted)
@@ -412,10 +422,10 @@ function statusOf(row: FileRow): string {
         .filter(Boolean)
         .join(' · ')
     case 'queued':
-      return 'Waiting for a turn'
+      return t('Waiting for a turn')
     case 'paused':
-      return wanted > 0 ? `Paused at ${percent}%` : 'Paused'
+      return wanted > 0 ? t('Paused at {percent}%', { percent: String(percent) }) : t('Paused')
     default:
-      return describeError(download.error ?? 'Something went wrong')
+      return describeError(download.error ?? t('Something went wrong'))
   }
 }

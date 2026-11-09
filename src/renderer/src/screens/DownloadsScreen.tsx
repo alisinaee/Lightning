@@ -9,6 +9,7 @@ import {
   Plus,
   X
 } from '@phosphor-icons/react'
+import { t, tn } from '@shared/i18n/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombineDiagram } from '../components/CombineDiagram'
 import { filterLabel } from '../components/downloadFilterLabels'
@@ -61,14 +62,14 @@ import { useKeptOrder } from '../utils/keepOrder'
 import { isFinished, type Item } from '../utils/status'
 import { EmptyStatusIcon } from '../components/EmptyIcon'
 
-const EMPTY_MESSAGES: Partial<Record<DownloadFilter, string>> = {
-  progress: 'No downloads in progress',
-  finished: 'No finished downloads',
-  failed: 'No downloads need attention',
-  downloading: 'Nothing is downloading right now',
-  queued: 'Nothing is waiting in the queue',
-  paused: 'Nothing is paused'
-}
+const emptyMessages = (): Partial<Record<DownloadFilter, string>> => ({
+  progress: t('No downloads in progress'),
+  finished: t('No finished downloads'),
+  failed: t('No downloads need attention'),
+  downloading: t('Nothing is downloading right now'),
+  queued: t('Nothing is waiting in the queue'),
+  paused: t('Nothing is paused')
+})
 
 /** The files of an entry that are listed: a group the filters narrowed lists only its matching ones. */
 const listedItems = (entry: ListEntry, only: Map<string, Set<string>> | null): Item[] => {
@@ -79,7 +80,7 @@ const listedItems = (entry: ListEntry, only: Map<string, Set<string>> | null): I
 }
 
 const platformTrash = (): string =>
-  window.lightning.platform === 'win32' ? 'Recycle Bin' : 'Trash'
+  window.lightning.platform === 'win32' ? t('Recycle Bin') : t('Trash')
 
 const isUnfinished = (item: Item): boolean => !isFinished(item) && item.status !== 'completed'
 const isTrashable = (item: Item): boolean =>
@@ -379,7 +380,7 @@ export function DownloadsScreen({
       }
     }
   }
-  const resumeLabel = resumableAll.length > 0 ? 'Resume all' : 'Retry all failed'
+  const resumeLabel = resumableAll.length > 0 ? t('Resume all') : t('Retry all failed')
 
   // Keyboard, as a file manager has it: Esc lets go of the selection, ⌘/Ctrl+A takes everything
   // listed, ⌘/Ctrl+F goes to the search box.
@@ -418,31 +419,43 @@ export function DownloadsScreen({
   const noDownloadsAtAll = entries.length === 0
 
   const count = confirmationItems.length
-  const noun = count === 1 ? 'download' : 'downloads'
   const confirmTitle =
     confirmation?.kind === 'cancel'
-      ? `Cancel ${count} ${noun}?`
+      ? tn(count, 'Cancel {count} download?', 'Cancel {count} downloads?')
       : confirmation?.kind === 'trash'
-        ? `Move ${count === 1 ? 'this file' : `${count} files`} to ${platformTrash()}?`
+        ? count === 1
+          ? t('Move this file to {trash}?', { trash: platformTrash() })
+          : t('Move {count} files to {trash}?', { count, trash: platformTrash() })
         : confirmation?.kind === 'remove'
-          ? `Remove ${count} ${noun} from the list?`
-          : 'Download this again?'
+          ? tn(
+              count,
+              'Remove {count} download from the list?',
+              'Remove {count} downloads from the list?'
+            )
+          : t('Download this again?')
   const confirmText =
     confirmation?.kind === 'cancel'
-      ? 'This stops the selected unfinished downloads and deletes their downloaded data. Finished downloads stay unchanged.'
+      ? t(
+          'This stops the selected unfinished downloads and deletes their downloaded data. Finished downloads stay unchanged.'
+        )
       : confirmation?.kind === 'trash'
-        ? `This moves the files to the ${platformTrash()} and removes them from the list. Unrelated files stay in place.`
+        ? t(
+            'This moves the files to the {trash} and removes them from the list. Unrelated files stay in place.',
+            { trash: platformTrash() }
+          )
         : confirmation?.kind === 'remove'
-          ? 'Only the list entry goes. The downloaded files stay on your computer.'
-          : 'It is taken off the list, any partly downloaded data is deleted, and the link opens in New download to start over.'
+          ? t('Only the list entry goes. The downloaded files stay on your computer.')
+          : t(
+              'It is taken off the list, any partly downloaded data is deleted, and the link opens in New download to start over.'
+            )
   const confirmButton =
     confirmation?.kind === 'cancel'
-      ? 'Cancel downloads'
+      ? t('Cancel downloads')
       : confirmation?.kind === 'trash'
-        ? `Move to ${platformTrash()}`
+        ? t('Move to {trash}', { trash: platformTrash() })
         : confirmation?.kind === 'remove'
-          ? 'Remove from list'
-          : 'Start again'
+          ? t('Remove from list')
+          : t('Start again')
 
   return (
     <div className="@container flex h-full flex-col bg-background">
@@ -456,7 +469,7 @@ export function DownloadsScreen({
                   type="button"
                   size="icon"
                   variant="secondary"
-                  aria-label={pausing ? 'Pause all' : resumeLabel}
+                  aria-label={pausing ? t('Pause all') : resumeLabel}
                   disabled={noDownloadsAtAll || (pausing && pausableAll.length === 0)}
                   onClick={() => void (pausing ? runAction(pausableAll, 'pause') : resumeAll())}
                 >
@@ -470,14 +483,14 @@ export function DownloadsScreen({
                 </Button>
               }
             />
-            <TooltipContent>{pausing ? 'Pause all' : resumeLabel}</TooltipContent>
+            <TooltipContent>{pausing ? t('Pause all') : resumeLabel}</TooltipContent>
           </Tooltip>
           <NetworksMenu onOpenLimits={openLimits} />
           <NewMenu
-            label="New download"
+            label={t('New download')}
             items={[
-              { label: 'One link', icon: Link2, run: () => openNewDownload() },
-              { label: 'Several links', icon: ListPlus, run: () => openMultiLinks() }
+              { label: t('One link'), icon: Link2, run: () => openNewDownload() },
+              { label: t('Several links'), icon: ListPlus, run: () => openMultiLinks() }
             ]}
           />
           {/* After the + button, so a VPN turning up doesn't move it. */}
@@ -495,7 +508,7 @@ export function DownloadsScreen({
                           type="button"
                           size="icon"
                           variant="ghost"
-                          aria-label="Filter"
+                          aria-label={t('Filter')}
                           className={
                             filter !== 'all' || kindFilter !== null ? 'text-primary' : undefined
                           }
@@ -506,10 +519,10 @@ export function DownloadsScreen({
                     </DropdownMenuTrigger>
                   }
                 />
-                <TooltipContent>Filter</TooltipContent>
+                <TooltipContent>{t('Filter')}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('Status')}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={filter}
                   onValueChange={(value) => chooseFilter(value as DownloadFilter)}
@@ -517,14 +530,14 @@ export function DownloadsScreen({
                   {STATUSES.map((entry) => (
                     <DropdownMenuRadioItem key={entry.value} value={entry.value}>
                       {entry.label}
-                      <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+                      <span className="ms-auto ps-3 font-mono text-[11px] text-muted-foreground tabular-nums">
                         {counts.statuses[entry.value] ?? 0}
                       </span>
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>File type</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('File type')}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={kindFilter ?? 'all'}
                   onValueChange={(value) => {
@@ -532,11 +545,11 @@ export function DownloadsScreen({
                     setSelected(new Set())
                   }}
                 >
-                  <DropdownMenuRadioItem value="all">All types</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="all">{t('All types')}</DropdownMenuRadioItem>
                   {FILE_KINDS.map((entry) => (
                     <DropdownMenuRadioItem key={entry.kind} value={entry.kind}>
                       {entry.label}
-                      <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+                      <span className="ms-auto ps-3 font-mono text-[11px] text-muted-foreground tabular-nums">
                         {counts.kinds[entry.kind] ?? 0}
                       </span>
                     </DropdownMenuRadioItem>
@@ -547,7 +560,7 @@ export function DownloadsScreen({
           )}
           <SearchField
             inputRef={searchInput}
-            label="Search downloads"
+            label={t('Search downloads')}
             value={search}
             onChange={setSearch}
             disabled={noDownloadsAtAll}
@@ -560,7 +573,7 @@ export function DownloadsScreen({
       ) : (
         <div
           role="toolbar"
-          aria-label="Selected downloads"
+          aria-label={t('Selected downloads')}
           aria-busy={busy}
           className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
         >
@@ -571,7 +584,7 @@ export function DownloadsScreen({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  aria-label="Deselect all"
+                  aria-label={t('Deselect all')}
                   disabled={busy}
                   onClick={() => setSelected(new Set())}
                 >
@@ -579,10 +592,10 @@ export function DownloadsScreen({
                 </Button>
               }
             />
-            <TooltipContent>Deselect all</TooltipContent>
+            <TooltipContent>{t('Deselect all')}</TooltipContent>
           </Tooltip>
           <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">
-            {chosen.length} selected
+            {t('{count} selected', { count: chosen.length })}
           </span>
           <Button
             type="button"
@@ -591,7 +604,7 @@ export function DownloadsScreen({
             disabled={busy || chosen.length === items.length}
             onClick={() => setSelected(new Set(items.map((item) => item.id)))}
           >
-            Select all
+            {t('Select all')}
           </Button>
           <div className="flex-1" />
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -603,7 +616,7 @@ export function DownloadsScreen({
                 disabled={busy}
                 onClick={() => void runAction(pausable, 'pause')}
               >
-                Pause ({pausable.length})
+                {t('Pause ({count})', { count: pausable.length })}
               </Button>
             )}
             {resumable.length > 0 && (
@@ -614,7 +627,7 @@ export function DownloadsScreen({
                 disabled={busy}
                 onClick={() => void runAction(resumable, 'resume')}
               >
-                Resume ({resumable.length})
+                {t('Resume ({count})', { count: resumable.length })}
               </Button>
             )}
             {retryable.length > 0 && (
@@ -625,7 +638,7 @@ export function DownloadsScreen({
                 disabled={busy}
                 onClick={() => void runAction(retryable, 'resume')}
               >
-                Retry ({retryable.length})
+                {t('Retry ({count})', { count: retryable.length })}
               </Button>
             )}
             {removable.length > 0 && (
@@ -634,12 +647,12 @@ export function DownloadsScreen({
                 size="sm"
                 variant="secondary"
                 disabled={busy}
-                title="Takes them off the list; the files stay on your computer"
+                title={t('Takes them off the list; the files stay on your computer')}
                 onClick={() =>
                   setConfirmation({ kind: 'remove', ids: removable.map((item) => item.id) })
                 }
               >
-                Remove from list ({removable.length})
+                {t('Remove from list ({count})', { count: removable.length })}
               </Button>
             )}
             {trashable.length > 0 && (
@@ -648,12 +661,12 @@ export function DownloadsScreen({
                 size="sm"
                 variant="destructive"
                 disabled={busy}
-                title={`Moves the files to the ${platformTrash()}`}
+                title={t('Moves the files to the {trash}', { trash: platformTrash() })}
                 onClick={() =>
                   setConfirmation({ kind: 'trash', ids: trashable.map((item) => item.id) })
                 }
               >
-                Delete files ({trashable.length})
+                {t('Delete files ({count})', { count: trashable.length })}
               </Button>
             )}
             {cancelable.length > 0 && (
@@ -662,12 +675,12 @@ export function DownloadsScreen({
                 size="sm"
                 variant="destructive"
                 disabled={busy}
-                title="Stops them and deletes what was downloaded so far"
+                title={t('Stops them and deletes what was downloaded so far')}
                 onClick={() =>
                   setConfirmation({ kind: 'cancel', ids: cancelable.map((item) => item.id) })
                 }
               >
-                Cancel ({cancelable.length})
+                {t('Cancel ({count})', { count: cancelable.length })}
               </Button>
             )}
           </div>
@@ -714,11 +727,11 @@ export function DownloadsScreen({
                   />
                   <p className="text-[16px] font-semibold">
                     {kindFilter !== null || search.trim() !== ''
-                      ? 'No matching downloads'
-                      : (EMPTY_MESSAGES[filter] ?? 'No downloads')}
+                      ? t('No matching downloads')
+                      : (emptyMessages()[filter] ?? t('No downloads'))}
                   </p>
                   <Button type="button" variant="secondary" onClick={showAll}>
-                    Show all downloads
+                    {t('Show all downloads')}
                   </Button>
                 </div>
               )}
@@ -767,7 +780,7 @@ export function DownloadsScreen({
             <AlertDialogDescription>{confirmText}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={busy || confirmationItems.length === 0}
               className={buttonVariants({
@@ -826,38 +839,48 @@ function EmptyState(): React.JSX.Element {
       <CombineDiagram networks={PLACEHOLDER_NETWORKS} muted />
       {noNetworks ? (
         <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">No networks connected</div>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">
+            {t('No networks connected')}
+          </div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-            Lightning needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or
-            connect your phone using USB tethering.
+            {t(
+              'Lightning needs at least one active network. Join a Wi-Fi network, plug in Ethernet, or connect your phone using USB tethering.'
+            )}
           </div>
           <div className="mt-1 flex gap-2">
             <Button type="button" variant="secondary" onClick={() => loadInterfaces()}>
-              Scan again
+              {t('Scan again')}
             </Button>
             <Button
               type="button"
               variant="secondary"
               onClick={() => window.lightning.openNetworkSettings()}
             >
-              Network settings…
+              {t('Network settings…')}
             </Button>
           </div>
         </>
       ) : (
         <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">No downloads yet</div>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">
+            {t('No downloads yet')}
+          </div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-            Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.
+            {t('Paste a link ({shortcut}) or drop a .torrent anywhere in this window.', {
+              shortcut: PASTE_SHORTCUT
+            })}
           </div>
           <Button type="button" variant="secondary" onClick={() => openMultiLinks()}>
             <ListPlus data-icon="inline-start" />
-            Add several links
+            {t('Add several links')}
           </Button>
           <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
-            New download
-            <span className="ml-1.5 rounded-[5px] bg-white/20 px-[7px] py-[3px] font-mono text-[12px] leading-none font-medium text-primary-foreground">
+            {t('New download')}
+            <span
+              dir="ltr"
+              className="ms-1.5 rounded-[5px] bg-white/20 px-[7px] py-[3px] font-mono text-[12px] leading-none font-medium text-primary-foreground"
+            >
               {NEW_SHORTCUT}
             </span>
           </Button>

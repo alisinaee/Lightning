@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import { reportTelegram } from '../externalActivity'
 import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join, resolve, sep } from 'node:path'
@@ -182,13 +183,13 @@ async function notifyFinished(job: TdlJob, getWindow: () => BrowserWindow | null
   if (settings.notifyWhenInactive && getWindow()?.isFocused()) return
   const done = job.items.filter((item) => item.status === 'done').length
   const title =
-    job.status === 'completed' ? 'Telegram download finished' : 'Telegram download failed'
+    job.status === 'completed' ? t('Telegram download finished') : t('Telegram download failed')
   const body =
     job.status === 'completed'
       ? job.items.length === 1
-        ? (job.items[0]?.fileName ?? '1 file')
-        : `${done} of ${job.items.length} files`
-      : (job.error ?? 'Some files could not be downloaded.')
+        ? (job.items[0]?.fileName ?? t('1 file'))
+        : t('{done} of {total} files', { done, total: job.items.length })
+      : (job.error ?? t('Some files could not be downloaded.'))
   try {
     const notification = new Notification({ title, body, silent: true })
     notification.on('click', () => {

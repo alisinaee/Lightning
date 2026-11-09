@@ -1,3 +1,5 @@
+import { t } from '@shared/i18n'
+
 /** Turns a raw yt-dlp or IPC error into one plain sentence for the person, and keeps the raw text
  * for the Details disclosure. The raw text stays the source of truth; only the wording changes. */
 
@@ -23,56 +25,58 @@ const SIGN_IN =
 export const needsSignIn = (raw: string | null | undefined): boolean =>
   SIGN_IN.test(cleanRaw((raw ?? '').trim()))
 
-const RULES: { match: RegExp; summary: string }[] = [
+const RULES: { match: RegExp; summary: () => string }[] = [
   {
     match: /timed out/i,
-    summary: "YouTube didn't answer in time. Check your internet connection or VPN, then try again."
+    summary: () =>
+      t("YouTube didn't answer in time. Check your internet connection or VPN, then try again.")
   },
   {
     match: /HTTP Error 429|too many requests|rate[- ]?limit/i,
-    summary: 'YouTube is limiting requests right now. Wait a few minutes and try again.'
+    summary: () => t('YouTube is limiting requests right now. Wait a few minutes and try again.')
   },
   {
     match:
       /cookies? (database|file)|could not (find|copy|decrypt)[^\n]*cookie|failed to (decrypt|read)[^\n]*cookie|operation not permitted[^\n]*cookie/i,
-    summary: "Lightning couldn't read the browser sign-in. Choose how to sign in below."
+    summary: () => t("Lightning couldn't read the browser sign-in. Choose how to sign in below.")
   },
   {
     match: /sign in to confirm|confirm your age|age-restricted|members[- ]only|login required/i,
-    summary: 'YouTube wants you to sign in for this video. Pick a way to sign in below.'
+    summary: () => t('YouTube wants you to sign in for this video. Pick a way to sign in below.')
   },
   {
     match: /private video|video is private/i,
-    summary: 'This video is private, so it cannot be downloaded.'
+    summary: () => t('This video is private, so it cannot be downloaded.')
   },
   {
     match: /video (is )?unavailable|removed|no longer available|has been terminated/i,
-    summary: 'This video is unavailable. It may have been removed.'
+    summary: () => t('This video is unavailable. It may have been removed.')
   },
   {
     match: /unsupported url/i,
-    summary: "This link isn't a YouTube video link that Lightning can download."
+    summary: () => t("This link isn't a YouTube video link that Lightning can download.")
   },
   {
     match: /no such file|not found|ENOENT/i,
-    summary: 'The YouTube downloader (yt-dlp) is missing. Reinstall Lightning or update yt-dlp.'
+    summary: () =>
+      t('The YouTube downloader (yt-dlp) is missing. Reinstall Lightning or update yt-dlp.')
   },
   {
     match:
       /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|network is unreachable|Unable to download webpage/i,
-    summary: "Lightning couldn't reach YouTube. Check your internet connection or VPN."
+    summary: () => t("Lightning couldn't reach YouTube. Check your internet connection or VPN.")
   }
 ]
 
 export function explainYoutubeError(raw: string | null | undefined): ExplainedError {
   const detail = (raw ?? '').trim()
   if (!detail) {
-    return { summary: "Couldn't read this video. Try again.", detail: '' }
+    return { summary: t("Couldn't read this video. Try again."), detail: '' }
   }
   const text = cleanRaw(detail)
   const rule = RULES.find((entry) => entry.match.test(text))
   return {
-    summary: rule ? rule.summary : "Couldn't read this video. Open Details for the reason.",
+    summary: rule ? rule.summary() : t("Couldn't read this video. Open Details for the reason."),
     detail
   }
 }

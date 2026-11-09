@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import {
   Clipboard as ClipboardPaste,
   DownloadSimple as Download,
@@ -48,11 +49,11 @@ export function YoutubeAddDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={(next) => (next ? setAddOpen(true) : close())}>
       <DialogContent className="flex max-h-[calc(100%-2rem)] w-[560px] max-w-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[calc(100%-2rem)]">
         <DialogHeader className="border-b-[0.5px] border-border px-5 py-4">
-          <DialogTitle className="text-[16px] font-semibold">Add YouTube video</DialogTitle>
+          <DialogTitle className="text-[16px] font-semibold">{t('Add YouTube video')}</DialogTitle>
           <DialogDescription className="text-[12.5px]">
             {offerId
-              ? 'Sent from your browser. Check the quality, then download.'
-              : 'Paste a link, check the video, then choose a quality.'}
+              ? t('Sent from your browser. Check the quality, then download.')
+              : t('Paste a link, check the video, then choose a quality.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -68,25 +69,25 @@ export function YoutubeAddDialog(): React.JSX.Element {
             <div className="relative flex-1">
               <Search
                 aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                className="pointer-events-none absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
               />
               <Input
                 autoFocus
                 type="url"
-                aria-label="Video link"
+                aria-label={t('Video link')}
                 placeholder="https://www.youtube.com/watch?v=…"
                 value={inputUrl}
                 onChange={(event) => setInputUrl(event.target.value)}
-                className="h-9 pl-8 text-[12.5px]"
+                className="h-9 ps-8 text-[12.5px]"
               />
             </div>
             <Button type="button" variant="secondary" onClick={() => void paste()}>
               <ClipboardPaste />
-              Paste
+              {t('Paste')}
             </Button>
             <Button type="submit" variant="secondary" disabled={loading || !inputUrl.trim()}>
               {loading ? <Loader2 className="animate-spin" /> : null}
-              Fetch
+              {t('Fetch')}
             </Button>
           </div>
 
@@ -122,23 +123,27 @@ export function YoutubeAddDialog(): React.JSX.Element {
 
               <div className="grid gap-1 rounded-[9px] bg-muted/50 px-3 py-2 text-[12px] text-muted-foreground">
                 <span className="truncate">
-                  Saving to <span className="text-foreground">{options.folder || 'Downloads'}</span>
+                  {t('Saving to')}{' '}
+                  <span className="text-foreground" dir="ltr">
+                    {options.folder || t('Downloads')}
+                  </span>
                 </span>
                 <span>
-                  Playlists:{' '}
+                  {t('Playlists:')}{' '}
                   <span className="text-foreground">
-                    {options.playlist === 'full' ? 'whole playlist' : 'only this video'}
+                    {options.playlist === 'full' ? t('whole playlist') : t('only this video')}
                   </span>
-                  {' · '}Cookies:{' '}
+                  {' · '}
+                  {t('Cookies:')}{' '}
                   <span className="text-foreground">
-                    {options.cookieMode === 'none' ? 'off' : options.cookieMode}
+                    {options.cookieMode === 'none' ? t('off') : options.cookieMode}
                   </span>
                 </span>
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[12.5px] font-medium">Quality</span>
-                <div role="radiogroup" aria-label="Quality" className="grid grid-cols-2 gap-2">
+                <span className="text-[12.5px] font-medium">{t('Quality')}</span>
+                <div role="radiogroup" aria-label={t('Quality')} className="grid grid-cols-2 gap-2">
                   {probe.formats.map((format) => {
                     const active = selected?.formatId === format.formatId
                     return (
@@ -149,7 +154,7 @@ export function YoutubeAddDialog(): React.JSX.Element {
                         aria-checked={active}
                         onClick={() => setSelected(format)}
                         className={cn(
-                          'flex flex-col items-start gap-0.5 rounded-[9px] border-[0.5px] px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          'flex flex-col items-start gap-0.5 rounded-[9px] border-[0.5px] px-3 py-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring',
                           active
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:bg-secondary'
@@ -171,11 +176,11 @@ export function YoutubeAddDialog(): React.JSX.Element {
 
         <DialogFooter className="mx-0 mb-0 flex-row justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
           <Button type="button" variant="secondary" onClick={close}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="button" disabled={!probe || !selected} onClick={() => void startDownload()}>
             <Download />
-            {selected ? `Download ${selected.resolution}` : 'Download'}
+            {selected ? t('Download {quality}', { quality: selected.resolution }) : t('Download')}
           </Button>
         </DialogFooter>
       </DialogContent>

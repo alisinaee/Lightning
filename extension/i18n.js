@@ -5,10 +5,12 @@
     en: {
       checking: 'Looking for Lightning…',
       down_t: "Lightning isn't running",
-      down_h: 'Open the Lightning app, then press Retry. Until then your browser downloads files itself.',
+      down_h:
+        'Open the Lightning app, then press Retry. Until then your browser downloads files itself.',
       retry: 'Retry',
       unpaired_t: 'Not paired yet',
-      unpaired_h: 'In Lightning open Settings → Browser → Add to your browser. The extension pairs by itself.',
+      unpaired_h:
+        'In Lightning open Settings → Browser → Add to your browser. The extension pairs by itself.',
       badkey_t: 'Wrong pairing key',
       badkey_h: 'Open Lightning → Settings → Browser to pair again, or try the options below.',
       repair: 'Re-pair automatically',
@@ -44,7 +46,8 @@
       m_near: 'Download the links here with Lightning',
       m_clip: 'Download copied links with Lightning',
       p_down: 'Lightning is not running.',
-      p_key: 'Pair the extension with Lightning: in Lightning open Settings → Browser, or paste the key in the extension popup.',
+      p_key:
+        'Pair the extension with Lightning: in Lightning open Settings → Browser, or paste the key in the extension popup.',
       p_off: 'Turn on browser downloads in Lightning: Settings → Browser.',
       p_nothing: 'No links on the clipboard.',
       p_fail: 'Lightning could not take the link.',
@@ -69,19 +72,30 @@
       yt_video: 'video',
       yt_limit: 'Pick up to {n} at a time.',
       yt_sent: 'Sent {n} to Lightning',
-      yt_fail: 'Lightning could not take the videos.'
+      yt_fail: 'Lightning could not take the videos.',
+      ps_send: 'Send to Lightning',
+      ps_all: 'Select all',
+      ps_cancel: 'Cancel',
+      ps_hint: '{n} selected. Click links or videos to pick them.',
+      ps_sending: 'Sending {n}…',
+      ps_sent: 'Sent {n} to Lightning.',
+      ps_fail: 'Lightning could not take the links.'
     },
     fa: {
       checking: 'در حال جستجوی Lightning…',
       down_t: 'Lightning اجرا نشده است',
-      down_h: 'برنامه Lightning را باز کنید و «تلاش دوباره» را بزنید. تا آن زمان مرورگر خودش فایل‌ها را دانلود می‌کند.',
+      down_h:
+        'برنامه Lightning را باز کنید و «تلاش دوباره» را بزنید. تا آن زمان مرورگر خودش فایل‌ها را دانلود می‌کند.',
       retry: 'تلاش دوباره',
       unpaired_t: 'هنوز جفت نشده است',
-      unpaired_h: 'در Lightning به تنظیمات ← مرورگر ← «افزودن به مرورگر» بروید. افزونه خودکار جفت می‌شود.',
+      unpaired_h:
+        'در Lightning به تنظیمات ← مرورگر ← «افزودن به مرورگر» بروید. افزونه خودکار جفت می‌شود.',
       badkey_t: 'کلید جفت‌سازی نادرست است',
-      badkey_h: 'برای جفت‌سازی دوباره، Lightning ← تنظیمات ← مرورگر را باز کنید، یا گزینه‌های زیر را امتحان کنید.',
+      badkey_h:
+        'برای جفت‌سازی دوباره، Lightning ← تنظیمات ← مرورگر را باز کنید، یا گزینه‌های زیر را امتحان کنید.',
       repair: 'جفت‌سازی دوباره (خودکار)',
-      repair_none: 'کلید جدیدی پیدا نشد. از تنظیمات ← مرورگر در Lightning استفاده کنید یا کلید را وارد کنید.',
+      repair_none:
+        'کلید جدیدی پیدا نشد. از تنظیمات ← مرورگر در Lightning استفاده کنید یا کلید را وارد کنید.',
       ok_t: 'متصل است',
       ok_h: 'Lightning {v}',
       upd: 'نسخه جدید آماده است — در صفحه افزونه‌های مرورگر روی «بارگذاری مجدد» بزنید.',
@@ -113,7 +127,8 @@
       m_near: 'دانلود پیوندهای این بخش با Lightning',
       m_clip: 'دانلود پیوندهای کپی‌شده با Lightning',
       p_down: 'Lightning اجرا نشده است.',
-      p_key: 'افزونه را با Lightning جفت کنید: در Lightning به تنظیمات ← مرورگر بروید یا کلید را در پنجره افزونه وارد کنید.',
+      p_key:
+        'افزونه را با Lightning جفت کنید: در Lightning به تنظیمات ← مرورگر بروید یا کلید را در پنجره افزونه وارد کنید.',
       p_off: 'دانلودهای مرورگر را در Lightning روشن کنید: تنظیمات ← مرورگر.',
       p_nothing: 'پیوندی در کلیپ‌بورد نیست.',
       p_fail: 'Lightning نتوانست پیوند را بپذیرد.',
@@ -138,19 +153,30 @@
       yt_video: 'ویدیو',
       yt_limit: 'هر بار حداکثر {n} ویدیو.',
       yt_sent: '{n} ویدیو به Lightning فرستاده شد',
-      yt_fail: 'Lightning نتوانست ویدیوها را بپذیرد.'
+      yt_fail: 'Lightning نتوانست ویدیوها را بپذیرد.',
+      ps_send: 'ارسال به Lightning',
+      ps_all: 'انتخاب همه',
+      ps_cancel: 'انصراف',
+      ps_hint: '{n} مورد انتخاب شد. برای انتخاب، روی پیوندها یا ویدیوها کلیک کنید.',
+      ps_sending: 'در حال ارسال {n} مورد…',
+      ps_sent: '{n} مورد به Lightning فرستاده شد.',
+      ps_fail: 'Lightning نتوانست پیوندها را بپذیرد.'
     },
     ru: {
       checking: 'Поиск Lightning…',
       down_t: 'Lightning не запущен',
-      down_h: 'Откройте приложение Lightning и нажмите «Повторить». Пока оно закрыто, браузер скачивает файлы сам.',
+      down_h:
+        'Откройте приложение Lightning и нажмите «Повторить». Пока оно закрыто, браузер скачивает файлы сам.',
       retry: 'Повторить',
       unpaired_t: 'Ещё не связано',
-      unpaired_h: 'В Lightning откройте Настройки → Браузер → «Добавить в браузер». Расширение свяжется само.',
+      unpaired_h:
+        'В Lightning откройте Настройки → Браузер → «Добавить в браузер». Расширение свяжется само.',
       badkey_t: 'Неверный ключ связи',
-      badkey_h: 'Откройте Lightning → Настройки → Браузер, чтобы связать заново, или воспользуйтесь вариантами ниже.',
+      badkey_h:
+        'Откройте Lightning → Настройки → Браузер, чтобы связать заново, или воспользуйтесь вариантами ниже.',
       repair: 'Связать заново автоматически',
-      repair_none: 'Новый ключ не найден. Используйте Настройки → Браузер в Lightning или вставьте ключ.',
+      repair_none:
+        'Новый ключ не найден. Используйте Настройки → Браузер в Lightning или вставьте ключ.',
       ok_t: 'Подключено',
       ok_h: 'Lightning {v}',
       upd: 'Доступна новая версия — нажмите «Обновить» на странице расширений браузера.',
@@ -182,7 +208,8 @@
       m_near: 'Скачать ссылки отсюда через Lightning',
       m_clip: 'Скачать скопированные ссылки через Lightning',
       p_down: 'Lightning не запущен.',
-      p_key: 'Свяжите расширение с Lightning: в Lightning откройте Настройки → Браузер или вставьте ключ во всплывающем окне расширения.',
+      p_key:
+        'Свяжите расширение с Lightning: в Lightning откройте Настройки → Браузер или вставьте ключ во всплывающем окне расширения.',
       p_off: 'Включите загрузки из браузера в Lightning: Настройки → Браузер.',
       p_nothing: 'В буфере обмена нет ссылок.',
       p_fail: 'Lightning не смог принять ссылку.',
@@ -207,13 +234,22 @@
       yt_video: 'видео',
       yt_limit: 'Не более {n} за раз.',
       yt_sent: 'Отправлено в Lightning: {n}',
-      yt_fail: 'Lightning не смог принять видео.'
+      yt_fail: 'Lightning не смог принять видео.',
+      ps_send: 'Отправить в Lightning',
+      ps_all: 'Выбрать все',
+      ps_cancel: 'Отмена',
+      ps_hint: 'Выбрано: {n}. Нажимайте на ссылки и видео, чтобы выбрать их.',
+      ps_sending: 'Отправка: {n}…',
+      ps_sent: 'Отправлено в Lightning: {n}.',
+      ps_fail: 'Lightning не смог принять ссылки.'
     }
   }
 
   /** The supported language for a code like 'fa', 'ru-RU' or 'en_US'; '' when there is none. */
   function norm(code) {
-    const base = String(code || '').toLowerCase().slice(0, 2)
+    const base = String(code || '')
+      .toLowerCase()
+      .slice(0, 2)
     return DICT[base] ? base : ''
   }
 

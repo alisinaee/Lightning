@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { Cookie, Globe, Plugs, ShieldCheck } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
@@ -68,7 +69,7 @@ export function YoutubeSignInFix({
   return (
     <div
       role="group"
-      aria-label="Sign in to YouTube"
+      aria-label={t('Sign in to YouTube')}
       className="mt-2 flex flex-col gap-3 rounded-xl border-[0.5px] border-border bg-card p-3.5 text-foreground"
     >
       <div className="flex items-start gap-2.5">
@@ -76,20 +77,24 @@ export function YoutubeSignInFix({
           <ShieldCheck className="size-[18px]" />
         </span>
         <div className="min-w-0">
-          <div className="text-[13px] font-semibold">Let Lightning use your YouTube sign-in</div>
+          <div className="text-[13px] font-semibold">
+            {t('Let Lightning use your YouTube sign-in')}
+          </div>
           <div className="text-[12px] leading-snug text-muted-foreground">
-            YouTube asks for a sign-in on this video. Pick one way below. Your sign-in stays on this
-            computer and is used only for YouTube downloads.
+            {t(
+              'YouTube asks for a sign-in on this video. Pick one way below. Your sign-in stays on this computer and is used only for YouTube downloads.'
+            )}
           </div>
         </div>
       </div>
 
       {pending === 'safari' ? (
         <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3 text-[12px] leading-snug">
-          <div className="font-medium">Safari needs one permission</div>
+          <div className="font-medium">{t('Safari needs one permission')}</div>
           <div className="text-muted-foreground">
-            Safari keeps its sign-in in a protected folder. In System Settings, open Privacy &amp;
-            Security → Full Disk Access and switch Lightning on. Then come back and try again.
+            {t(
+              'Safari keeps its sign-in in a protected folder. In System Settings, open Privacy & Security → Full Disk Access and switch Lightning on. Then come back and try again.'
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -97,17 +102,17 @@ export function YoutubeSignInFix({
               variant="secondary"
               onClick={() => void window.lightning.openFullDiskAccess()}
             >
-              Open Full Disk Access
+              {t('Open Full Disk Access')}
             </Button>
             <Button
               size="sm"
               disabled={busy}
               onClick={() => void apply({ cookiesBrowser: 'safari', cookieMode: 'none' })}
             >
-              I allowed it, try again
+              {t('I allowed it, try again')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
-              Back
+              {t('Back')}
             </Button>
           </div>
         </div>
@@ -115,15 +120,17 @@ export function YoutubeSignInFix({
         <>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1.5 text-[12px] font-medium">
-              <Globe className="size-3.5" /> Use a browser you are signed in with
+              <Globe className="size-3.5" /> {t('Use a browser you are signed in with')}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {browsers === null && (
-                <span className="text-[12px] text-muted-foreground">Looking for browsers…</span>
+                <span className="text-[12px] text-muted-foreground">
+                  {t('Looking for browsers…')}
+                </span>
               )}
               {browsers?.length === 0 && (
                 <span className="text-[12px] text-muted-foreground">
-                  No supported browser found. Use the extension or a cookies file instead.
+                  {t('No supported browser found. Use the extension or a cookies file instead.')}
                 </span>
               )}
               {browsers?.map((browser) => (
@@ -140,8 +147,9 @@ export function YoutubeSignInFix({
             </div>
             {isMac && (
               <div className="text-[11.5px] leading-snug text-muted-foreground">
-                Chrome, Edge and Brave: macOS will ask to let Lightning use their “Safe Storage”
-                key. Choose Allow.
+                {t(
+                  'Chrome, Edge and Brave: macOS will ask to let Lightning use their “Safe Storage” key. Choose Allow.'
+                )}
               </div>
             )}
           </div>
@@ -149,15 +157,15 @@ export function YoutubeSignInFix({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[12px] font-medium">
-                <Plugs className="size-3.5" /> Use the Lightning browser extension
+                <Plugs className="size-3.5" /> {t('Use the Lightning browser extension')}
               </div>
               <div className="text-[11.5px] leading-snug text-muted-foreground">
-                Sends the sign-in along with each video you pick in the browser.
+                {t('Sends the sign-in along with each video you pick in the browser.')}
               </div>
             </div>
             {onOpenSettings && (
               <Button size="sm" variant="secondary" onClick={() => onOpenSettings('Browser')}>
-                Set up
+                {t('Set up')}
               </Button>
             )}
           </div>
@@ -165,14 +173,14 @@ export function YoutubeSignInFix({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[12px] font-medium">
-                <Cookie className="size-3.5" /> I have a cookies.txt file
+                <Cookie className="size-3.5" /> {t('I have a cookies.txt file')}
               </div>
               <div className="text-[11.5px] leading-snug text-muted-foreground">
-                Exported from your browser with any cookies exporter.
+                {t('Exported from your browser with any cookies exporter.')}
               </div>
             </div>
             <Button size="sm" variant="secondary" disabled={busy} onClick={() => void chooseFile()}>
-              Choose file
+              {t('Choose file')}
             </Button>
           </div>
         </>

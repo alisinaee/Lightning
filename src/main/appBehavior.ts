@@ -10,6 +10,8 @@ import { offerLink } from './openLinks'
 import { fileLinksOf } from './download/pageScan'
 import { IpcChannels } from '../shared/ipc-channels'
 import { prefsOf } from './settings'
+import { isLang, resolveLanguage, setLanguage } from '../shared/i18n'
+import { testKnobs } from './testKnobs'
 
 /** What Settings asked of the process itself: hiding on close, the Dock, and the proxy. */
 export const behavior = {
@@ -91,7 +93,20 @@ function applyLoginItem(enabled: boolean): void {
 
 /** Applies the parts of Settings that live outside a download: the Dock, and the proxy the
  * app's own requests use. */
+/** Takes the language the person chose ('system' follows the computer's). An e2e run is held to
+ * English (or LIGHTNING_E2E_LANG). Changing it re-words the menus, which listen for it. */
+export function applyLanguage(setting: AppSettings | undefined): void {
+  const forced = testKnobs.forcedLanguage
+  if (forced) {
+    setLanguage(isLang(forced) ? forced : 'en')
+    return
+  }
+  const choice = setting ? prefsOf(setting).language : 'system'
+  setLanguage(resolveLanguage(choice ?? 'system', app.getPreferredSystemLanguages()))
+}
+
 export async function applyBehavior(settings: AppSettings): Promise<void> {
+  applyLanguage(settings)
   const prefs = prefsOf(settings)
   behavior.closeHides = prefs.closeToBackground
   setGlassBlur(prefs.glassBlur)

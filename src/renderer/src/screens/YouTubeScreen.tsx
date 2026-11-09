@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, SlidersHorizontal, VideoCamera as Video, X } from '@phosphor-icons/react'
 import { EmptyStatusIcon } from '../components/EmptyIcon'
@@ -124,7 +125,7 @@ export function YouTubeScreen({
       // Videos keep the playlist's order (they were queued in it).
       list.sort((a, b) => a.createdAt - b.createdAt)
       const expanded = expandedGroups.has(groupId)
-      const title = list[0].groupTitle ?? 'Playlist'
+      const title = list[0].groupTitle ?? t('Playlist')
       items.push({
         at: Math.max(...list.map((job) => job.createdAt)),
         node: (
@@ -227,7 +228,7 @@ export function YouTubeScreen({
             <h1 className="sr-only">YouTube</h1>
             <PauseAllButton
               pausing={running.length > 0}
-              resumeLabel={pausedAll.length > 0 ? 'Resume all' : 'Try again all'}
+              resumeLabel={pausedAll.length > 0 ? t('Resume all') : t('Try again all')}
               resumeIcon={pausedAll.length > 0 ? 'play' : 'retry'}
               disabled={running.length === 0 && pausedAll.length + failedAll.length === 0}
               onPause={() => running.forEach((job) => void pauseJob(job.id))}
@@ -239,27 +240,27 @@ export function YouTubeScreen({
             />
             <NetworksMenu onOpenLimits={openLimits} />
             <NewMenu
-              label="New download"
-              items={[{ label: 'Video link', icon: Plus, run: () => setAddOpen(true) }]}
+              label={t('New download')}
+              items={[{ label: t('Video link'), icon: Plus, run: () => setAddOpen(true) }]}
             />
             {/* After the + button, so a VPN turning up doesn't move it. */}
             <VpnControl />
             <Badge variant="outline" className="shrink-0">
-              {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : 'yt-dlp missing'}
+              {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : t('yt-dlp missing')}
             </Badge>{' '}
             {status && !status.binary && (
               <Badge variant="destructive" className="shrink-0">
-                yt-dlp missing
+                {t('yt-dlp missing')}
               </Badge>
             )}
             {status && !status.ffmpeg && (
               <Badge variant="destructive" className="shrink-0">
-                ffmpeg missing
+                {t('ffmpeg missing')}
               </Badge>
             )}
             <div className="flex-1" />
             <SearchField
-              label="Search YouTube downloads"
+              label={t('Search YouTube downloads')}
               value={search}
               onChange={(value) => {
                 setSearch(value)
@@ -276,34 +277,34 @@ export function YouTubeScreen({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    aria-label="YouTube options"
+                    aria-label={t('YouTube options')}
                     onClick={() => setOptionsOpen(true)}
                   >
                     <SlidersHorizontal />
                   </Button>
                 }
               />
-              <TooltipContent>YouTube options</TooltipContent>
+              <TooltipContent>{t('YouTube options')}</TooltipContent>
             </Tooltip>
-            <SettingsButton label="Settings" onClick={() => onOpenSettings('YouTube')} />
+            <SettingsButton label={t('Settings')} onClick={() => onOpenSettings('YouTube')} />
           </div>
         ) : (
           <div
             role="toolbar"
-            aria-label="Selected YouTube downloads"
+            aria-label={t('Selected YouTube downloads')}
             className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3"
           >
             <Button
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="Deselect all"
+              aria-label={t('Deselect all')}
               onClick={() => setSelected(new Set())}
             >
               <X />
             </Button>
             <span className="shrink-0 text-[13px] font-semibold whitespace-nowrap">
-              {chosen.length} selected
+              {t('{count} selected', { count: chosen.length })}
             </span>
             <div className="flex-1" />
             {pausable.length > 0 && (
@@ -313,7 +314,7 @@ export function YouTubeScreen({
                 variant="secondary"
                 onClick={() => pausable.forEach((job) => void pauseJob(job.id))}
               >
-                Pause ({pausable.length})
+                {t('Pause ({count})', { count: pausable.length })}
               </Button>
             )}
             {resumable.length > 0 && (
@@ -323,7 +324,7 @@ export function YouTubeScreen({
                 variant="secondary"
                 onClick={() => resumable.forEach((job) => void resumeJob(job.id))}
               >
-                Resume ({resumable.length})
+                {t('Resume ({count})', { count: resumable.length })}
               </Button>
             )}
             {retryable.length > 0 && (
@@ -333,7 +334,7 @@ export function YouTubeScreen({
                 variant="secondary"
                 onClick={() => retryable.forEach((job) => void retryJob(job.id))}
               >
-                Try again ({retryable.length})
+                {t('Try again ({count})', { count: retryable.length })}
               </Button>
             )}
             {cancellable.length > 0 && (
@@ -343,17 +344,17 @@ export function YouTubeScreen({
                 variant="secondary"
                 onClick={() => cancellable.forEach((job) => void cancelJob(job.id))}
               >
-                Cancel ({cancellable.length})
+                {t('Cancel ({count})', { count: cancellable.length })}
               </Button>
             )}
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              title="Takes them off the list; the files stay on your computer"
+              title={t('Takes them off the list; the files stay on your computer')}
               onClick={() => chosen.forEach((job) => void removeJob(job.id, false))}
             >
-              Remove from list ({chosen.length})
+              {t('Remove from list ({count})', { count: chosen.length })}
             </Button>
           </div>
         )}
@@ -366,8 +367,9 @@ export function YouTubeScreen({
             role="alert"
             className="shrink-0 border-b-[0.5px] border-border bg-destructive/10 px-4 py-2 text-[12.5px] text-destructive"
           >
-            yt-dlp was not found, so YouTube downloads cannot start. Reinstall Lightning or update
-            yt-dlp.
+            {t(
+              'yt-dlp was not found, so YouTube downloads cannot start. Reinstall Lightning or update yt-dlp.'
+            )}
           </div>
         )}
 
@@ -379,7 +381,7 @@ export function YouTubeScreen({
           >
             <div role="columnheader" className="flex items-center justify-center">
               <Checkbox
-                aria-label="Select all YouTube downloads"
+                aria-label={t('Select all YouTube downloads')}
                 checked={allListedChosen}
                 indeterminate={chosen.length > 0 && !allListedChosen}
                 disabled={listed.length === 0}
@@ -387,25 +389,25 @@ export function YouTubeScreen({
               />
             </div>
             <div role="columnheader" className="px-2">
-              Name
+              {t('Name')}
             </div>
-            <div role="columnheader" className="px-2 text-right">
-              Size
+            <div role="columnheader" className="px-2 text-end">
+              {t('Size')}
             </div>
             <div role="columnheader" className="px-2">
-              Status
+              {t('Status')}
             </div>
-            <div role="columnheader" className="px-2 text-right">
-              Speed
+            <div role="columnheader" className="px-2 text-end">
+              {t('Speed')}
             </div>
             {columns.eta && (
-              <div role="columnheader" className="px-2 text-right">
-                Time left
+              <div role="columnheader" className="px-2 text-end">
+                {t('Time left')}
               </div>
             )}
             {columns.added && (
               <div role="columnheader" className="px-2">
-                Added
+                {t('Added')}
               </div>
             )}
             <div role="columnheader" />
@@ -422,14 +424,15 @@ export function YouTubeScreen({
               <div className="flex size-12 items-center justify-center rounded-full bg-muted">
                 <Video className="size-5 text-muted-foreground" />
               </div>
-              <div className="text-[14px] font-medium">No YouTube downloads yet</div>
+              <div className="text-[14px] font-medium">{t('No YouTube downloads yet')}</div>
               <div className="max-w-sm text-[12.5px] text-muted-foreground">
-                Paste a link to a video, or right-click a video in your browser and choose “Download
-                video with Lightning”.
+                {t(
+                  'Paste a link to a video, or right-click a video in your browser and choose “Download video with Lightning”.'
+                )}
               </div>
               <Button type="button" variant="secondary" onClick={() => setAddOpen(true)}>
                 <Plus />
-                Add video
+                {t('Add video')}
               </Button>
             </div>
           ) : (
@@ -446,7 +449,7 @@ export function YouTubeScreen({
                         : 'all'
                 }
               />
-              Nothing matches this filter.
+              {t('Nothing matches this filter.')}
             </div>
           )}
         </div>
