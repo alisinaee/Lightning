@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/main.png" alt="Lightning's download list, with two files downloading and four queued" width="860" />
+  <img src="docs/screenshots/main.png" alt="Lightning's download list: a group of seven files, three downloading over Wi-Fi and Ethernet and four waiting" width="860" />
 </p>
 
 ---
@@ -54,7 +54,7 @@ Faster networks take more pieces, so a slow one never holds the others back.
 - **Limits.** Cap total speed, switch on slow mode, or give each network its own speed and daily, weekly or monthly data limit.
 - **DNS, with a test.** Pick DNS servers for the app, a group or one download, from a list that includes well-known Iranian ones (Electro, Shecan, Begzar and more). **Test DNS for this site** tries every DNS on a link's real host and measures the servers they lead to. **Auto** uses the best one found for each site. A DNS that sends a site to a server with the wrong certificate is flagged and never chosen.
 - **Proxy.** Use the system proxy, none, or a manual HTTP, HTTPS, FTP or SOCKS5 proxy for the app's own requests.
-- **VPN.** Lightning detects your VPN and lets you switch whether downloads may use it, from the top bar.
+- **VPN.** Lightning detects your VPN and lets you switch whether downloads may use it, from the top bar or the menu-bar panel.
 - **Power.** Keeps the computer awake while a download runs.
 - **Schedule.** Weekly run or pause windows (overnight ones too), each with an optional speed cap.
 - **When downloads finish.** Optionally ask whether to quit, sleep or shut down; a file can also open itself, or show in its folder, when done.
@@ -70,6 +70,7 @@ Faster networks take more pieces, so a slow one never holds the others back.
 - **Resizable, sortable columns** and search with previous/next and a counter such as `1/23`. Long names can wrap onto several lines.
 - **Right-click or `⋯` on any row** for open, show in folder, details, pause/resume/retry, fix link, copy link, copy name or location, download again, remove from list, delete file, or cancel and delete partial data. Anything destructive asks first, and bulk actions apply to the whole selection.
 - **A status bar** with the count, total speed and the speed of each network.
+- **YouTube and Telegram tabs.** The row of three icons at the top of the sidebar switches between **Downloads**, **Telegram** and **YouTube**. The filters under it follow the tab, and a tab pulses while something in it is downloading. YouTube videos download at the quality you pick, and when YouTube asks you to sign in, Lightning offers to use your browser's cookies. Telegram files download through the Telegram downloader, with your own account.
 
 <p align="center">
   <img src="docs/screenshots/details.png" alt="A finished download's details: speed over time and each network's share of the file" width="860" />
@@ -77,11 +78,26 @@ Faster networks take more pieces, so a slow one never holds the others back.
 
 Open any download to see its speed over time, what each network contributed, and a map of every chunk coloured by the network that fetched it.
 
+### The menu-bar panel
+
+Click the bolt in the menu bar (macOS) for a small panel instead of a menu: the total speed and a live graph, each network's share, the downloads running now, and a row of buttons.
+
+- **Speed beside the icon.** The total speed sits next to the bolt, the number over its unit, in KB/s or MB/s as you choose (or automatic). It turns yellow while something downloads and reads `0` when everything is paused.
+- **Your own buttons.** Press **Edit** to drag the buttons into order, remove some and add others from a shelf: new download, several links, pause all, resume all, VPN on/off, slow mode on/off, open the downloads folder, Telegram, check for updates, logs, Settings and Open. The panel holds at most six, and each grows or shrinks to fit.
+- **Pin.** Pin keeps the panel open while you work elsewhere. Without it, a click outside closes it.
+- **Everything counts.** YouTube and Telegram downloads are included in the speed and the counts.
+
 ### History and settings
 
 - **History** keeps every finished file with search, size, date, uploaded bytes and a mark when the file has gone missing. Rename a file (on disk too, if it is still there), show it in Finder or Explorer, remove it from history only, or clear the lot.
-- **Settings** has General, History, Appearance (text size, light or dark, accent colour), Network, Notifications, Power and Interface (close to the tray, hide the Dock icon).
+- **Settings** opens in a window of its own, so you can keep working in the main window beside it. The pages are General, History, Usage, Appearance, Network, Notifications, Power, Schedule, Browser, Telegram, YouTube, Interface and Status bar. Changes apply and save as you make them.
+- **Appearance.** Text size, light or dark, six accent colours, and on macOS the **window glass**: how see-through the window is (0 to 90%) and how strongly it blurs what is behind it (off, standard or strong).
+- **A first-run intro and tour.** The first launch plays a short intro, then a step-by-step tour of the main screens. Both can be replayed from Settings → Interface.
 - **Logs window and diagnostic report** with sensitive details redacted, for when something goes wrong.
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Settings in its own window, on the Appearance page: text size, theme, window glass and accent colours" width="720" />
+</p>
 
 ## Install
 

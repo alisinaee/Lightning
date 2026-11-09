@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns as Columns3 } from '@phosphor-icons/react'
+import { ArrowDown, ArrowUp, SlidersHorizontal } from '@phosphor-icons/react'
 import { cn } from 'cn'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore, type ColumnId } from '../../store/useAppStore'
@@ -280,7 +280,7 @@ export function DownloadsTable({
                     />
                   }
                 >
-                  <Columns3 />
+                  <SlidersHorizontal />
                 </DropdownMenuTrigger>
               }
             />

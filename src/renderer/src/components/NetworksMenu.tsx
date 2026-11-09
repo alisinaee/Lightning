@@ -8,6 +8,7 @@ import { formatSpeed } from '../utils/format'
 import { DnsPicker } from './DnsPicker'
 import { useDns } from '../hooks/useDns'
 import { UsageBar } from './LimitsDialog'
+import { NetworkKindIcon } from './NetworkKindIcon'
 import { NetworkEditPopover } from './NetworkEditPopover'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Button } from './ui/button'
@@ -64,14 +65,16 @@ export function NetworksMenu({
         }
         render={<Button type="button" variant="secondary" className="gap-2.5 px-3 text-[13px]" />}
       >
-        <span className="flex gap-1" aria-hidden>
+        <span className="flex gap-1.5" aria-hidden>
           {interfaces.slice(0, 4).map((iface) => (
-            <span
+            <NetworkKindIcon
               key={iface.id}
-              className="size-2 rounded-full"
+              kind={iface.kind}
+              className="size-4"
+              // Each icon in its network's colour, dimmed while that network is off.
               style={{
-                background: networkVisual(iface.id, iface.kind, iface.displayName).solid,
-                opacity: isNetworkOff(iface, preferences) ? 0.3 : 1
+                color: networkVisual(iface.id, iface.kind, iface.displayName).solid,
+                opacity: isNetworkOff(iface, preferences) ? 0.35 : 1
               }}
             />
           ))}
@@ -87,98 +90,102 @@ export function NetworksMenu({
         )}
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-max max-w-[520px] min-w-[380px] gap-0 p-0">
-        <div className="flex flex-col gap-1.5 border-b-[0.5px] border-border p-4">
-          <div className="text-[14px] font-semibold">Default networks</div>
-          <div className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            New downloads combine the networks turned on here. You can change this for any single
-            download.
+      <PopoverContent align="end" className="w-max max-w-[480px] min-w-[360px] gap-0 p-0">
+        <div className="flex flex-col gap-0.5 px-4 pt-4 pb-2">
+          <div className="text-[13px] font-semibold tracking-tight">Networks</div>
+          <div className="text-[12px] leading-snug text-[var(--text-secondary)]">
+            New downloads use the ones switched on. Each download can change this.
           </div>
         </div>
-        {interfaces.map((iface) => {
-          const visual = networkVisual(iface.id, iface.kind, iface.displayName)
-          const preference = preferences[iface.id]
-          const used = usage[iface.id] ?? 0
-          const dataLimit = preference?.dataLimit
-          const reached = dataLimit !== undefined && used >= dataLimit
-          const speed = speeds.get(iface.id) ?? 0
-          return (
-            <div
-              key={iface.id}
-              // The whole row opens this network's limits (the chevron's button stretches over it);
-              // the switch and the pencil sit above it and do their own thing.
-              className="group relative flex flex-col gap-2 border-b-[0.5px] border-border px-4 py-3 hover:bg-muted"
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className="mt-[7px] size-2 shrink-0 self-start rounded-full"
-                  style={{ background: visual.solid }}
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex min-w-0 items-center gap-1">
-                    <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
-                    <span className="relative z-10 flex">
-                      <NetworkEditPopover
-                        interfaceId={iface.id}
-                        interfaceKind={iface.kind}
-                        osName={iface.displayName}
-                      />
-                    </span>
-                  </div>
-                  <div
-                    className={`truncate font-mono text-[11px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
+        <div className="flex flex-col gap-1 px-2 pb-2">
+          {interfaces.map((iface) => {
+            const visual = networkVisual(iface.id, iface.kind, iface.displayName)
+            const preference = preferences[iface.id]
+            const used = usage[iface.id] ?? 0
+            const dataLimit = preference?.dataLimit
+            const reached = dataLimit !== undefined && used >= dataLimit
+            const speed = speeds.get(iface.id) ?? 0
+            return (
+              <div
+                key={iface.id}
+                // The whole row opens this network's limits (the chevron's button stretches over it);
+                // the switch and the pencil sit above it and do their own thing.
+                className="group relative flex flex-col gap-2 rounded-xl px-2.5 py-2.5 hover:bg-muted"
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex size-9 shrink-0 items-center justify-center rounded-[10px]"
+                    style={{
+                      background: `color-mix(in srgb, ${visual.solid} 16%, transparent)`,
+                      color: visual.solid,
+                      opacity: isNetworkOff(iface, preferences) ? 0.5 : 1
+                    }}
                   >
-                    {reached
-                      ? 'Data limit reached'
-                      : iface.displayName !== visual.name
-                        ? iface.displayName
-                        : kindLabel(iface.kind)}
+                    <NetworkKindIcon kind={iface.kind} className="size-[18px]" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex min-w-0 items-center gap-1">
+                      <span className="truncate text-[13.5px] font-medium">{visual.name}</span>
+                      <span className="relative z-10 flex">
+                        <NetworkEditPopover
+                          interfaceId={iface.id}
+                          interfaceKind={iface.kind}
+                          osName={iface.displayName}
+                        />
+                      </span>
+                    </div>
+                    <div
+                      className={`truncate text-[11.5px] ${reached ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}
+                    >
+                      {reached
+                        ? 'Data limit reached'
+                        : [
+                            iface.displayName !== visual.name
+                              ? iface.displayName
+                              : kindLabel(iface.kind),
+                            speed > 0 ? formatSpeed(speed) : null,
+                            typeof latencies[iface.id] === 'number'
+                              ? `${Math.round(latencies[iface.id]!)} ms`
+                              : null
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </div>
                   </div>
+                  <Switch
+                    className="relative z-10"
+                    aria-label={`Use ${visual.name} for new downloads`}
+                    checked={!isNetworkOff(iface, preferences)}
+                    onCheckedChange={(checked) => setNetworkPreference(iface.id, { off: !checked })}
+                  />
+                  <button
+                    type="button"
+                    aria-label={`${visual.name} limits`}
+                    className="text-muted-foreground/60 outline-none group-hover:text-foreground after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+                    onClick={() => {
+                      setOpen(false)
+                      onOpenLimits(iface.id)
+                    }}
+                  >
+                    <ChevronRight className="size-4" />
+                  </button>
                 </div>
-                {/* Figures sit in columns of their own, so every row lines up whatever the names. */}
-                <div className="flex shrink-0 flex-col items-end gap-1 font-mono text-[11px] leading-none text-muted-foreground tabular-nums">
-                  <span className="w-[72px] text-right">
-                    {speed > 0 ? formatSpeed(speed) : 'Idle'}
-                  </span>
-                  <span className="w-[72px] text-right">
-                    {typeof latencies[iface.id] === 'number'
-                      ? `${Math.round(latencies[iface.id]!)} ms`
-                      : '–'}
-                  </span>
-                </div>
-                <Switch
-                  className="relative z-10"
-                  aria-label={`Use ${visual.name} for new downloads`}
-                  checked={!isNetworkOff(iface, preferences)}
-                  onCheckedChange={(checked) => setNetworkPreference(iface.id, { off: !checked })}
-                />
-                <button
-                  type="button"
-                  aria-label={`${visual.name} limits`}
-                  className="text-muted-foreground outline-none group-hover:text-foreground after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
-                  onClick={() => {
-                    setOpen(false)
-                    onOpenLimits(iface.id)
-                  }}
-                >
-                  <ChevronRight className="size-4" />
-                </button>
+                {dataLimit !== undefined && (
+                  <UsageBar
+                    used={used}
+                    limit={dataLimit}
+                    period={preference?.dataLimitPeriod ?? 'month'}
+                  />
+                )}
               </div>
-              {dataLimit !== undefined && (
-                <UsageBar
-                  used={used}
-                  limit={dataLimit}
-                  period={preference?.dataLimitPeriod ?? 'month'}
-                />
-              )}
-            </div>
-          )
-        })}
-        <div className="flex items-center gap-3 border-b-[0.5px] border-border px-4 py-3">
+            )
+          })}
+        </div>
+        <div className="mx-2 flex items-center gap-3 border-t-[0.5px] border-border px-2.5 py-3">
           <div className="min-w-0 flex-1">
             <div className="text-[13.5px] font-medium">DNS</div>
             <div className="text-[11.5px] leading-snug text-muted-foreground">
-              How names are looked up. A group or a single download can use its own.
+              How names are looked up
             </div>
           </div>
           <DnsPicker
@@ -189,7 +196,7 @@ export function NetworksMenu({
         </div>
         <button
           type="button"
-          className="px-4 py-3 text-[13px] font-medium text-primary hover:underline"
+          className="mx-2 mb-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] font-medium text-primary hover:bg-muted"
           onClick={() => {
             setOpen(false)
             onOpenLimits(null)

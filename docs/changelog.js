@@ -10,6 +10,46 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.39',
+      items: [
+        {
+          kind: 'new',
+          title: 'Settings in its own window',
+          text: 'Settings opens beside the main window, in clean grouped lists, so you can keep working while you change things.'
+        },
+        {
+          kind: 'new',
+          title: 'Window glass on macOS',
+          text: 'The window can be see-through and blur what is behind it. Set how much in Settings → Appearance.'
+        },
+        {
+          kind: 'new',
+          title: 'A menu-bar panel you arrange',
+          text: 'Pick up to six buttons (VPN, slow mode, new download and more), drag them into order, and pin the panel open. The speed shows beside the bolt, in KB/s or MB/s.'
+        },
+        {
+          kind: 'improved',
+          title: 'VPN switch always in view',
+          text: 'The VPN switch stays beside the + button. With no VPN connected it is dimmed and off, instead of disappearing.'
+        },
+        {
+          kind: 'improved',
+          title: 'Network icons',
+          text: 'Wi-Fi, Ethernet and a phone tethered over USB each get their own icon in the networks menu, which is now cleaner and more minimal.'
+        },
+        {
+          kind: 'improved',
+          title: 'YouTube and Telegram count too',
+          text: 'Their downloads are included in the menu-bar speed and counts.'
+        },
+        {
+          kind: 'fixed',
+          title: 'App icon size',
+          text: 'The Dock icon now has the standard margin, so it is the same size as other apps.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.38',
       items: [
         {
