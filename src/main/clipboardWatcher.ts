@@ -10,6 +10,7 @@ import { isYoutubeUrl } from '../shared/youtube'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { ClipboardHistoryEntry, ClipboardLinkKind } from '../shared/types'
 import { readJson, updateJson } from './jsonFile'
+import { log } from './logger'
 
 const POLL_MS = 1000
 /** How many noticed links the history keeps. */
@@ -52,11 +53,10 @@ function isEntry(value: unknown): value is ClipboardHistoryEntry {
  * design: it only notifies while Lightning is in the background, with a notification the user may
  * ignore, and never offers the same link twice in a row. Every link it notices (a file, YouTube or
  * Telegram link) is also kept in a capped history, saved in the userData folder, for Settings →
- * Clipboard.
+ * Clipboard. The history records every noticed link, whether or not Lightning is in front.
  *
- * Honest limit: when Lightning is focused and "only in the background" is off, links are still
- * recorded in the history but no in-app offer is shown (the New download dialog reads the
- * clipboard itself); notifications are only ever sent in the background. */
+ * Notifications are only sent while Lightning is in the background. When it is in front, the New
+ * download dialog reads the clipboard itself, so no notification is needed. */
 export class ClipboardWatcher {
   private timer: NodeJS.Timeout | null = null
   private last = ''
@@ -119,6 +119,7 @@ export class ClipboardWatcher {
   }
 
   private record(kind: ClipboardLinkKind, url: string): void {
+    log.info('clipboard', 'noticed a link', { kind, url: redactUrl(url) })
     this.entries = [
       { id: randomUUID(), kind, url, at: Date.now() },
       // Copying a link again moves it to the top rather than listing it twice.
@@ -154,9 +155,8 @@ export class ClipboardWatcher {
     const text = await this.read()
     if (text === this.last) return
     this.last = text
+    // Recorded whether or not Lightning is in front. Only the notification waits for the background.
     const focused = BrowserWindow.getFocusedWindow() !== null
-    // In the window already: the New download dialog reads the clipboard itself.
-    if (focused && this.options.onlyInBackground) return
     await this.loaded
     const { files, youtube, telegram } = this.options
     if (telegram) {
