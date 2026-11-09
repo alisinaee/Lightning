@@ -1,9 +1,10 @@
 import type { Dict } from '../types'
 
 const isDev = (): boolean => {
+  // No import.meta here: the e2e specs load this file as CommonJS. Duplicate keys are also
+  // caught by scripts/i18n-check.mjs.
   const g = globalThis as { process?: { env?: Record<string, string | undefined> } }
-  const meta = import.meta as ImportMeta & { env?: { DEV?: boolean } }
-  return g.process?.env?.NODE_ENV === 'development' || meta.env?.DEV === true
+  return g.process?.env?.NODE_ENV === 'development'
 }
 
 /** Merge per-area partials; in dev, warn when a key appears twice with different values. */
