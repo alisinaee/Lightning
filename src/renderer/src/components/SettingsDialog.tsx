@@ -648,11 +648,8 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
           )}
           {page === 'YouTube' && (
             <>
-              <div>
-                <div className="text-[15px] font-semibold">YouTube</div>
-                <div className="ios-note">Used by every new YouTube download.</div>
-              </div>
-              <YoutubeOptionsPanel />
+              <div className="ios-note !mx-0 !mt-0">Used by every new YouTube download.</div>
+              <YoutubeOptionsPanel settings />
             </>
           )}
           {page === 'Telegram' && (

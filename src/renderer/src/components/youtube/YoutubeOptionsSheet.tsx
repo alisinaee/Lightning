@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { FolderOpen, ArrowCounterClockwise as RotateCcw } from '@phosphor-icons/react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -24,7 +24,20 @@ const SELECT =
 
 type Change = (part: Partial<YoutubeOptions>) => void
 
+/** On inside the Settings window: the panel then takes the same look as the other settings pages.
+ * In the YouTube options sheet it stays off and keeps its own. */
+const SettingsStyle = createContext(false)
+
 function Section({ title, children }: { title: string; children: ReactNode }): React.JSX.Element {
+  const settings = useContext(SettingsStyle)
+  if (settings) {
+    return (
+      <section className="flex flex-col">
+        <div className="ios-title">{title}</div>
+        <div className="flex flex-col">{children}</div>
+      </section>
+    )
+  }
   return (
     <section className="flex flex-col">
       <h3 className="pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -45,6 +58,19 @@ function Row({
   hint?: string
   children: ReactNode
 }): React.JSX.Element {
+  const settings = useContext(SettingsStyle)
+  if (settings) {
+    return (
+      // Rows stack without the iOS overlap, so each keeps its own padding around its text.
+      <div className="ios-row !mt-0 !py-2.5">
+        <div className="ios-label">
+          <div className="font-medium">{title}</div>
+          {hint && <div className="ios-hint">{hint}</div>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">{children}</div>
+      </div>
+    )
+  }
   return (
     <div className="flex items-center justify-between gap-4 py-2.5">
       <div className="min-w-0">
@@ -67,10 +93,11 @@ function Choice<T extends string>({
   choices: { value: T; label: string }[]
   onChange: (value: T) => void
 }): React.JSX.Element {
+  const settings = useContext(SettingsStyle)
   return (
     <select
       aria-label={label}
-      className={SELECT}
+      className={settings ? 'ios-input w-44' : SELECT}
       value={value}
       onChange={(event) => onChange(event.target.value as T)}
     >
@@ -112,8 +139,25 @@ function Field({
   onSave: (value: string) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(String(value))
+  const settings = useContext(SettingsStyle)
   const commit = (): void => {
     if (draft !== String(value)) onSave(draft)
+  }
+  if (settings) {
+    return (
+      <input
+        aria-label={label}
+        type={numeric ? 'number' : 'text'}
+        value={draft}
+        placeholder={placeholder}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+        }}
+        className={cn('ios-input', width)}
+      />
+    )
   }
   return (
     <Input
@@ -556,43 +600,57 @@ function AdvancedSettings({
 
 /** The YouTube downloader's settings, in two tabs: Common for everyday use, Advanced for yt-dlp's
  * finer controls. Shown in the YouTube options sheet and on the YouTube page of Settings. */
-export function YoutubeOptionsPanel(): React.JSX.Element {
+export function YoutubeOptionsPanel({
+  settings = false
+}: {
+  settings?: boolean
+}): React.JSX.Element {
   const options = useYoutubeStore((store) => store.options)
   const setOptions = useYoutubeStore((store) => store.setOptions)
   const [tab, setTab] = useState<'common' | 'advanced'>('common')
   const change: Change = (part) => void setOptions(part)
+  const tabs = (['common', 'advanced'] as const).map((value) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => setTab(value)}
+      {...(settings
+        ? { 'aria-pressed': tab === value }
+        : { role: 'tab', 'aria-selected': tab === value })}
+      className={
+        settings
+          ? 'flex-1 capitalize'
+          : cn(
+              'h-7 flex-1 rounded-[5px] text-[12px] font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              tab === value
+                ? 'bg-background text-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+            )
+      }
+    >
+      {value}
+    </button>
+  ))
 
   return (
-    <>
-      <div className="px-4 pt-3">
-        <div role="tablist" aria-label="Option groups" className="flex rounded-md bg-muted p-0.5">
-          {(['common', 'advanced'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              onClick={() => setTab(value)}
-              className={cn(
-                'h-7 flex-1 rounded-[5px] text-[12px] font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                tab === value
-                  ? 'bg-background text-foreground shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {value}
-            </button>
-          ))}
+    <SettingsStyle.Provider value={settings}>
+      {settings ? (
+        <div className="ios-seg w-full">{tabs}</div>
+      ) : (
+        <div className="px-4 pt-3">
+          <div role="tablist" aria-label="Option groups" className="flex rounded-md bg-muted p-0.5">
+            {tabs}
+          </div>
         </div>
-      </div>
-      <div className="px-4 py-4">
+      )}
+      <div className={settings ? 'pt-3' : 'px-4 py-4'}>
         {tab === 'common' ? (
           <CommonSettings options={options} change={change} />
         ) : (
           <AdvancedSettings options={options} change={change} />
         )}
       </div>
-    </>
+    </SettingsStyle.Provider>
   )
 }
 
