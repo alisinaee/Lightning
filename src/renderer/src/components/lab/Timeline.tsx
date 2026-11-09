@@ -62,7 +62,7 @@ function StepRow({ step }: { step: LabStep }): React.JSX.Element {
       <CollapsibleTrigger
         disabled={!detail}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-[13px] transition-colors',
           detail && 'hover:bg-muted',
           step.status === 'running' && 'bg-sky-500/10'
         )}
@@ -87,7 +87,7 @@ function StepRow({ step }: { step: LabStep }): React.JSX.Element {
             {step.assertions.length} checks
           </span>
         )}
-        <span className="w-12 text-right text-[11px] text-muted-foreground tabular-nums">
+        <span className="w-12 text-end text-[11px] text-muted-foreground tabular-nums">
           {seconds(step)}
         </span>
         {detail && (
@@ -100,7 +100,7 @@ function StepRow({ step }: { step: LabStep }): React.JSX.Element {
         )}
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="mt-1 mb-2 ml-6 space-y-1 border-l pl-3">
+        <div className="mt-1 mb-2 ms-6 space-y-1 border-s ps-3">
           {step.error && <div className="text-xs text-destructive">{step.error}</div>}
           {step.assertions.map((assertion, index) => (
             <div key={index} className="text-xs leading-snug">
@@ -108,7 +108,7 @@ function StepRow({ step }: { step: LabStep }): React.JSX.Element {
                 <StatusIcon status={assertion.ok ? 'pass' : 'fail'} className="mt-px size-3.5" />
                 <span className="font-medium">{assertion.label}</span>
               </div>
-              <div className="ml-5 font-mono text-[11px] text-muted-foreground">
+              <div className="ms-5 font-mono text-[11px] text-muted-foreground">
                 expected <span className="text-foreground">{assertion.expected}</span> · got{' '}
                 <span
                   className={assertion.ok ? 'text-foreground' : 'font-semibold text-destructive'}
@@ -117,7 +117,7 @@ function StepRow({ step }: { step: LabStep }): React.JSX.Element {
                 </span>
               </div>
               {!assertion.ok && assertion.hint && (
-                <div className="ml-5 text-[11px] text-destructive">{assertion.hint}</div>
+                <div className="ms-5 text-[11px] text-destructive">{assertion.hint}</div>
               )}
             </div>
           ))}

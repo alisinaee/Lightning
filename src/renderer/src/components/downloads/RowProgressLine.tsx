@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { t } from '@shared/i18n/react'
 import type { RowInfo } from '../../utils/status'
 import { statusStyle } from '../../utils/status'
 import { useAppStore } from '../../store/useAppStore'
@@ -15,8 +16,14 @@ function useTitleLeft(anchor: RefObject<HTMLElement | null>, active: boolean): n
     if (!active || !row) return
     const measure = (): void => {
       const title = row.querySelector<HTMLElement>('[data-title]')
-      const next = title
-        ? title.getBoundingClientRect().left - row.getBoundingClientRect().left - row.clientLeft
+      const rtl = getComputedStyle(row).direction === 'rtl'
+      const titleBox = title?.getBoundingClientRect()
+      const rowBox = row.getBoundingClientRect()
+      // Measured from the row's start edge (left, or right in a right-to-left language).
+      const next = titleBox
+        ? rtl
+          ? rowBox.right - titleBox.right - row.clientLeft
+          : titleBox.left - rowBox.left - row.clientLeft
         : SELECT_WIDTH
       // Only a real move is worth a render.
       setLeft((prev) => (Math.abs(prev - next) > 0.5 ? next : prev))
@@ -53,15 +60,15 @@ export function RowProgressLine({ info }: { info: RowInfo }): React.JSX.Element 
     <span
       ref={anchor}
       role="progressbar"
-      aria-label="Progress"
+      aria-label={t('Progress')}
       aria-valuenow={Math.round(info.percent)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="pointer-events-none absolute bottom-0 right-0 z-[1] h-[4px] overflow-hidden rounded-l-full bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]"
-      style={{ left }}
+      className="pointer-events-none absolute end-0 bottom-0 z-[1] h-[4px] overflow-hidden rounded-s-full bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]"
+      style={{ insetInlineStart: left }}
     >
       <span
-        className="relative block h-full overflow-hidden rounded-r-full transition-[width] duration-500"
+        className="relative block h-full overflow-hidden rounded-e-full transition-[width] duration-500"
         style={{
           width: `${Math.max(1, info.percent)}%`,
           background: color,

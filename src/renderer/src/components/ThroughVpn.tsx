@@ -1,5 +1,6 @@
 import { ShieldCheck } from '@phosphor-icons/react'
 import { formatBytes, formatSpeed } from '../utils/format'
+import { t } from '@shared/i18n/react'
 
 /** What travelled through the VPN tunnel, as one line below a download's connections. Rendered
  * only when the tunnel actually carried data; it is not a connection and has no switch. */
@@ -13,9 +14,9 @@ export function ThroughVpn({
   className?: string
 }): React.JSX.Element {
   return (
-    <section aria-label="Through VPN" className={`flex flex-col gap-1.5 ${className}`}>
-      <h2 className="font-mono text-[9.5px] leading-none tracking-[0.12em] text-muted-foreground uppercase">
-        VPN layer
+    <section aria-label={t('Through VPN')} className={`flex flex-col gap-1.5 ${className}`}>
+      <h2 className="font-mono text-[9.5px] leading-none tracking-[0.12em] text-muted-foreground uppercase rtl:tracking-normal">
+        {t('VPN layer')}
       </h2>
       <div
         className="flex items-center gap-2.5 rounded-lg border-[0.5px] px-3 py-2 text-[12.5px]"
@@ -23,16 +24,16 @@ export function ThroughVpn({
       >
         <ShieldCheck aria-hidden className="size-4" style={{ color: 'var(--color-vpn-text)' }} />
         <span className="font-medium" style={{ color: 'var(--color-vpn-text)' }}>
-          Through VPN
+          {t('Through VPN')}
         </span>
         <span className="flex-1" />
         {speedBytesPerSec > 0 && (
           <span className="font-mono text-[11.5px] tabular-nums">
-            {formatSpeed(speedBytesPerSec)}
+            <bdi>{formatSpeed(speedBytesPerSec)}</bdi>
           </span>
         )}
         <span className="font-mono text-[11.5px] text-[var(--text-secondary)] tabular-nums">
-          {formatBytes(bytesDownloaded)}
+          <bdi>{formatBytes(bytesDownloaded)}</bdi>
         </span>
       </div>
     </section>

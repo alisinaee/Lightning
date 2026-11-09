@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { TdlItem, TdlJob } from '@shared/telegram'
 import { cn } from 'cn'
 import { Copy, FolderOpen, ArrowSquareOut as SquareArrowOutUpRight } from '@phosphor-icons/react'
@@ -43,7 +44,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
     actions.push(
       {
         id: 'open',
-        label: 'Open file',
+        label: t('Open file'),
         icon: SquareArrowOutUpRight,
         run: () => void window.lightning.tdlOpenItem(job.id, item.key)
       },
@@ -59,7 +60,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
     const link = item.link
     actions.push({
       id: 'copy',
-      label: 'Copy link',
+      label: t('Copy link'),
       icon: Copy,
       run: () => void navigator.clipboard.writeText(link).catch(() => {})
     })
@@ -99,13 +100,13 @@ export const TelegramItemRow = memo(function TelegramItemRow({
           <div role="cell" className="flex items-center justify-center">
             {!nested && (
               <Checkbox
-                aria-label={`Select ${item.fileName}`}
+                aria-label={t('Select {name}', { name: item.fileName })}
                 checked={Boolean(selected)}
                 onCheckedChange={(on) => onSelect?.(on)}
               />
             )}
           </div>
-          <div role="cell" className={cn(cellClass, 'gap-2.5 pl-0', nested && 'pl-7')}>
+          <div role="cell" className={cn(cellClass, 'gap-2.5 ps-0', nested && 'ps-7')}>
             <FormatBadge name={item.fileName} kind={fileKindOfMedia(item.media)} />
             <div data-title className="flex min-w-0 flex-1 flex-col gap-1">
               <ClippedText
@@ -115,7 +116,10 @@ export const TelegramItemRow = memo(function TelegramItemRow({
                   finished && 'text-[var(--text-secondary)]'
                 )}
               />
-              <span className="truncate text-[11px] leading-none text-muted-foreground">
+              <span
+                dir="ltr"
+                className="truncate text-start text-[11px] leading-none text-muted-foreground"
+              >
                 {subtitle || ' '}
               </span>
             </div>
@@ -132,7 +136,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
           {columns.added && (
             <AddedCell at={finished ? (info.completedAt ?? info.addedAt) : info.addedAt} />
           )}
-          <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+          <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
             {actions.length > 0 && <RowActionsMenu label={item.fileName} actions={actions} />}
           </div>
         </div>

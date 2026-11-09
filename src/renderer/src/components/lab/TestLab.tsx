@@ -78,7 +78,7 @@ export function TestLab(): React.JSX.Element {
           onPointerDown={startResize}
           className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize transition-colors hover:bg-primary/30"
         />
-        <SheetHeader className="gap-1 border-b p-4 pr-12">
+        <SheetHeader className="gap-1 border-b p-4 pe-12">
           <SheetTitle>Test lab</SheetTitle>
           <SheetDescription>
             Real downloads, groups and Auto planning, run for you against pretend networks and a

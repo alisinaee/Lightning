@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import type { TdlChat, TdlItem, TdlRangeType, TgMediaKind } from '@shared/telegram'
 import { cn } from 'cn'
 import {
@@ -32,11 +33,12 @@ export function TelegramExportDialog(): React.JSX.Element {
   )
 }
 
-const RANGE_HELP: Record<TdlRangeType, string> = {
-  time: 'Messages sent between two dates',
-  id: 'Messages between two message numbers',
-  last: 'The most recent messages'
-}
+const rangeHelp = (type: TdlRangeType): string =>
+  type === 'time'
+    ? t('Messages sent between two dates')
+    : type === 'id'
+      ? t('Messages between two message numbers')
+      : t('The most recent messages')
 
 /** A date input's value as Unix seconds (local midnight; the end date takes in the whole day). */
 const unixOf = (date: string, endOfDay: boolean): number =>
@@ -181,12 +183,14 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
     >
       <div className="flex items-baseline justify-between gap-3 border-b-[0.5px] border-border px-5 py-4">
         <DialogTitle className="text-[16px] font-semibold">
-          {preview ? `Files in ${chat?.title}` : 'Export a chat'}
+          {preview ? t('Files in {chat}', { chat: chat?.title ?? '' }) : t('Export a chat')}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Pick a chat and a range of messages, then choose which files to download.
+          {t('Pick a chat and a range of messages, then choose which files to download.')}
         </DialogDescription>
-        <span className="mr-9 text-[12px] text-muted-foreground">Step {preview ? 2 : 1} of 2</span>
+        <span className="me-9 text-[12px] text-muted-foreground">
+          {t('Step {step} of 2', { step: preview ? 2 : 1 })}
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
@@ -195,24 +199,28 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
             <div className="relative shrink-0">
               <Search
                 aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                className="pointer-events-none absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
               />
               <Input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Find a chat"
-                aria-label="Find a chat"
-                className={cn(field, 'pl-8')}
+                placeholder={t('Find a chat')}
+                aria-label={t('Find a chat')}
+                className={cn(field, 'ps-8')}
               />
             </div>
             <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {chatsError ? (
                 <div className="p-3 text-[12.5px] text-[var(--color-danger)]">{chatsError}</div>
               ) : chats === null ? (
-                <div className="p-3 text-[12.5px] text-muted-foreground">Loading your chats…</div>
+                <div className="p-3 text-[12.5px] text-muted-foreground">
+                  {t('Loading your chats…')}
+                </div>
               ) : shownChats.length === 0 ? (
-                <div className="p-3 text-[12.5px] text-muted-foreground">No chat matches.</div>
+                <div className="p-3 text-[12.5px] text-muted-foreground">
+                  {t('No chat matches.')}
+                </div>
               ) : (
                 shownChats.map((entry) => (
                   <button
@@ -221,7 +229,7 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     aria-pressed={chat?.id === entry.id}
                     onClick={() => setChat(entry)}
                     className={cn(
-                      'flex items-center gap-2 border-b-[0.5px] border-border px-3 py-2 text-left text-[12.5px] outline-none last:border-b-0 hover:bg-secondary focus-visible:bg-secondary',
+                      'flex items-center gap-2 border-b-[0.5px] border-border px-3 py-2 text-start text-[12.5px] outline-none last:border-b-0 hover:bg-secondary focus-visible:bg-secondary',
                       chat?.id === entry.id && 'bg-primary/10 hover:bg-primary/15'
                     )}
                   >
@@ -238,14 +246,14 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 <ToggleGroup
                   value={[rangeType]}
                   variant="outline"
-                  aria-label="Range"
+                  aria-label={t('Range')}
                   onValueChange={(value) => value[0] && setRangeType(value[0] as TdlRangeType)}
                 >
-                  <ToggleGroupItem value="last">Last</ToggleGroupItem>
-                  <ToggleGroupItem value="time">Dates</ToggleGroupItem>
-                  <ToggleGroupItem value="id">Message numbers</ToggleGroupItem>
+                  <ToggleGroupItem value="last">{t('Last')}</ToggleGroupItem>
+                  <ToggleGroupItem value="time">{t('Dates')}</ToggleGroupItem>
+                  <ToggleGroupItem value="id">{t('Message numbers')}</ToggleGroupItem>
                 </ToggleGroup>
-                <span className="text-[12px] text-muted-foreground">{RANGE_HELP[rangeType]}</span>
+                <span className="text-[12px] text-muted-foreground">{rangeHelp(rangeType)}</span>
               </div>
               <div className="flex items-center gap-2">
                 {rangeType === 'last' ? (
@@ -254,7 +262,7 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                     min={1}
                     value={count}
                     onChange={(event) => setCount(event.target.value)}
-                    aria-label="Number of messages"
+                    aria-label={t('Number of messages')}
                     className={cn(field, 'w-32')}
                   />
                 ) : (
@@ -264,16 +272,16 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       min={rangeType === 'id' ? 1 : undefined}
                       value={from}
                       onChange={(event) => setFrom(event.target.value)}
-                      aria-label="From"
+                      aria-label={t('From')}
                       className={cn(field, 'w-40')}
                     />
-                    <span className="text-[12px] text-muted-foreground">to</span>
+                    <span className="text-[12px] text-muted-foreground">{t('to')}</span>
                     <Input
                       type={rangeType === 'time' ? 'date' : 'number'}
                       min={rangeType === 'id' ? 1 : undefined}
                       value={to}
                       onChange={(event) => setTo(event.target.value)}
-                      aria-label="To"
+                      aria-label={t('To')}
                       className={cn(field, 'w-40')}
                     />
                   </>
@@ -281,9 +289,9 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                 <Input
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
-                  placeholder="Filter (optional)"
+                  placeholder={t('Filter (optional)')}
                   spellCheck={false}
-                  aria-label="Filter"
+                  aria-label={t('Filter')}
                   className={cn(field, 'min-w-0 flex-1 font-mono text-[12px]')}
                 />
               </div>
@@ -322,19 +330,19 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               })}
               <span className="flex-1" />
               {iconButton(
-                'Select all',
+                t('Select all'),
                 ListChecks,
                 visible.length === 0 || chosen.length === visible.length,
                 () => setUnticked(new Set())
               )}
-              {iconButton('Unselect all', ListX, chosen.length === 0, () =>
+              {iconButton(t('Unselect all'), ListX, chosen.length === 0, () =>
                 setUnticked(new Set(visible.map((item) => item.key)))
               )}
             </div>
             <div className="flex min-h-[120px] flex-1 flex-col overflow-y-auto rounded-[9px] border-[0.5px] border-border">
               {items.length === 0 ? (
                 <div className="p-3 text-[12.5px] text-muted-foreground">
-                  No files in that range.
+                  {t('No files in that range.')}
                 </div>
               ) : (
                 visible.map((item) => (
@@ -362,7 +370,10 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
                       {item.fileName}
                     </span>
                     {item.total > 0 && (
-                      <span className="w-20 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground">
+                      <span
+                        className="w-20 shrink-0 text-end font-mono text-[11.5px] text-muted-foreground"
+                        dir="ltr"
+                      >
                         {formatBytes(item.total)}
                       </span>
                     )}
@@ -371,16 +382,17 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2 text-[12.5px]">
-              <span className="w-20 shrink-0 text-[var(--text-secondary)]">Saved to</span>
+              <span className="w-20 shrink-0 text-[var(--text-secondary)]">{t('Saved to')}</span>
               <span
-                className="min-w-0 flex-1 truncate font-mono text-[12px]"
+                dir="ltr"
+                className="min-w-0 flex-1 truncate text-start font-mono text-[12px]"
                 title={dir ?? undefined}
               >
-                {dir ? toDisplayPath(dir, homeDir) : 'Lightning Telegram folder (see Settings)'}
+                {dir ? toDisplayPath(dir, homeDir) : t('Lightning Telegram folder (see Settings)')}
               </span>
               <Button type="button" variant="secondary" onClick={() => void browse()}>
                 <FolderOpen data-icon="inline-start" />
-                Browse…
+                {t('Browse…')}
               </Button>
             </div>
           </>
@@ -398,24 +410,24 @@ function ExportForm({ onDone }: { onDone: () => void }): React.JSX.Element {
           <Button
             type="button"
             variant="ghost"
-            className="mr-auto"
+            className="me-auto"
             disabled={busy}
             onClick={() => setPreview(null)}
           >
-            Back
+            {t('Back')}
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={onDone} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </Button>
         {preview ? (
           <Button type="submit" disabled={chosen.length === 0 || busy}>
-            Download {chosen.length} {chosen.length === 1 ? 'file' : 'files'}
+            {tn(chosen.length, 'Download {count} file', 'Download {count} files')}
             {totalBytes > 0 && ` (${formatBytes(totalBytes)})`}
           </Button>
         ) : (
           <Button type="submit" disabled={!chat || !range || busy}>
-            {busy ? 'Reading the chat…' : 'Continue'}
+            {busy ? t('Reading the chat…') : t('Continue')}
           </Button>
         )}
       </div>

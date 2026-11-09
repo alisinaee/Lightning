@@ -208,6 +208,9 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
   }
   const scale = parsed.uiScale
   if (typeof scale === 'number' && scale >= 0.8 && scale <= 1.4) prefs.uiScale = scale
+  if (['system', 'en', 'fa', 'ru'].includes(parsed.language as string)) {
+    prefs.language = parsed.language as AppPrefs['language']
+  }
   if (['amber', 'blue', 'teal', 'green', 'violet', 'rose'].includes(parsed.accent as string)) {
     prefs.accent = parsed.accent as AppPrefs['accent']
   }
@@ -225,6 +228,9 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'openAtLogin',
     'watchClipboard',
     'telegramWatchClipboard',
+    'clipboardTrack',
+    'clipboardOnlyInBackground',
+    'clipboardYoutube',
     'telegramSkipSame',
     'telegramSortByKind',
     'telegramGroupAlbums',
@@ -278,6 +284,8 @@ export function prefsOf(settings: AppSettings): ResolvedPrefs {
   return {
     ...DEFAULT_PREFS,
     ...saved,
+    // Settings saved before the main switch existed: tracking was on when file links were.
+    clipboardTrack: saved.clipboardTrack ?? saved.watchClipboard === true,
     // A part left out of what was saved stays as the default.
     statusBar: { ...DEFAULT_STATUS_BAR, ...saved.statusBar }
   }

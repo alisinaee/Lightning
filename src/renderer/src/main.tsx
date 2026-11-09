@@ -19,7 +19,8 @@ import App from './App'
 import { SettingsWindow } from './components/SettingsWindow'
 import { AppBoundary } from './components/AppBoundary'
 import { LogsDialog } from './components/LogsDialog'
-import { applyGlass } from './utils/syncSettings'
+import { useLanguage } from '@shared/i18n/react'
+import { applyGlass, applyLanguage } from './utils/syncSettings'
 import './utils/errorLog'
 import './utils/clickGuard'
 
@@ -32,12 +33,24 @@ if (window.lightning.platform === 'darwin') {
 // Settings opens in a window of its own, which loads this same page at #settings.
 const isSettingsWindow = window.location.hash.startsWith('#settings')
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {/* Default Phosphor weight for every icon; override per icon with the weight prop. */}
-    <IconContext.Provider value={{ weight: 'regular' }}>
+// The language is set before the first render.
+applyLanguage(window.lightning.initialState.prefs.language)
+
+/** Keyed by the language: a change remounts the tree so every t() is read again. */
+// eslint-disable-next-line react-refresh/only-export-components
+function Root(): React.JSX.Element {
+  const language = useLanguage()
+  return (
+    <IconContext.Provider key={language} value={{ weight: 'regular' }}>
       <AppBoundary>{isSettingsWindow ? <SettingsWindow /> : <App />}</AppBoundary>
       {!isSettingsWindow && <LogsDialog />}
     </IconContext.Provider>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    {/* Default Phosphor weight for every icon; override per icon with the weight prop. */}
+    <Root />
   </StrictMode>
 )

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, SlidersHorizontal } from '@phosphor-icons/react'
+import { isRtl, t } from '@shared/i18n/react'
 import { cn } from 'cn'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore, type ColumnId } from '../../store/useAppStore'
@@ -126,6 +127,8 @@ export function DownloadsTable({
       const right = columnOf(next)
       if (!left || !right) return
       const startX = event.clientX
+      // In a right-to-left language the table runs the other way, so a drag to the left grows.
+      const direction = isRtl() ? -1 : 1
       const startRight = layout.widthOf(next)
       const startLeft = layout.widthOf(id)
       // Name has no width of its own: dragging its divider only changes the next column.
@@ -139,7 +142,7 @@ export function DownloadsTable({
       const spare = Math.max(0, width - SELECT_WIDTH - ACTIONS_WIDTH - fixed - NAME_MIN)
       let latest: Partial<Record<ColumnId, number>> = {}
       const move = (moveEvent: PointerEvent): void => {
-        const dx = moveEvent.clientX - startX
+        const dx = (moveEvent.clientX - startX) * direction
         if (nameOnLeft) {
           // Name takes whatever the other columns leave, so its divider moves the columns to its
           // right, one after another: dragging right takes room from the next column down to its
@@ -210,11 +213,11 @@ export function DownloadsTable({
   const header = (
     <div
       role="row"
-      className="sticky top-0 z-10 grid h-9 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium tracking-wide text-muted-foreground [grid-template-columns:var(--cols)]"
+      className="sticky top-0 z-10 grid h-9 shrink-0 items-center border-b-[0.5px] border-border bg-background text-[11px] font-medium tracking-wide text-muted-foreground rtl:tracking-normal [grid-template-columns:var(--cols)]"
     >
       <div role="columnheader" className="flex items-center justify-center">
         <Checkbox
-          aria-label="Select all downloads"
+          aria-label={t('Select all downloads')}
           checked={allSelected}
           indeterminate={someSelected}
           disabled={!selectable}
@@ -258,7 +261,7 @@ export function DownloadsTable({
               <span
                 aria-hidden
                 onPointerDown={(event) => startResize(event, id, next)}
-                className="absolute inset-y-1 right-0 w-2 cursor-col-resize after:absolute after:inset-y-0 after:right-0.5 after:w-px after:bg-border hover:after:bg-primary"
+                className="absolute inset-y-1 end-0 w-2 cursor-col-resize after:absolute after:inset-y-0 after:end-0.5 after:w-px after:bg-border hover:after:bg-primary"
               />
             )}
           </div>
@@ -275,7 +278,7 @@ export function DownloadsTable({
                       type="button"
                       size="icon-xs"
                       variant="ghost"
-                      aria-label="Choose columns"
+                      aria-label={t('Choose columns')}
                       className="text-muted-foreground"
                     />
                   }
@@ -284,7 +287,7 @@ export function DownloadsTable({
                 </DropdownMenuTrigger>
               }
             />
-            <TooltipContent>Choose columns</TooltipContent>
+            <TooltipContent>{t('Choose columns')}</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end" className="w-44">
             {HIDEABLE.map((column) => (
@@ -301,7 +304,7 @@ export function DownloadsTable({
               checked={tableLayout.wrapNames}
               onCheckedChange={setWrapNames}
             >
-              Show full file names
+              {t('Show full file names')}
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -313,7 +316,7 @@ export function DownloadsTable({
     <ColumnsContext.Provider value={layout.visible}>
       <div
         role="table"
-        aria-label="Downloads"
+        aria-label={t('Downloads')}
         style={{ '--cols': layout.template, minWidth: ACTIONS_WIDTH } as React.CSSProperties}
         data-wrap={tableLayout.wrapNames}
         className="group/table flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
@@ -346,7 +349,7 @@ export function DownloadsTable({
                   checked={tableLayout.wrapNames}
                   onCheckedChange={setWrapNames}
                 >
-                  Show full file names
+                  {t('Show full file names')}
                 </ContextMenuCheckboxItem>
               </ContextMenuContent>
             </ContextMenu>

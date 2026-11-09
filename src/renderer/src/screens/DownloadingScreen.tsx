@@ -1,5 +1,6 @@
 import type { DownloadState } from '@shared/types'
 import { Folder } from '@phosphor-icons/react'
+import { formatNumber, t, tn } from '@shared/i18n/react'
 import { memo, useEffect, useState } from 'react'
 import { BlockGrid } from '../components/BlockGrid'
 import { ColorBadge } from '../components/ColorBadge'
@@ -43,6 +44,9 @@ import {
 
 /** Inline "·" separator between adjacent stats. `shrink` pins it at its natural width inside a
  * flex row that might otherwise squeeze it (footer rows), matching each call site's prior style. */
+const fixed = (n: number): string =>
+  formatNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
 function Dot(): React.JSX.Element {
   return <span className="opacity-35">·</span>
 }
@@ -95,12 +99,12 @@ function waitingFor(download: DownloadState): string | null {
   if (enabled.some((network) => network.status === 'on')) return null
   if (enabled.some((network) => network.status === 'unreachable')) {
     return download.kind === 'torrent'
-      ? 'Can’t reach peers. Retrying…'
-      : 'Can’t reach the server. Retrying…'
+      ? t('Can’t reach peers. Retrying…')
+      : t('Can’t reach the server. Retrying…')
   }
   return enabled.length > 0 && enabled.every((network) => network.status === 'limit')
-    ? 'Every network in use has reached its data limit. Raise one in Speed & data limits.'
-    : 'Waiting for a network. Reconnect one or switch one on.'
+    ? t('Every network in use has reached its data limit. Raise one in Speed & data limits.')
+    : t('Waiting for a network. Reconnect one or switch one on.')
 }
 
 // Memoized: App re-renders on every download's progress, and this one's grid and tables are
@@ -142,10 +146,14 @@ export const DownloadingScreen = memo(function DownloadingScreen({
 
   useEffect(() => {
     if (isPaused) {
-      const label = isQueued ? 'Queued' : 'Paused'
-      document.title = knownSize ? `Lightning — ${label} (${percent}%)` : `Lightning — ${label}`
+      const label = isQueued ? t('Queued') : t('Paused')
+      document.title = knownSize
+        ? t('Lightning — {label} ({percent}%)', { label, percent })
+        : t('Lightning — {label}', { label })
     } else {
-      document.title = knownSize ? `Lightning — ${percent}%` : 'Lightning — downloading'
+      document.title = knownSize
+        ? t('Lightning — {percent}%', { percent })
+        : t('Lightning — downloading')
     }
     return () => {
       document.title = 'Lightning'
@@ -218,10 +226,19 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           .sort((a, b) => a.ratio - b.ratio)
           .map(({ ratio, visual }) => ({
             visual,
-            label: `${ratio.toFixed(1)}× ${visual.name.toUpperCase()} ALONE`,
+            label: t('{ratio}× {name} ALONE', {
+              ratio: fixed(ratio),
+              name: visual.name.toUpperCase()
+            }),
             tooltip: bySpeed
-              ? `Total speed is ${ratio.toFixed(1)}× faster than ${visual.name} alone`
-              : `Total downloaded is ${ratio.toFixed(1)}× compared to ${visual.name} alone`
+              ? t('Total speed is {ratio}× faster than {name} alone', {
+                  ratio: fixed(ratio),
+                  name: visual.name
+                })
+              : t('Total downloaded is {ratio}× compared to {name} alone', {
+                  ratio: fixed(ratio),
+                  name: visual.name
+                })
           }))
       : []
 
@@ -229,13 +246,17 @@ export const DownloadingScreen = memo(function DownloadingScreen({
     chipOptions.length > 0 ? chipOptions[chipModeIndex % chipOptions.length] : null
 
   const statusBadge = isPaused
-    ? { label: isQueued ? 'QUEUED' : 'PAUSED', palette: KIND_PALETTE.usb }
+    ? { label: isQueued ? t('QUEUED') : t('PAUSED'), palette: KIND_PALETTE.usb }
     : null
 
   const throughputStatusLabel = isPaused
     ? null
-    : `LAST ${Object.values(speedHistory)[0]?.length ?? 0}S`
-  const pauseResumeLabel = resuming ? 'Resuming…' : isPaused && !isQueued ? 'Resume' : 'Pause'
+    : t('LAST {n}S', { n: Object.values(speedHistory)[0]?.length ?? 0 })
+  const pauseResumeLabel = resuming
+    ? t('Resuming…')
+    : isPaused && !isQueued
+      ? t('Resume')
+      : t('Pause')
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -264,17 +285,17 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           <div className="flex min-w-[130px] shrink-0 flex-col gap-[7px]">
             <>
               <BigStat
-                label="TOTAL SPEED"
+                label={t('TOTAL SPEED')}
                 value={isPaused ? '—' : speed.value}
-                unit={isPaused ? undefined : `${speed.unit}/s`}
+                unit={isPaused ? undefined : t('{size}/s', { size: speed.unit })}
                 valueClass={isPaused ? 'text-muted-foreground' : 'text-foreground'}
               />
               <div className="flex items-center gap-2 font-mono text-[10px] leading-none font-medium tabular-nums text-muted-foreground">
-                <InlineStat label="AVG" value={formatSpeed(avgSpeedBytesPerSec)} />
+                <InlineStat label={t('AVG')} value={formatSpeed(avgSpeedBytesPerSec)} />
                 <Dot />
                 {/* A dash until a speed has been held long enough to call it the peak. */}
                 <InlineStat
-                  label="PEAK"
+                  label={t('PEAK')}
                   value={
                     peakSpeedBytesPerSec === undefined ? '—' : formatSpeed(peakSpeedBytesPerSec)
                   }
@@ -296,7 +317,11 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                   : activeChipOption && (
                       <CyclableChip
                         label={activeChipOption.label}
-                        tooltip={`${activeChipOption.tooltip}${chipOptions.length > 1 ? ' (click to toggle)' : ''}`}
+                        tooltip={
+                          chipOptions.length > 1
+                            ? t('{tip} (click to toggle)', { tip: activeChipOption.tooltip })
+                            : activeChipOption.tooltip
+                        }
                         bg={activeChipOption.visual.bg}
                         border={activeChipOption.visual.border}
                         color={activeChipOption.visual.text}
@@ -314,7 +339,8 @@ export const DownloadingScreen = memo(function DownloadingScreen({
             }`}
           >
             <div className="font-mono text-[9.5px] leading-none font-medium tracking-[0.12em] text-muted-foreground">
-              THROUGHPUT{throughputStatusLabel ? ` · ${throughputStatusLabel}` : ''}
+              {t('THROUGHPUT')}
+              {throughputStatusLabel ? ` · ${throughputStatusLabel}` : ''}
             </div>
             <ThroughputChart
               order={groups.map((g, i) => ({
@@ -336,7 +362,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
             kind={isFolder(download) ? 'torrent' : undefined}
           >
             {isFolder(download) ? (
-              <Folder aria-label="Folder" className="size-[18px]" />
+              <Folder aria-label={t('Folder')} className="size-[18px]" />
             ) : undefined}
           </FormatBadge>
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -350,20 +376,20 @@ export const DownloadingScreen = memo(function DownloadingScreen({
             <div className="flex min-w-0 items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>
                 {formatBytes(download.bytesDownloaded)}
-                {knownSize ? ` of ${formatBytes(wantedBytes(download))}` : ''}
+                {knownSize ? t(' of {total}', { total: formatBytes(wantedBytes(download)) }) : ''}
               </span>
               {knownSize && (
                 <>
                   <Dot />
-                  <span className="font-semibold text-foreground">{percent}%</span>
+                  <span className="font-semibold text-foreground">
+                    {t('{percent}%', { percent })}
+                  </span>
                 </>
               )}
               {isTorrent && (
                 <>
                   <Dot />
-                  <span>
-                    {download.peers.length} {download.peers.length === 1 ? 'peer' : 'peers'}
-                  </span>
+                  <span>{tn(download.peers.length, '{count} peer', '{count} peers')}</span>
                 </>
               )}
               {/* Several files: they open below. One is the name above. */}
@@ -389,7 +415,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 <>
                   <Dot />
                   <span className="text-[var(--text-secondary)]">
-                    {formatEta(download.timeLeftSeconds)} left
+                    {t('{time} left', { time: formatEta(download.timeLeftSeconds) })}
                   </span>
                 </>
               )}
@@ -411,7 +437,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 <>
                   <Dot />
                   <span className="text-[var(--color-usb)]">
-                    {totalRetries} {totalRetries === 1 ? 'retry' : 'retries'}
+                    {tn(totalRetries, '{count} retry', '{count} retries')}
                   </span>
                 </>
               )}
@@ -419,16 +445,18 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <span className="ml-auto flex min-w-0 items-center gap-1.5 pl-3 text-[11px] text-muted-foreground">
+                    <span className="ms-auto flex min-w-0 items-center gap-1.5 ps-3 text-[11px] text-muted-foreground">
                       <Folder aria-hidden className="size-3 shrink-0" />
-                      <span className="sr-only">Saving to</span>
-                      <span className="truncate">
+                      <span className="sr-only">{t('Saving to')}</span>
+                      <span className="truncate" dir="ltr">
                         {toDisplayPath(dirnameOf(download.destinationPath), homeDir)}
                       </span>
                     </span>
                   }
                 />
-                <TooltipContent>Saving to: {download.destinationPath}</TooltipContent>
+                <TooltipContent>
+                  {t('Saving to: {path}', { path: download.destinationPath })}
+                </TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -461,7 +489,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
         <div className="mt-3">
           <div className="flex items-center gap-2 px-5 pb-2">
             <span className="font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground uppercase">
-              Connections
+              {t('Connections')}
             </span>
             <ConnectionPicker
               options={networkOptions}
@@ -492,13 +520,13 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                 )
               }
             />
-            <span className="ml-3 font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground uppercase">
-              DNS
+            <span className="ms-3 font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground uppercase">
+              {t('DNS')}
             </span>
             <DnsPicker
               value={download.dnsId ?? null}
-              followLabel={group?.dnsId ? "Group's DNS" : 'Default'}
-              label={`DNS for ${download.fileName}`}
+              followLabel={group?.dnsId ? t('Group’s DNS') : t('Default')}
+              label={t('DNS for {name}', { name: download.fileName })}
               testUrl={download.kind === 'http' ? download.url : undefined}
               onChange={(id) => void window.lightning.setDownloadDns(download.id, id)}
             />
@@ -510,7 +538,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           </div>
           <div
             role="table"
-            aria-label="Networks"
+            aria-label={t('Networks')}
             className="grid gap-x-3"
             style={{ gridTemplateColumns: NETWORK_ROW_GRID_COLUMNS }}
           >
@@ -518,8 +546,8 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               role="row"
               className="sticky top-0 z-10 col-span-full grid grid-cols-subgrid gap-x-3 border-b border-border bg-background pt-2.5 pb-[7px] font-mono text-[9.5px] leading-none tracking-[0.12em] text-muted-foreground uppercase"
             >
-              <div role="columnheader" aria-label="Status" />
-              <div role="columnheader">Network</div>
+              <div role="columnheader" aria-label={t('Status')} />
+              <div role="columnheader">{t('Network')}</div>
               <div role="columnheader">
                 {isTorrent ? (
                   <Tooltip>
@@ -529,26 +557,28 @@ export const DownloadingScreen = memo(function DownloadingScreen({
                           type="button"
                           className="rounded-sm text-inherit uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         >
-                          Progress
+                          {t('Progress')}
                         </button>
                       }
                     />
                     <TooltipContent>
-                      Percentage of the download completed with verified data from this network.
+                      {t(
+                        'Percentage of the download completed with verified data from this network.'
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  'Progress'
+                  t('Progress')
                 )}
               </div>
-              <div role="columnheader" className="text-right">
-                Share
+              <div role="columnheader" className="text-end">
+                {t('Share')}
               </div>
-              <div role="columnheader" className="text-right">
-                Speed
+              <div role="columnheader" className="text-end">
+                {t('Speed')}
               </div>
-              <div role="columnheader" className="pr-5 text-right">
-                {isTorrent ? 'Transferred' : 'Downloaded'}
+              <div role="columnheader" className="pe-5 text-end">
+                {isTorrent ? t('Transferred') : t('Downloaded')}
               </div>
             </div>
             {rows.map((row, index) => (

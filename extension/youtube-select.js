@@ -6,6 +6,22 @@
 
   const api = typeof browser !== 'undefined' ? browser : chrome
 
+  // Texts in Lightning's language (kept in storage by the background script), else the browser's.
+  const I18N = self.LightningI18n
+  let lang = I18N.pick('', api.i18n?.getUILanguage?.() || navigator.language)
+  const t = (key, vars) => I18N.t(lang, key, vars)
+  const relang = (saved) => {
+    lang = I18N.pick(saved, api.i18n?.getUILanguage?.() || navigator.language)
+    if (bar || toggleButton) {
+      syncToggle()
+      relabelBar()
+    }
+  }
+  api.storage.local.get({ lang: '' }).then((v) => relang(v.lang)).catch(() => {})
+  api.storage.onChanged?.addListener((changes) => {
+    if (changes.lang) relang(changes.lang.newValue)
+  })
+
   const STYLE = `
     .lightning-box {
       position: absolute; top: 6px; left: 6px; z-index: 5;
@@ -39,6 +55,7 @@
     #lightning-select-bar button:disabled { opacity: .45; cursor: default; }
     #lightning-select-bar .lightning-primary { background: #d97706; color: #fff; }
     #lightning-select-bar .lightning-ghost { background: transparent; color: #fff; }
+    #lightning-select-bar .lightning-this[aria-pressed="true"] { background: #fff; color: #1f1f1f; }
     #lightning-select-toggle {
       position: fixed; right: 20px; bottom: 20px; z-index: 99998;
       font: 600 13px/1 system-ui, sans-serif; border: 0; border-radius: 999px;
@@ -90,7 +107,14 @@
     }
     const id = url.searchParams.get('v') || (url.pathname.match(/^\/shorts\/([\w-]+)/) || [])[1]
     if (!id) return null
-    const title = (card.querySelector('#video-title, h3')?.textContent || '').trim()
+    const title = (
+      card.querySelector(
+        '#video-title, h3, [class*="metadata-view-model__title"], [class*="TitleLink"]'
+      )?.textContent ||
+      link.getAttribute('title') ||
+      link.getAttribute('aria-label') ||
+      ''
+    ).trim()
     return {
       id,
       url: url.pathname.startsWith('/shorts/')
@@ -110,16 +134,53 @@
     else selected.set(video.id, { url: video.url, title: video.title })
     const box = card.querySelector('input[data-lightning-box]')
     if (box) setCheck(box, selected.has(video.id))
+    changed()
+  }
+
+  /** The video the watch page (or a Shorts page) is playing, or null on a list page. */
+  function currentVideo() {
+    const url = new URL(location.href)
+    const id = url.pathname.startsWith('/shorts/')
+      ? (url.pathname.match(/^\/shorts\/([\w-]+)/) || [])[1]
+      : url.pathname === '/watch'
+        ? url.searchParams.get('v')
+        : null
+    if (!id) return null
+    const heading = document.querySelector('h1.ytd-watch-metadata, ytd-watch-metadata h1, h1')
+    const title = (heading?.textContent || document.title.replace(/ - YouTube$/, '')).trim()
+    return {
+      id,
+      url: url.pathname.startsWith('/shorts/')
+        ? `https://www.youtube.com/shorts/${id}`
+        : `https://www.youtube.com/watch?v=${id}`,
+      title
+    }
+  }
+
+  function toggleCurrent() {
+    const video = currentVideo()
+    if (!video) return
+    if (selected.has(video.id)) selected.delete(video.id)
+    else if (selected.size < MAX_BATCH) selected.set(video.id, { url: video.url, title: video.title })
+    changed()
+  }
+
+  /** A pick changed: any "Sent" message gives way to the live count. */
+  function changed() {
+    flashUntil = 0
     updateBar()
   }
 
-  /** Adds a checkbox to every video card on the page that does not have one yet. */
+  /** Adds a checkbox to every video card on the page, and fixes the ones YouTube reused for another video. */
   function decorate() {
     if (!active) return
     for (const card of cardsOnPage()) {
-      if (card.dataset.lightningCard) continue
       const video = videoOf(card)
       if (!video) continue
+      const have = card.querySelector('input[data-lightning-box]')
+      if (have && card.dataset.lightningCard === video.id) continue
+      // Either new, or YouTube put another video in this card (or dropped our checkbox): start over.
+      card.querySelectorAll('input[data-lightning-box]').forEach((old) => old.remove())
       card.dataset.lightningCard = video.id
       card.setAttribute('data-lightning-card', video.id)
       const thumb = card.querySelector(THUMB) || card
@@ -128,17 +189,17 @@
       const box = document.createElement('input')
       box.type = 'checkbox'
       box.setAttribute('data-lightning-box', video.id)
-      box.setAttribute('aria-label', `Select ${video.title || 'video'}`)
+      box.setAttribute('aria-label', t('yt_aria', { t: video.title || t('yt_video') }))
       box.className = 'lightning-box'
-      box.checked = selected.has(video.id)
       box.addEventListener('click', (event) => {
         event.stopPropagation()
         const current = videoOf(card)
         if (current) toggle(current, card)
       })
       thumb.appendChild(box)
-      if (box.checked) card.classList.add('lightning-picked')
+      setCheck(box, selected.has(video.id))
     }
+    updateBar()
   }
 
   /** The card that a click or key press landed on, when select mode is on. */
@@ -170,20 +231,39 @@
   let flashUntil = 0
 
   function updateBar() {
-    if (!bar || Date.now() < flashUntil) return
+    if (!bar) return
     const count = selected.size
     const loaded = document.querySelectorAll('[data-lightning-card]').length
-    bar.count.textContent =
-      count === 0 ? 'No videos picked' : `${count} selected${count >= MAX_BATCH ? ' (max)' : ''}`
-    bar.send.textContent = count > 0 ? `Download ${count}` : 'Download'
+    // Buttons always follow the picks; only the count text gives way to a status message.
+    if (Date.now() >= flashUntil) {
+      bar.count.textContent =
+        count === 0
+          ? t('yt_none')
+          : `${t('yt_n', { n: count })}${count >= MAX_BATCH ? ' ' + t('yt_max') : ''}`
+    }
+    bar.send.textContent = count > 0 ? t('yt_dl_n', { n: count }) : t('yt_dl')
     bar.send.disabled = count === 0 || busy
     bar.clear.disabled = count === 0 || busy
     bar.invert.disabled = loaded === 0 || busy
     bar.selectAll.disabled = loaded === 0 || busy || count >= MAX_BATCH
+    const current = currentVideo()
+    bar.this.hidden = !current
+    if (current) bar.this.setAttribute('aria-pressed', String(selected.has(current.id)))
+  }
+
+  function relabelBar() {
+    if (!bar) return
+    bar.selectAll.textContent = t('yt_all')
+    bar.invert.textContent = t('yt_invert')
+    bar.clear.textContent = t('yt_clear')
+    bar.done.textContent = t('yt_done')
+    bar.this.textContent = t('yt_this')
+    bar.root.dir = I18N.dir(lang)
+    updateBar()
   }
 
   let setActive = function setActiveState(on) {
-    if (!on && selected.size > 0 && !confirm(`Discard ${selected.size} selected video(s)?`)) return
+    if (!on && selected.size > 0 && !confirm(t('yt_discard', { n: selected.size }))) return
     active = on
     document.documentElement.classList.toggle('lightning-select-on', on)
     if (on) {
@@ -228,7 +308,7 @@
       const box = card.querySelector('input[data-lightning-box]')
       if (box) setCheck(box, true)
     }
-    updateBar()
+    changed()
   }
 
   function invertSelection() {
@@ -239,13 +319,13 @@
       const box = card.querySelector('input[data-lightning-box]')
       if (box) setCheck(box, selected.has(video.id))
     }
-    updateBar()
+    changed()
   }
 
   function clearSelection() {
     selected.clear()
     document.querySelectorAll('input[data-lightning-box]').forEach((box) => setCheck(box, false))
-    updateBar()
+    changed()
   }
 
   function mountBar() {
@@ -254,14 +334,17 @@
     root.id = 'lightning-select-bar'
     const count = document.createElement('span')
     count.className = 'lightning-count'
-    const selectAll = button('Select all', 'lightning-ghost', selectAllLoaded)
-    const invert = button('Invert', 'lightning-ghost', invertSelection)
-    const clear = button('Clear', 'lightning-ghost', clearSelection)
-    const send = button('Download', 'lightning-primary', sendSelected)
-    const done = button('Done', 'lightning-ghost', () => setActive(false))
-    root.append(count, selectAll, invert, clear, send, done)
+    const thisOne = button('', 'lightning-ghost lightning-this', toggleCurrent)
+    thisOne.setAttribute('aria-pressed', 'false')
+    const selectAll = button('', 'lightning-ghost', selectAllLoaded)
+    const invert = button('', 'lightning-ghost', invertSelection)
+    const clear = button('', 'lightning-ghost', clearSelection)
+    const send = button('', 'lightning-primary', sendSelected)
+    const done = button('', 'lightning-ghost', () => setActive(false))
+    root.append(count, thisOne, selectAll, invert, clear, send, done)
     document.documentElement.appendChild(root)
-    bar = { root, count, selectAll, invert, clear, send }
+    bar = { root, count, selectAll, invert, clear, send, done, this: thisOne }
+    relabelBar()
   }
 
   function unmountBar() {
@@ -279,7 +362,7 @@
   async function sendSelected() {
     if (selected.size === 0 || busy) return
     if (selected.size > MAX_BATCH) {
-      flash(`Pick up to ${MAX_BATCH} at a time.`)
+      flash(t('yt_limit', { n: MAX_BATCH }))
       return
     }
     busy = true
@@ -292,12 +375,12 @@
         document
           .querySelectorAll('input[data-lightning-box]')
           .forEach((box) => setCheck(box, false))
-        flash(`Sent ${response.started ?? videos.length} to Lightning`)
+        flash(t('yt_sent', { n: response.started ?? videos.length }))
       } else {
-        flash(response?.message || 'Lightning could not take the videos.')
+        flash(response?.message || t('yt_fail'))
       }
     } catch {
-      flash('Lightning could not take the videos.')
+      flash(t('yt_fail'))
     } finally {
       busy = false
       updateBar()
@@ -305,12 +388,12 @@
   }
 
   // The small button that turns select mode on or off, always visible on YouTube pages.
-  const toggleButton = button('Select videos', 'lightning-toggle', () => setActive(!active))
+  const toggleButton = button(t('yt_toggle'), 'lightning-toggle', () => setActive(!active))
   toggleButton.id = 'lightning-select-toggle'
   toggleButton.setAttribute('aria-pressed', 'false')
   const syncToggle = () => {
     toggleButton.setAttribute('aria-pressed', String(active))
-    toggleButton.textContent = active ? 'Stop selecting' : 'Select videos'
+    toggleButton.textContent = active ? t('yt_stop') : t('yt_toggle')
     // While the bar is up, "Done" is the way out, so the toggle steps aside.
     toggleButton.hidden = active
   }

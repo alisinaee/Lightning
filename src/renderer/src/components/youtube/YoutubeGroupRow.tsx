@@ -1,3 +1,4 @@
+import { t, tn } from '@shared/i18n/react'
 import { memo, type CSSProperties } from 'react'
 import {
   CaretDown as ChevronDown,
@@ -53,21 +54,25 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
     >
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center" />
-      <div role="cell" className={cn(cellClass, 'gap-2 pl-0')}>
+      <div role="cell" className={cn(cellClass, 'gap-2 ps-0')}>
         <Button
           type="button"
           size="icon-xs"
           variant="ghost"
-          aria-label={expanded ? `Hide videos of ${title}` : `Show videos of ${title}`}
+          aria-label={
+            expanded
+              ? t('Hide videos of {title}', { title })
+              : t('Show videos of {title}', { title })
+          }
           onClick={onToggle}
         >
-          <Chevron />
+          <Chevron className={expanded ? '' : 'rtl:-scale-x-100'} />
         </Button>
         <FolderIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <ClippedText text={title} className="text-[13px] leading-none font-semibold" />
           <span className="truncate text-[11px] leading-none text-muted-foreground">
-            {jobs.length} {jobs.length === 1 ? 'video' : 'videos'} · Playlist
+            {tn(jobs.length, '{count} video', '{count} videos')} · {t('Playlist')}
           </span>
         </div>
       </div>
@@ -76,13 +81,13 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
       <SpeedCell speed={info.speed} />
       {columns.eta && <EtaCell seconds={info.etaSeconds} />}
       {columns.added && <AddedCell at={info.addedAt} />}
-      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+      <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
         {first && (
           <Button
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label={`Show ${title} in its folder`}
+            aria-label={t('Show {title} in its folder', { title })}
             onClick={() => revealJob(first.id)}
           >
             <FolderOpen />

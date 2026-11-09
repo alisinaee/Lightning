@@ -24,6 +24,7 @@ import type {
   BrowserInfo,
   IntegrationInfo,
   NetworkInterfaceInfo,
+  ClipboardHistoryEntry,
   PendingLink,
   ProbeResult,
   RequestExtras,
@@ -33,7 +34,7 @@ import type {
 } from './types'
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
- * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged, settingsRefresh, linkReceived, tdlJobUpdated and tdlLoginEvent) — one source of truth for
+ * main->renderer push events, downloadUpdated, networksChanged, magnetStatus, historyChanged, groupsChanged, labEvent, settingsChanged, settingsRefresh, clipboardHistoryChanged, linkReceived, tdlJobUpdated and tdlLoginEvent) — one source of truth for
  * both lightningApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -78,6 +79,12 @@ export interface IpcContract {
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }
   readClipboardText: { args: []; result: string }
+  /** The links the clipboard watcher noticed, newest first (Settings → Clipboard). */
+  getClipboardHistory: { args: []; result: ClipboardHistoryEntry[] }
+  removeClipboardEntry: { args: [id: string]; result: void }
+  clearClipboardHistory: { args: []; result: void }
+  /** Opens the entry's link in the Add dialog, as the notification would. */
+  downloadClipboardEntry: { args: [id: string]; result: void }
   openLogs: { args: []; result: void }
   /** The newest `limit` lines of the app log, oldest first. */
   readLog: { args: [limit: number]; result: string[] }

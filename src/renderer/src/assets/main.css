@@ -934,3 +934,10 @@ html[data-vibrancy] {
     --bg-popover: #26292c;
   }
 }
+
+/* Persian: the system font stack already covers Arabic script on macOS; the stack is spelled out
+   so a Persian-capable face is always picked, and the digits read evenly. */
+:lang(fa) {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Geeza Pro', 'Tahoma', 'Vazirmatn',
+    sans-serif;
+}

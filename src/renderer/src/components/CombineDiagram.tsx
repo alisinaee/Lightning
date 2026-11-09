@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { formatSpeed } from '../utils/format'
 
 const ROW_HEIGHT = 36
@@ -53,7 +54,7 @@ export function CombineDiagram({
     <svg
       viewBox={`0 0 ${WIDTH} ${height}`}
       className="block shrink-0"
-      style={{ width: WIDTH, height }}
+      style={{ width: WIDTH, height, direction: 'ltr' }}
     >
       <g fill="none" strokeWidth={3} strokeLinecap="round">
         {networks.map((network, index) => {
@@ -157,7 +158,7 @@ export function CombineDiagram({
           fill="var(--text-tertiary)"
           className="font-mono text-[8.5px] tracking-[0.12em] font-medium"
         >
-          COMBINED
+          {t('COMBINED')}
         </text>
       )}
     </svg>

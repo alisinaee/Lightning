@@ -1,6 +1,7 @@
 import type { ThemeSource } from '@shared/types'
 import { useAppStore } from '../store/useAppStore'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { t } from '@shared/i18n/react'
 
 const OPTIONS: { id: ThemeSource; nextLabel: string; icon: React.JSX.Element }[] = [
   {
@@ -50,7 +51,7 @@ export function ThemeToggle(): React.JSX.Element {
         render={
           <button
             type="button"
-            aria-label={current.nextLabel}
+            aria-label={t(current.nextLabel)}
             data-tour="theme"
             onClick={toggle}
             className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-[0.5px] border-border bg-secondary text-[var(--text-secondary)] [-webkit-app-region:no-drag]"
@@ -59,7 +60,7 @@ export function ThemeToggle(): React.JSX.Element {
           </button>
         }
       />
-      <TooltipContent>{current.nextLabel}</TooltipContent>
+      <TooltipContent>{t(current.nextLabel)}</TooltipContent>
     </Tooltip>
   )
 }

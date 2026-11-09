@@ -61,7 +61,7 @@ function ProgressLabel({ className, ...props }: ProgressPrimitive.Label.Props): 
 function ProgressValue({ className, ...props }: ProgressPrimitive.Value.Props): React.JSX.Element {
   return (
     <ProgressPrimitive.Value
-      className={cn('ml-auto text-sm text-muted-foreground tabular-nums', className)}
+      className={cn('ms-auto text-sm text-muted-foreground tabular-nums', className)}
       data-slot="progress-value"
       {...props}
     />

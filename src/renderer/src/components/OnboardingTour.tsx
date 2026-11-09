@@ -11,9 +11,10 @@ import {
   X,
   type Icon
 } from '@phosphor-icons/react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { setFirstRunBusy } from '../utils/firstRun'
 import { Button } from './ui/button'
+import { t } from '@shared/i18n/react'
 
 // Versioned: raising it shows the walkthrough once more to everyone, after it has changed a lot.
 const STORAGE_KEY = 'lightning.tour.v2'
@@ -56,17 +57,18 @@ const press = (el: HTMLElement | null | undefined): void => {
   }
 }
 
-const plusButton = q('button[aria-label="New download"]')
+const plusButton = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>(`button[aria-label="${t('New download')}"]`)
 
 /** Open the + menu, if it is not open. */
 const openMenu = (): void => {
-  if (!menuItem('One link')()) press(plusButton())
+  if (!menuItem(t('One link'))()) press(plusButton())
 }
 
 const wait = (ms: number): Promise<void> => new Promise((done) => window.setTimeout(done, ms))
 
 const addDialog = (): HTMLElement | null =>
-  document.querySelector<HTMLElement>('[role="dialog"]:not([aria-label="Quick tour"])')
+  document.querySelector<HTMLElement>(`[role="dialog"]:not([aria-label="${t('Quick tour')}"])`)
 
 /** Close the + menu: Escape on it, then a press outside it; either closes it. */
 const closeMenu = (): void => {
@@ -82,7 +84,7 @@ const closeMenu = (): void => {
 const openDialog = (): void => {
   if (addDialog()) return
   openMenu()
-  window.setTimeout(() => press(menuItem('One link')()), 250)
+  window.setTimeout(() => press(menuItem(t('One link'))()), 250)
 }
 
 /** Close the dialog smoothly: it and its backdrop fade out together, the dialog easing down and
@@ -111,22 +113,24 @@ const closeDialogGently = async (): Promise<void> => {
     buttons.find(
       (node) => (node.getAttribute('aria-label') ?? node.textContent ?? '').trim() === text
     )
-  press(named('Close') ?? named('Cancel'))
+  press(named(t('Close')) ?? named(t('Cancel')))
   await wait(250)
 }
 
-const STEPS: Step[] = [
+const buildSteps = (): Step[] => [
   {
     icon: Plus,
-    title: 'Start with the + button',
-    body: 'Click + to add a download. It is the quickest way to begin.',
+    title: t('Start with the + button'),
+    body: t('Click + to add a download. It is the quickest way to begin.'),
     find: plusButton,
     advanceOnClick: 250
   },
   {
     icon: Link,
-    title: 'One link or several',
-    body: 'One link adds a single file. Several links lets you paste a whole list at once. You can also press ⌘V anywhere in the app to paste a link.',
+    title: t('One link or several'),
+    body: t(
+      'One link adds a single file. Several links lets you paste a whole list at once. You can also press ⌘V anywhere in the app to paste a link.'
+    ),
     find: q('[role="menu"]'),
     ensure: openMenu,
     advanceWhen: (target) => target.closest('[role="menuitem"]') !== null,
@@ -137,49 +141,59 @@ const STEPS: Step[] = [
   },
   {
     icon: ClipboardText,
-    title: 'Paste the link, then Download',
-    body: 'Paste a web or magnet link in the top field, then press Download at the bottom right to start it. Download later keeps it waiting instead.',
+    title: t('Paste the link, then Download'),
+    body: t(
+      'Paste a web or magnet link in the top field, then press Download at the bottom right to start it. Download later keeps it waiting instead.'
+    ),
     find: addDialog,
     ensure: openDialog,
-    advanceWhen: (target) => target.closest('button')?.textContent?.trim() === 'Download',
+    advanceWhen: (target) => target.closest('button')?.textContent?.trim() === t('Download'),
     advanceDelay: 900,
     leave: closeDialogGently
   },
   {
     icon: SidebarSimple,
-    title: 'The side panel',
-    body: 'Your downloads are sorted here: downloading, queued, paused, completed and failed, plus file types.',
-    find: q('nav[aria-label="Download categories"]')
+    title: t('The side panel'),
+    body: t(
+      'Your downloads are sorted here: downloading, queued, paused, completed and failed, plus file types.'
+    ),
+    find: q(`nav[aria-label="${t('Download categories')}"]`)
   },
   {
     icon: SquaresFour,
-    title: 'Downloads, Telegram, YouTube',
-    body: 'These three icons are the only sections. Telegram saves files from chats and links, and YouTube saves videos and audio.',
-    find: q('[role="tablist"][aria-label="Section"]')
+    title: t('Downloads, Telegram, YouTube'),
+    body: t(
+      'These three icons are the only sections. Telegram saves files from chats and links, and YouTube saves videos and audio.'
+    ),
+    find: q(`[role="tablist"][aria-label="${t('Section')}"]`)
   },
   {
     icon: ShieldCheck,
-    title: 'VPN',
-    body: 'Turn this on to send downloads through your VPN. Connections that bypass it are marked, so you always know which path a file takes.',
-    find: parentOf('[role="switch"][aria-label="Use VPN for downloads"]')
+    title: t('VPN'),
+    body: t(
+      'Turn this on to send downloads through your VPN. Connections that bypass it are marked, so you always know which path a file takes.'
+    ),
+    find: parentOf(`[role="switch"][aria-label="${t('Use VPN for downloads')}"]`)
   },
   {
     icon: Gauge,
-    title: 'Slow mode',
-    body: 'Cap the speed to leave room for browsing and calls. Switch it on, and click the speed to change the limit.',
-    find: parentOf('[role="switch"][aria-label="Slow mode"]')
+    title: t('Slow mode'),
+    body: t(
+      'Cap the speed to leave room for browsing and calls. Switch it on, and click the speed to change the limit.'
+    ),
+    find: parentOf(`[role="switch"][aria-label="${t('Slow mode')}"]`)
   },
   {
     icon: Moon,
-    title: 'Dark or light',
-    body: 'Switch between the dark and the light theme here, any time.',
+    title: t('Dark or light'),
+    body: t('Switch between the dark and the light theme here, any time.'),
     find: q('[data-tour="theme"]')
   },
   {
     icon: Gear,
-    title: 'Settings',
-    body: 'Downloads folder, connections, limits, schedule, theme accent and more live here.',
-    find: q('button[aria-label="Settings"]')
+    title: t('Settings'),
+    body: t('Downloads folder, connections, limits, schedule, theme accent and more live here.'),
+    find: q(`button[aria-label="${t('Settings')}"]`)
   }
 ]
 
@@ -273,12 +287,13 @@ export function OnboardingTour(): React.JSX.Element | null {
     return () => window.removeEventListener('lightning:start-tour', start)
   }, [])
 
-  const step = STEPS[index]
+  const steps = useMemo(() => buildSteps(), [])
+  const step = steps[index]
 
   const go = useCallback(
     async (to: number) => {
       if (busy) return
-      const leaving = STEPS[index]?.leave?.(to > index ? 'next' : 'back')
+      const leaving = steps[index]?.leave?.(to > index ? 'next' : 'back')
       if (leaving) {
         busyRef.current = true
         setBusy(true)
@@ -286,10 +301,10 @@ export function OnboardingTour(): React.JSX.Element | null {
         busyRef.current = false
         setBusy(false)
       }
-      if (to >= STEPS.length) return finish()
+      if (to >= steps.length) return finish()
       setIndex(Math.max(0, to))
     },
-    [busy, finish, index]
+    [busy, finish, index, steps]
   )
 
   // Follow the target: it moves, resizes, or only appears later (a menu, a dialog).
@@ -370,7 +385,7 @@ export function OnboardingTour(): React.JSX.Element | null {
 
   if (!active) return null
   const pos = place(rect, cardHeight)
-  const last = index === STEPS.length - 1
+  const last = index === steps.length - 1
   const StepIcon = step.icon
   return (
     <div className="pointer-events-none fixed inset-0 z-[400]" aria-live="polite">
@@ -395,7 +410,7 @@ export function OnboardingTour(): React.JSX.Element | null {
         key={index}
         ref={card}
         role="dialog"
-        aria-label="Quick tour"
+        aria-label={t('Quick tour')}
         className="lightning-tour-card pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-[0_16px_48px_-8px_rgba(0,0,0,0.4)] ring-1 ring-foreground/[0.08]"
         style={{ width: CARD_WIDTH, top: pos.top, left: pos.left }}
       >
@@ -406,16 +421,16 @@ export function OnboardingTour(): React.JSX.Element | null {
               <StepIcon className="size-[18px]" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Step {index + 1} of {STEPS.length}
+              <div className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase rtl:tracking-normal">
+                {t('Step {n} of {total}', { n: index + 1, total: steps.length })}
               </div>
               <div className="text-[14.5px] leading-tight font-semibold">{step.title}</div>
             </div>
             <button
               type="button"
-              aria-label="Close the tour"
+              aria-label={t('Close the tour')}
               onClick={finish}
-              className="-mt-1 -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="-mt-1 -me-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <X className="size-3.5" />
             </button>
@@ -426,12 +441,12 @@ export function OnboardingTour(): React.JSX.Element | null {
               className="h-1 flex-1 overflow-hidden rounded-full bg-foreground/10"
               role="progressbar"
               aria-valuemin={1}
-              aria-valuemax={STEPS.length}
+              aria-valuemax={steps.length}
               aria-valuenow={index + 1}
             >
               <div
                 className="h-full rounded-full bg-primary transition-[width] duration-300"
-                style={{ width: `${((index + 1) / STEPS.length) * 100}%` }}
+                style={{ width: `${((index + 1) / steps.length) * 100}%` }}
               />
             </div>
             <div className="flex items-center gap-1.5">
@@ -443,11 +458,11 @@ export function OnboardingTour(): React.JSX.Element | null {
                   disabled={busy}
                   onClick={() => void go(index - 1)}
                 >
-                  Back
+                  {t('Back')}
                 </Button>
               )}
               <Button type="button" size="sm" disabled={busy} onClick={() => void go(index + 1)}>
-                {last ? 'Done' : 'Next'}
+                {last ? t('Done') : t('Next')}
               </Button>
             </div>
           </div>

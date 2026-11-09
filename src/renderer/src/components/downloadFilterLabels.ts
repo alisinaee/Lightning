@@ -1,23 +1,47 @@
+import { t } from '@shared/i18n/react'
 import type { DownloadFilter } from '../store/useAppStore'
 
-export const DOWNLOAD_FILTERS: { value: DownloadFilter; label: string }[] = [
-  { value: 'all', label: 'All downloads' },
-  { value: 'progress', label: 'In progress' },
-  { value: 'finished', label: 'Finished' },
-  { value: 'failed', label: 'Needs attention' }
+export const DOWNLOAD_FILTERS: { value: DownloadFilter; readonly label: string }[] = [
+  {
+    value: 'all',
+    get label() {
+      return t('All downloads')
+    }
+  },
+  {
+    value: 'progress',
+    get label() {
+      return t('In progress')
+    }
+  },
+  {
+    value: 'finished',
+    get label() {
+      return t('Finished')
+    }
+  },
+  {
+    value: 'failed',
+    get label() {
+      return t('Needs attention')
+    }
+  }
 ]
 
-const FINER_LABELS: Partial<Record<DownloadFilter, string>> = {
-  downloading: 'Downloading',
-  queued: 'Queued',
-  paused: 'Paused'
-}
+const finerLabel = (value: DownloadFilter): string | undefined =>
+  value === 'downloading'
+    ? t('Downloading')
+    : value === 'queued'
+      ? t('Queued')
+      : value === 'paused'
+        ? t('Paused')
+        : undefined
 
 /** What a filter is called, whichever place set it. */
 export function filterLabel(value: DownloadFilter): string {
   return (
     DOWNLOAD_FILTERS.find((filter) => filter.value === value)?.label ??
-    FINER_LABELS[value] ??
-    'All downloads'
+    finerLabel(value) ??
+    t('All downloads')
   )
 }

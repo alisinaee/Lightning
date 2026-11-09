@@ -1,3 +1,5 @@
+import { t } from '@shared/i18n/react'
+
 // tdl prints its login QR as terminal block characters, where █ is light and a space is dark
 // (the reverse of what black-on-white text shows). Decode the blocks into modules and draw them
 // as a real image, which a phone camera can read.
@@ -66,7 +68,7 @@ export function TelegramQr({
   return (
     <svg
       role="img"
-      aria-label="Login QR code"
+      aria-label={t('Login QR code')}
       viewBox={`0 0 ${width} ${size}`}
       shapeRendering="crispEdges"
       // A whole number of pixels per module keeps every square the same width for a phone camera.

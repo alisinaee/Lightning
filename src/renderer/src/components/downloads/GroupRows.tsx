@@ -1,4 +1,5 @@
 import { RowProgressLine } from './RowProgressLine'
+import { t, tn } from '@shared/i18n/react'
 import type { DownloadState } from '@shared/types'
 import { cn } from 'cn'
 import {
@@ -150,11 +151,11 @@ export function GroupTableRow({
     status,
     label:
       status === 'downloading'
-        ? `Downloading ${percent}%`
+        ? t('Downloading {percent}%', { percent: String(percent) })
         : status === 'paused' && received > 0
-          ? `Paused ${percent}%`
+          ? t('Paused {percent}%', { percent: String(percent) })
           : status === 'failed'
-            ? 'Needs attention'
+            ? t('Needs attention')
             : statusStyle(status).label,
     percent,
     bar: !allDone && received > 0 && status !== 'failed',
@@ -178,9 +179,9 @@ export function GroupTableRow({
   const some = !all && ids.some((id) => selected.has(id))
 
   const detail = [
-    `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`,
-    done > 0 && done < fileCount && `${done} finished`,
-    waiting.length > 0 && `${waiting.length} waiting`,
+    tn(fileCount, '{count} file', '{count} files'),
+    done > 0 && done < fileCount && t('{count} finished', { count: done }),
+    waiting.length > 0 && t('{count} waiting', { count: waiting.length }),
     toDisplayPath(group.destinationDir, homeDir)
   ]
     .filter(Boolean)
@@ -221,27 +222,27 @@ export function GroupTableRow({
   const menu: RowAction[] = [
     {
       id: 'toggle',
-      label: open ? 'Hide files' : 'Show files',
+      label: open ? t('Hide files') : t('Show files'),
       icon: open ? ChevronDown : ChevronRight,
       run: toggleOpen
     },
     ...(group.held
-      ? [{ id: 'start', label: 'Start', icon: Play, run: () => void startAll() }]
+      ? [{ id: 'start', label: t('Start'), icon: Play, run: () => void startAll() }]
       : []),
     ...(pausable.length > 0
-      ? [{ id: 'pause', label: 'Pause all in group', icon: Pause, run: () => void pauseAll() }]
+      ? [{ id: 'pause', label: t('Pause all in group'), icon: Pause, run: () => void pauseAll() }]
       : []),
     ...(!group.held && paused.length > 0 && pausable.length === 0
-      ? [{ id: 'resume', label: 'Resume all in group', icon: Play, run: () => void resumeAll() }]
+      ? [{ id: 'resume', label: t('Resume all in group'), icon: Play, run: () => void resumeAll() }]
       : []),
     ...(failedCount > 0
-      ? [{ id: 'retry', label: 'Retry failed', icon: RotateCw, run: () => void retryFailed() }]
+      ? [{ id: 'retry', label: t('Retry failed'), icon: RotateCw, run: () => void retryFailed() }]
       : []),
     ...(revealId
       ? [
           {
             id: 'reveal',
-            label: 'Open folder',
+            label: t('Open folder'),
             icon: FolderOpen,
             run: () => void window.lightning.revealDownload(revealId)
           }
@@ -249,21 +250,21 @@ export function GroupTableRow({
       : []),
     {
       id: 'edit',
-      label: 'Edit group',
+      label: t('Edit group'),
       icon: Pencil,
       run: () => editGroup(group.id),
       divider: true
     },
     {
       id: 'select-all',
-      label: 'Select all files',
+      label: t('Select all files'),
       icon: ListChecks,
       disabled: ids.length === 0,
       run: () => onToggle(ids, true)
     },
     {
       id: 'remove',
-      label: 'Remove group…',
+      label: t('Remove group…'),
       icon: Trash2,
       danger: true,
       run: () => setRemoving(true),
@@ -272,6 +273,7 @@ export function GroupTableRow({
   ]
 
   const iconButton = (
+    tip: string,
     label: string,
     icon: React.JSX.Element,
     onClick: () => void
@@ -283,7 +285,7 @@ export function GroupTableRow({
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label={`${label} ${group.name}`}
+            aria-label={label}
             onClick={onClick}
             className="text-muted-foreground hover:text-foreground"
           >
@@ -291,24 +293,31 @@ export function GroupTableRow({
           </Button>
         }
       />
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
   )
 
   const cells: Record<string, React.JSX.Element> = {
     name: (
-      <div key="name" role="cell" className={cn(cellClass, 'gap-2 pl-0')}>
+      <div key="name" role="cell" className={cn(cellClass, 'gap-2 ps-0')}>
         <button
           type="button"
           aria-expanded={open}
-          aria-label={open ? `Hide files in ${group.name}` : `Show files in ${group.name}`}
+          aria-label={
+            open
+              ? t('Hide files in {name}', { name: group.name })
+              : t('Show files in {name}', { name: group.name })
+          }
           onClick={toggleOpen}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {open ? (
             <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+            <ChevronRight
+              aria-hidden
+              className="size-4 shrink-0 text-muted-foreground rtl:-scale-x-100"
+            />
           )}
           <FileKindIcon kind="other" icon={Folder} />
           <span data-title className="flex min-w-0 flex-1 flex-col gap-1 pb-2">
@@ -318,7 +327,7 @@ export function GroupTableRow({
                 className="font-sans text-[13px] leading-none font-semibold"
               />
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                {group.mode === 'auto' ? 'Auto' : 'Manual'}
+                {group.mode === 'auto' ? t('Auto') : t('Manual')}
               </Badge>
             </span>
             <span className="truncate text-[11px] leading-none text-muted-foreground">
@@ -352,7 +361,7 @@ export function GroupTableRow({
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center">
         <Checkbox
-          aria-label={`Select all files in ${group.name}`}
+          aria-label={t('Select all files in {name}', { name: group.name })}
           checked={all}
           indeterminate={some}
           disabled={ids.length === 0}
@@ -360,16 +369,43 @@ export function GroupTableRow({
         />
       </div>
       {columns.map((column) => cells[column])}
-      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
-        {group.held && iconButton('Start', <Play />, () => void startAll())}
-        {pausable.length > 0 && iconButton('Pause all in', <Pause />, () => void pauseAll())}
+      <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
+        {group.held &&
+          iconButton(
+            t('Start'),
+            t('Start {name}', { name: group.name }),
+            <Play />,
+            () => void startAll()
+          )}
+        {pausable.length > 0 &&
+          iconButton(
+            t('Pause all'),
+            t('Pause all in {name}', { name: group.name }),
+            <Pause />,
+            () => void pauseAll()
+          )}
         {!group.held &&
           paused.length > 0 &&
           pausable.length === 0 &&
-          iconButton('Resume all in', <Play />, () => void resumeAll())}
-        {failedCount > 0 && iconButton('Retry failed in', <RotateCw />, () => void retryFailed())}
-        {iconButton('Edit', <Pencil />, () => editGroup(group.id))}
-        {iconButton('Remove', <Trash2 />, () => setRemoving(true))}
+          iconButton(
+            t('Resume all'),
+            t('Resume all in {name}', { name: group.name }),
+            <Play />,
+            () => void resumeAll()
+          )}
+        {failedCount > 0 &&
+          iconButton(
+            t('Retry failed'),
+            t('Retry failed in {name}', { name: group.name }),
+            <RotateCw />,
+            () => void retryFailed()
+          )}
+        {iconButton(t('Edit'), t('Edit {name}', { name: group.name }), <Pencil />, () =>
+          editGroup(group.id)
+        )}
+        {iconButton(t('Remove'), t('Remove {name}', { name: group.name }), <Trash2 />, () =>
+          setRemoving(true)
+        )}
       </div>
     </div>
   )
@@ -380,26 +416,29 @@ export function GroupTableRow({
       {error && (
         <div
           role="alert"
-          className="border-b-[0.5px] border-border py-1 pl-12 text-[12px] text-destructive"
+          className="border-b-[0.5px] border-border py-1 ps-12 text-[12px] text-destructive"
         >
           {error}
         </div>
       )}
       {open && (
         <>
-          <div className="border-b-[0.5px] border-border/70 bg-card/40 py-2 pr-4 pl-12">
+          <div className="border-b-[0.5px] border-border/70 bg-card/40 py-2 pe-4 ps-12">
             {group.mode === 'auto' ? (
               <GroupPlanPanel group={group} live={live} items={items} now={now} />
             ) : (
               <div className="text-[12px] text-muted-foreground">
-                Manual: each file uses the connections you chose. Use the network button on a file
-                to change them.
+                {t(
+                  'Manual: each file uses the connections you chose. Use the network button on a file to change them.'
+                )}
                 <GroupConnectionTotals items={items} />
               </div>
             )}
             {allDone && (
               <div className="mt-2 flex items-center gap-2 text-[12px] text-muted-foreground">
-                <span>All {fileCount} files finished.</span>
+                <span>
+                  {tn(fileCount, 'All {count} file finished.', 'All {count} files finished.')}
+                </span>
                 {revealId && (
                   <Button
                     type="button"
@@ -407,13 +446,15 @@ export function GroupTableRow({
                     variant="secondary"
                     onClick={() => void window.lightning.revealDownload(revealId)}
                   >
-                    Open folder
+                    {t('Open folder')}
                   </Button>
                 )}
               </div>
             )}
             {fileCount === 0 && (
-              <div className="py-1 text-[12px] text-muted-foreground">No files in this group.</div>
+              <div className="py-1 text-[12px] text-muted-foreground">
+                {t('No files in this group.')}
+              </div>
             )}
           </div>
           {sortedItems
@@ -458,19 +499,20 @@ export function GroupTableRow({
       <AlertDialog open={removing} onOpenChange={setRemoving}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {group.name}?</AlertDialogTitle>
+            <AlertDialogTitle>{t('Remove {name}?', { name: group.name })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This stops the files still downloading and deletes the parts already downloaded, then
-              removes the group from the list. Files that finished stay on your computer.
+              {t(
+                'This stops the files still downloading and deletes the parts already downloaded, then removes the group from the list. Files that finished stay on your computer.'
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogCancel>{t('Keep it')}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: 'destructive', size: 'sm' })}
               onClick={() => void confirmRemoval()}
             >
-              Remove group
+              {t('Remove group')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

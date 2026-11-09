@@ -13,6 +13,7 @@ import { StatusMenuContent } from './StatusMenu'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Switch } from './ui/switch'
 import { UpdateIndicator } from './UpdateIndicator'
+import { t, tn } from '@shared/i18n/react'
 
 const FREE_SPACE_POLL_MS = 30_000
 
@@ -74,12 +75,15 @@ export function StatusBar(): React.JSX.Element {
     <>
       {bar.showCount && (
         <span className="shrink-0 text-foreground">
-          {listed} {listed === 1 ? 'download' : 'downloads'}
+          {tn(listed, '{count} download', '{count} downloads')}
         </span>
       )}
       {bar.showSpeed && speed > 0 && (
         <span className="shrink-0 tabular-nums">
-          ↓ <span className="text-foreground">{formatSpeed(speed)}</span>
+          ↓{' '}
+          <span className="text-foreground">
+            <bdi>{formatSpeed(speed)}</bdi>
+          </span>
         </span>
       )}
     </>
@@ -90,11 +94,11 @@ export function StatusBar(): React.JSX.Element {
       {bar.menu ? (
         <Popover>
           <PopoverTrigger
-            aria-label="Show download activity"
+            aria-label={t('Show download activity')}
             className="flex shrink-0 items-center gap-3 rounded-sm px-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             {summary}
-            {!bar.showCount && !bar.showSpeed && <span>Activity</span>}
+            {!bar.showCount && !bar.showSpeed && <span>{t('Activity')}</span>}
           </PopoverTrigger>
           <PopoverContent
             side="top"
@@ -110,9 +114,13 @@ export function StatusBar(): React.JSX.Element {
         summary
       )}
       {bar.showLimit && limit !== undefined && (
-        <span className="shrink-0 tabular-nums">limit {formatSpeed(limit)}</span>
+        <span className="shrink-0 tabular-nums">
+          {t('limit {speed}', { speed: formatSpeed(limit) })}
+        </span>
       )}
-      {bar.showWaiting && waiting > 0 && <span className="shrink-0">{waiting} waiting</span>}
+      {bar.showWaiting && waiting > 0 && (
+        <span className="shrink-0">{t('{count} waiting', { count: waiting })}</span>
+      )}
       <ScheduleChip />
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         {bar.showNetworks &&
@@ -125,7 +133,9 @@ export function StatusBar(): React.JSX.Element {
           ))}
       </div>
       {bar.showSlowMode && <SlowModeControl />}
-      {bar.showFree && free !== null && <span className="shrink-0">{formatBytes(free)} free</span>}
+      {bar.showFree && free !== null && (
+        <span className="shrink-0">{t('{size} free', { size: formatBytes(free) })}</span>
+      )}
       <UpdateIndicator />
       <ThemeToggle />
     </ScreenFooter>
@@ -141,34 +151,40 @@ function SlowModeControl(): React.JSX.Element {
   const setSlowModeSpeed = useAppStore((store) => store.setSlowModeSpeed)
   return (
     <span className="flex shrink-0 items-center gap-2">
-      <Switch aria-label="Slow mode" checked={slowMode} onCheckedChange={setSlowMode} />
+      <Switch aria-label={t('Slow mode')} checked={slowMode} onCheckedChange={setSlowMode} />
       <Popover>
         <PopoverTrigger
           className="flex h-[18px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-1.5 outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Slow mode speed"
-          title="Edit the slow mode speed"
+          aria-label={t('Slow mode speed')}
+          title={t('Edit the slow mode speed')}
         >
-          Slow mode
+          {t('Slow mode')}
           <span className="text-foreground">{formatSpeed(slowModeSpeed)}</span>
           <Pencil aria-hidden className="size-3 shrink-0" />
         </PopoverTrigger>
         <PopoverContent side="top" align="end" className="w-[300px] gap-3 p-3 font-sans">
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">Slow mode</div>
+              <div className="text-[13px] font-medium">{t('Slow mode')}</div>
               <div className="text-[12px] leading-snug text-muted-foreground">
-                Caps all downloads at this speed, replacing the total limit. Handy during calls.
+                {t(
+                  'Caps all downloads at this speed, replacing the total limit. Handy during calls.'
+                )}
               </div>
             </div>
             <Switch
-              aria-label="Enable slow mode"
+              aria-label={t('Enable slow mode')}
               checked={slowMode}
               onCheckedChange={setSlowMode}
             />
           </div>
           <div className="flex items-center gap-2 text-[12.5px]">
-            <span className="text-muted-foreground">Speed</span>
-            <SpeedInput bytes={slowModeSpeed} label="Slow mode speed" onChange={setSlowModeSpeed} />
+            <span className="text-muted-foreground">{t('Speed')}</span>
+            <SpeedInput
+              bytes={slowModeSpeed}
+              label={t('Slow mode speed')}
+              onChange={setSlowModeSpeed}
+            />
           </div>
         </PopoverContent>
       </Popover>

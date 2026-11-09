@@ -1,9 +1,11 @@
 import { createContext, useContext } from 'react'
+import { t } from '@shared/i18n/react'
 import type { ColumnId, TableLayout } from '../../store/useAppStore'
 
 export interface ColumnDef {
   id: ColumnId
-  label: string
+  /** Translated on read. */
+  readonly label: string
   /** Starting width in px; the name column has none, it takes what the others leave. */
   width: number
   min: number
@@ -15,10 +17,22 @@ export interface ColumnDef {
 }
 
 export const COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Name', width: 0, min: 200, max: 0, dropOrder: 0, canHide: false },
+  {
+    id: 'name',
+    get label() {
+      return t('Name')
+    },
+    width: 0,
+    min: 200,
+    max: 0,
+    dropOrder: 0,
+    canHide: false
+  },
   {
     id: 'size',
-    label: 'Size',
+    get label() {
+      return t('Size')
+    },
     width: 124,
     min: 84,
     max: 260,
@@ -28,10 +42,22 @@ export const COLUMNS: ColumnDef[] = [
   },
   // The running percentage is short now (the bar is a line along the row), and the words
   // (Completed, Queued #1, Needs attention) fit in this.
-  { id: 'status', label: 'Status', width: 112, min: 92, max: 320, dropOrder: 0, canHide: false },
+  {
+    id: 'status',
+    get label() {
+      return t('Status')
+    },
+    width: 112,
+    min: 92,
+    max: 320,
+    dropOrder: 0,
+    canHide: false
+  },
   {
     id: 'speed',
-    label: 'Speed',
+    get label() {
+      return t('Speed')
+    },
     width: 96,
     min: 80,
     max: 180,
@@ -41,7 +67,9 @@ export const COLUMNS: ColumnDef[] = [
   },
   {
     id: 'eta',
-    label: 'Time left',
+    get label() {
+      return t('Time left')
+    },
     width: 92,
     min: 88,
     max: 160,
@@ -49,12 +77,24 @@ export const COLUMNS: ColumnDef[] = [
     dropOrder: 4,
     canHide: true
   },
-  { id: 'added', label: 'Added', width: 112, min: 84, max: 220, dropOrder: 5, canHide: true },
+  {
+    id: 'added',
+    get label() {
+      return t('Added')
+    },
+    width: 112,
+    min: 84,
+    max: 220,
+    dropOrder: 5,
+    canHide: true
+  },
   {
     // Coloured dots, one for each network in use: they need little room, and the header's label
     // is short for the same reason.
     id: 'connections',
-    label: 'Networks',
+    get label() {
+      return t('Networks')
+    },
     width: 92,
     min: 88,
     max: 240,

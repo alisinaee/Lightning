@@ -25,6 +25,14 @@ It talks to Lightning over `127.0.0.1` only. Lightning must be running.
      (removed when Firefox quits).
    - Safari 18+: Settings → Advanced → show web developer features; Settings → Developer → allow
      unsigned extensions → **Add Temporary Extension** → the folder (removed when Safari quits).
-3. The extension pairs by itself from `pairing.json`. Pasting the key in its popup still works.
+3. The extension pairs by itself from `pairing.json`. Pasting the key in its popup (Enter the key manually) still works.
+
+The popup shows one clear state (Lightning not running, not paired, wrong key, connected), the
+on/off switch for taking over downloads, quick actions (scan this page, select videos on YouTube)
+and the options. It speaks English, Persian (right to left) and Russian: Lightning's language
+setting when it reports one, else the browser's language. If Lightning carries a newer extension
+than the one loaded, the popup says to click Reload on the browser's extensions page.
+
+In YouTube select mode, pick videos on any list or search page, or use **This video** on a watch page.
 
 If Lightning is not running, the browser downloads the file itself as usual.

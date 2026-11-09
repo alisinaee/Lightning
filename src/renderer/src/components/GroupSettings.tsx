@@ -1,5 +1,6 @@
 import type { GroupMode, GroupRule } from '@shared/types'
 import { useNetworkOptions } from '../hooks/useNetworkOptions'
+import { t } from '@shared/i18n/react'
 import { ConnectionPicker } from './ConnectionPicker'
 import { DnsPicker } from './DnsPicker'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
@@ -46,9 +47,9 @@ export function GroupSettings({
   return (
     <div className="flex flex-col gap-2.5 text-[12.5px]">
       <div className="flex items-center gap-3">
-        <span className={labelClass}>Files at once</span>
+        <span className={labelClass}>{t('Files at once')}</span>
         <ToggleGroup
-          aria-label="How many files download at once"
+          aria-label={t('How many files download at once')}
           value={[atOnce === null ? 'auto' : String(atOnce)]}
           onValueChange={(values) => {
             const next = values[0]
@@ -59,7 +60,7 @@ export function GroupSettings({
           spacing={0.5}
           className="bg-secondary p-0.5"
         >
-          <ToggleGroupItem value="auto">Auto</ToggleGroupItem>
+          <ToggleGroupItem value="auto">{t('Auto')}</ToggleGroupItem>
           {AT_ONCE_CHOICES.map((count) => (
             <ToggleGroupItem key={count} value={String(count)} className="min-w-7">
               {count}
@@ -67,13 +68,13 @@ export function GroupSettings({
           ))}
         </ToggleGroup>
         <label className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          Other
+          {t('Other')}
           <input
             type="number"
             min={1}
             max={64}
             inputMode="numeric"
-            aria-label="Files at once, other number"
+            aria-label={t('Files at once, other number')}
             value={atOnce !== null && !AT_ONCE_CHOICES.includes(atOnce) ? atOnce : ''}
             placeholder="–"
             onChange={(event) => {
@@ -87,9 +88,9 @@ export function GroupSettings({
       </div>
 
       <div className="flex items-center gap-3">
-        <span className={labelClass}>Connections</span>
+        <span className={labelClass}>{t('Connections')}</span>
         <ToggleGroup
-          aria-label="How files are given networks"
+          aria-label={t('How files are given networks')}
           value={[value.mode]}
           onValueChange={(values) => {
             const next = values[0]
@@ -99,13 +100,13 @@ export function GroupSettings({
           spacing={0.5}
           className="bg-secondary p-0.5"
         >
-          <ToggleGroupItem value="auto">Auto</ToggleGroupItem>
-          <ToggleGroupItem value="manual">Manual</ToggleGroupItem>
+          <ToggleGroupItem value="auto">{t('Auto')}</ToggleGroupItem>
+          <ToggleGroupItem value="manual">{t('Manual')}</ToggleGroupItem>
         </ToggleGroup>
         <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
           {manual
-            ? 'You decide which networks the files use.'
-            : 'Each file gets a network, matched to how fast it is.'}
+            ? t('You decide which networks the files use.')
+            : t('Each file gets a network, matched to how fast it is.')}
         </span>
       </div>
 
@@ -113,19 +114,19 @@ export function GroupSettings({
         <span className={labelClass}>DNS</span>
         <DnsPicker
           value={value.dnsId}
-          followLabel="App default"
+          followLabel={t('App default')}
           onChange={(id) => onChange({ dnsId: id })}
         />
         <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
-          Every file of the group looks names up this way.
+          {t('Every file of the group looks names up this way.')}
         </span>
       </div>
 
       {manual && (
         <div className="flex items-center gap-3">
-          <span className={labelClass}>Rule</span>
+          <span className={labelClass}>{t('Rule')}</span>
           <ToggleGroup
-            aria-label="Where the choice of networks is made"
+            aria-label={t('Where the choice of networks is made')}
             value={[value.rule]}
             onValueChange={(values) => {
               const next = values[0]
@@ -135,31 +136,31 @@ export function GroupSettings({
             spacing={0.5}
             className="bg-secondary p-0.5"
           >
-            <ToggleGroupItem value="general">Same for all files</ToggleGroupItem>
-            <ToggleGroupItem value="perFile">Each file on its own</ToggleGroupItem>
+            <ToggleGroupItem value="general">{t('Same for all files')}</ToggleGroupItem>
+            <ToggleGroupItem value="perFile">{t('Each file on its own')}</ToggleGroupItem>
           </ToggleGroup>
           <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
             {perFile
-              ? 'Only the choice made on each file counts.'
-              : 'One choice below applies to every file.'}
+              ? t('Only the choice made on each file counts.')
+              : t('One choice below applies to every file.')}
           </span>
         </div>
       )}
 
       <div className="flex items-center gap-3">
-        <span className={labelClass}>Networks</span>
+        <span className={labelClass}>{t('Networks')}</span>
         <ConnectionPicker
           options={options}
           value={value.interfaceIds}
-          label={perFile ? 'files not set yet' : 'the group'}
+          label={perFile ? t('files not set yet') : t('the group')}
           onChange={setNetworks}
         />
         <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">
           {manual
             ? perFile
-              ? 'Used by files you have not set yet.'
-              : 'Every file uses exactly these.'
-            : 'Auto only uses these.'}
+              ? t('Used by files you have not set yet.')
+              : t('Every file uses exactly these.')
+            : t('Auto only uses these.')}
         </span>
       </div>
     </div>

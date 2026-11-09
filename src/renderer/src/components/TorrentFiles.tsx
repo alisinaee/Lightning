@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import type { TorrentFileEntry, TorrentInfo, TorrentPieceState } from '@shared/types'
 import { cn } from 'cn'
 import { Folder } from '@phosphor-icons/react'
@@ -49,7 +50,7 @@ export function TorrentFileList({
   return (
     <div
       role="group"
-      aria-label="Files"
+      aria-label={t('Files')}
       className="max-h-44 overflow-y-auto rounded-[9px] border border-border px-3 py-1.5"
     >
       {folder && (
@@ -63,13 +64,15 @@ export function TorrentFileList({
             }
           />
           <Folder aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate">{folder}</span>
+          <span dir="auto" className="min-w-0 flex-1 truncate">
+            {folder}
+          </span>
         </label>
       )}
       {files.map((file, index) => (
         <label
           key={index}
-          className={cn('flex items-center gap-2 py-0.5 font-mono text-[11.5px]', folder && 'pl-6')}
+          className={cn('flex items-center gap-2 py-0.5 font-mono text-[11.5px]', folder && 'ps-6')}
         >
           <Checkbox
             checked={!skipped.includes(index)}
@@ -78,14 +81,18 @@ export function TorrentFileList({
               onChange(checked ? skipped.filter((entry) => entry !== index) : [...skipped, index])
             }
           />
-          <span className="min-w-0 flex-1 truncate">{pathInTorrent(file.path)}</span>
-          <span className="shrink-0 text-muted-foreground">{formatBytes(file.length)}</span>
+          <span dir="auto" className="min-w-0 flex-1 truncate">
+            {pathInTorrent(file.path)}
+          </span>
+          <span dir="ltr" className="shrink-0 text-muted-foreground">
+            {formatBytes(file.length)}
+          </span>
           {done && (
-            <span className="w-14 shrink-0 text-right tabular-nums text-[var(--text-secondary)]">
+            <span className="w-14 shrink-0 text-end tabular-nums text-[var(--text-secondary)]">
               {skipped.includes(index)
-                ? 'Skipped'
+                ? t('Skipped')
                 : finished(index)
-                  ? 'Done'
+                  ? t('Done')
                   : `${formatPercent(done[index], file.length)}%`}
             </span>
           )}
@@ -125,7 +132,7 @@ export function TorrentFiles({
     : []
   const choose = (next: number[]): void => {
     if (next.length === files.length) {
-      setError('Keep at least one file.')
+      setError(t('Keep at least one file.'))
       return
     }
     setError(null)

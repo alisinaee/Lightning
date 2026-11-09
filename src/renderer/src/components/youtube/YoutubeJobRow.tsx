@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import { memo, useState, type CSSProperties } from 'react'
 import {
   Copy,
@@ -93,32 +94,32 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
 
   // The main action, as on a Downloads row: open when done, retry when failed, pause or resume otherwise.
   const primary: { label: string; icon: Icon; run: () => void } | null = finished
-    ? { label: 'Open', icon: ExternalLink, run: () => openJob(job.id) }
+    ? { label: t('Open'), icon: ExternalLink, run: () => openJob(job.id) }
     : job.status === 'downloading' || job.status === 'queued'
-      ? { label: 'Pause', icon: Pause, run: () => void pauseJob(job.id) }
+      ? { label: t('Pause'), icon: Pause, run: () => void pauseJob(job.id) }
       : job.status === 'paused'
-        ? { label: 'Resume', icon: Play, run: () => void resumeJob(job.id) }
+        ? { label: t('Resume'), icon: Play, run: () => void resumeJob(job.id) }
         : job.status === 'error' || job.status === 'cancelled'
-          ? { label: 'Try again', icon: RotateCw, run: () => void retryJob(job.id) }
+          ? { label: t('Try again'), icon: RotateCw, run: () => void retryJob(job.id) }
           : null
 
   const actions: RowAction[] = [
     ...(finished
-      ? [{ id: 'open', label: 'Open', icon: ExternalLink, run: () => openJob(job.id) }]
+      ? [{ id: 'open', label: t('Open'), icon: ExternalLink, run: () => openJob(job.id) }]
       : []),
-    { id: 'reveal', label: 'Show in Folder', icon: FolderOpen, run: () => revealJob(job.id) },
+    { id: 'reveal', label: t('Show in Folder'), icon: FolderOpen, run: () => revealJob(job.id) },
     ...(active
-      ? [{ id: 'pause', label: 'Pause', icon: Pause, run: () => void pauseJob(job.id) }]
+      ? [{ id: 'pause', label: t('Pause'), icon: Pause, run: () => void pauseJob(job.id) }]
       : []),
     ...(job.status === 'paused'
-      ? [{ id: 'resume', label: 'Resume', icon: Play, run: () => void resumeJob(job.id) }]
+      ? [{ id: 'resume', label: t('Resume'), icon: Play, run: () => void resumeJob(job.id) }]
       : []),
     ...(job.status === 'error' || job.status === 'cancelled'
-      ? [{ id: 'retry', label: 'Try again', icon: RotateCw, run: () => void retryJob(job.id) }]
+      ? [{ id: 'retry', label: t('Try again'), icon: RotateCw, run: () => void retryJob(job.id) }]
       : []),
     {
       id: 'copy',
-      label: 'Copy link',
+      label: t('Copy link'),
       icon: Copy,
       run: () => void navigator.clipboard.writeText(job.url)
     },
@@ -126,7 +127,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       ? [
           {
             id: 'cancel',
-            label: 'Cancel',
+            label: t('Cancel'),
             icon: X,
             danger: true,
             divider: true,
@@ -136,7 +137,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       : []),
     {
       id: 'remove',
-      label: 'Remove from list',
+      label: t('Remove from list'),
       icon: Trash2,
       danger: true,
       divider: !active,
@@ -159,20 +160,20 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       <RowProgressLine info={info} />
       <div role="cell" className="flex items-center justify-center">
         <Checkbox
-          aria-label={`Select ${job.title}`}
+          aria-label={t('Select {title}', { title: job.title })}
           checked={selected}
           onCheckedChange={(on) => onSelect?.(on)}
         />
       </div>
-      <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'pl-8' : 'pl-0')}>
+      <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'ps-8' : 'ps-0')}>
         <FormatBadge name={fileName} />
         <button
           type="button"
           data-title
-          aria-label={finished ? `Open ${job.title}` : job.title}
+          aria-label={finished ? t('Open {title}', { title: job.title }) : job.title}
           disabled={!finished}
           onClick={() => finished && openJob(job.id)}
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+          className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-start outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
         >
           <ClippedText
             text={job.title}
@@ -200,10 +201,14 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
       {columns.added && (
         <AddedCell at={finished ? (job.finishedAt ?? job.createdAt) : job.createdAt} />
       )}
-      <div role="cell" className="flex items-center justify-end gap-0.5 pl-1.5 pr-4">
+      <div role="cell" className="flex items-center justify-end gap-0.5 ps-1.5 pe-4">
         {primary && <IconAction label={primary.label} icon={primary.icon} onClick={primary.run} />}
         {finished && (
-          <IconAction label="Show in Folder" icon={FolderOpen} onClick={() => revealJob(job.id)} />
+          <IconAction
+            label={t('Show in Folder')}
+            icon={FolderOpen}
+            onClick={() => revealJob(job.id)}
+          />
         )}
         <RowActionsMenu label={job.title} actions={actions} />
       </div>

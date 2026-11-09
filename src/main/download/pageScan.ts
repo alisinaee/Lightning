@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 import type { RequestExtras, ScanPageResult } from '../../shared/types'
 import { buildHeaders } from '../../shared/requestHeaders'
 
@@ -104,10 +105,10 @@ export async function scanPage(
   try {
     url = new URL(pageUrl)
   } catch {
-    throw new Error('That is not a web address')
+    throw new Error(t('That is not a web address'))
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('A page address starts with https://')
+    throw new Error(t('A page address starts with https://'))
   }
   let response: Response
   try {
@@ -117,12 +118,12 @@ export async function scanPage(
       signal: AbortSignal.timeout(SCAN_TIMEOUT_MS)
     })
   } catch {
-    throw new Error('Could not open the page. Check the address and your connection.')
+    throw new Error(t('Could not open the page. Check the address and your connection.'))
   }
   if (!response.ok) throw new Error(`The page answered ${response.status}`)
   const type = response.headers.get('content-type') ?? ''
   if (type && !/text|html|xml|json/i.test(type)) {
-    throw new Error('That address is a file, not a page: add it as a link instead')
+    throw new Error(t('That address is a file, not a page: add it as a link instead'))
   }
   const reader = response.body?.getReader()
   const chunks: Uint8Array[] = []

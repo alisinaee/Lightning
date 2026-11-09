@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { TitleBar } from './TitleBar'
 import { useLogsStore } from '../store/useLogsStore'
 import { Button } from './ui/button'
+import { t } from '@shared/i18n/react'
 
 interface State {
   error: Error | null
@@ -47,27 +48,29 @@ export class AppBoundary extends Component<{ children: ReactNode }, State> {
           role="alert"
           className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
         >
-          <p className="text-[18px] font-semibold">Something went wrong</p>
+          <p className="text-[18px] font-semibold">{t('Something went wrong')}</p>
           <p className="max-w-[460px] text-[13px] text-muted-foreground">
-            {this.state.error.message}. Your downloads keep going. Reload the view, or copy the
-            error for a bug report.
+            {t(
+              '{message}. Your downloads keep going. Reload the view, or copy the error for a bug report.',
+              { message: this.state.error.message }
+            )}
           </p>
           <div className="flex gap-2">
             <Button
               type="button"
               onClick={() => this.setState({ error: null, componentStack: '', copied: false })}
             >
-              Reload view
+              {t('Reload view')}
             </Button>
             <Button type="button" variant="secondary" onClick={this.copy}>
-              {this.state.copied ? 'Copied' : 'Copy error'}
+              {this.state.copied ? t('Copied') : t('Copy error')}
             </Button>
             <Button
               type="button"
               variant="secondary"
               onClick={() => useLogsStore.getState().setOpen(true)}
             >
-              View logs
+              {t('View logs')}
             </Button>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { t } from '@shared/i18n/react'
 import {
   DEFAULT_YOUTUBE_OPTIONS,
   formatForQuality,
@@ -26,7 +27,7 @@ let fetchSeq = 0
 /** Tells the person a fetched video is ready to choose. Clicking the notice opens its quality choice. */
 const notifyReady = (id: string, title: string): void => {
   try {
-    const note = new Notification('Ready to download', { body: title, silent: true })
+    const note = new Notification(t('Ready to download'), { body: title, silent: true })
     note.onclick = () => useYoutubeStore.getState().openFetch(id)
   } catch {
     // The queue card still shows it.
@@ -221,14 +222,14 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
       if (!get().fetches.some((item) => item.id === id)) return
       if (get().options.autoStartDefault) {
         const format = formatFor(meta, get().options.quality)
-        if (!format) throw new Error('No downloadable format for this video')
+        if (!format) throw new Error(t('No downloadable format for this video'))
         await get().startJob(id, meta, format, offerId)
         return
       }
       update({ state: 'ready', meta })
       notifyReady(id, meta.title)
     } catch (err: unknown) {
-      update({ state: 'error', error: (err as Error)?.message || 'Failed to fetch this link' })
+      update({ state: 'error', error: (err as Error)?.message || t('Failed to fetch this link') })
     }
   },
 
@@ -254,7 +255,7 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
         addOpen: false
       }))
     } catch (err: unknown) {
-      const message = (err as Error)?.message || 'Could not start YouTube download'
+      const message = (err as Error)?.message || t('Could not start YouTube download')
       set((state) => ({
         fetches: state.fetches.map((item) =>
           item.id === fetchId ? { ...item, state: 'error', error: message } : item

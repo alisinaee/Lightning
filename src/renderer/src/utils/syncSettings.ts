@@ -1,4 +1,15 @@
+import { isRtl, resolveLanguage, setLanguage, type LanguageSetting } from '@shared/i18n'
 import { useAppStore } from '../store/useAppStore'
+
+/** Resolves the language setting ('system' follows the computer), makes it the current one and
+ * puts lang/dir on the page. The app root is keyed by the language, so the whole tree redraws. */
+export function applyLanguage(setting: LanguageSetting | undefined): void {
+  const lang = resolveLanguage(setting ?? 'system', navigator.languages)
+  setLanguage(lang)
+  const root = document.documentElement
+  root.lang = lang
+  root.dir = isRtl(lang) ? 'rtl' : 'ltr'
+}
 
 /** Reads the saved settings again and puts them in this window's store: Settings lives in its own
  * window, so a change there (or here) reaches the other window this way. */
@@ -24,4 +35,5 @@ export function reloadSavedSettings(): void {
   window.lightning.setZoom(saved.prefs.uiScale)
   document.documentElement.dataset.accent = saved.prefs.accent
   applyGlass(saved.prefs.glassTransparency)
+  applyLanguage(saved.prefs.language)
 }
