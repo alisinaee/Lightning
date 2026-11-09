@@ -29,6 +29,8 @@ import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
 import { migrateLegacyUserData } from './legacyData'
 import { appVariant } from './variant'
+import { refreshInstalledExtension } from './integration'
+import { raiseSettingsWindow } from './settingsWindow'
 import type { DownloadManager } from './download/downloadManager'
 
 // In dev mode the app runs as the raw `electron` binary, which otherwise shows "Electron" in
@@ -189,6 +191,8 @@ function createWindow(): void {
 
   // The page's own <title> would otherwise rename the window back to "Lightning".
   mainWindow.on('page-title-updated', (event) => event.preventDefault())
+  // Back from the Dock, the main window would cover an open Settings window.
+  mainWindow.on('restore', raiseSettingsWindow)
   log.info('window', 'created')
   mainWindow.webContents.on('did-finish-load', () => log.info('window', 'page loaded'))
   mainWindow.on('closed', () => {
@@ -268,6 +272,11 @@ app.whenReady().then(async () => {
       log: logFilePath(),
       packaged: app.isPackaged
     }
+  )
+
+  // The extension set up in Documents gets this version's files (the browser reloads it).
+  void refreshInstalledExtension().catch((error) =>
+    log.warn('integration', 'extension refresh', { error: String(error) })
   )
 
   // A failed move keeps the old file, to retry next launch — it must never stop the window opening.

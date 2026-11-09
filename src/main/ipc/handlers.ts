@@ -37,7 +37,14 @@ import { onMagnetCheckStatus } from '../download/torrent/metadata'
 import { scanPage } from '../download/pageScan'
 import { askWhatNext, runFinishedAction } from '../postActions'
 import { ScheduleController } from '../scheduleController'
-import { extensionFolder, integrationToken, regenerateToken } from '../integration'
+import {
+  addExtensionToBrowser,
+  installExtension,
+  installedExtensionFolder,
+  installedBrowsers,
+  integrationToken,
+  regenerateToken
+} from '../integration'
 import { ALWAYS_ALLOWED, DEFAULT_SCHEDULE } from '../../shared/schedule'
 import { normalizeRequest, sanitizeExtras } from '../../shared/requestHeaders'
 import { deviceBindingSupported } from '../network/deviceBinding'
@@ -396,13 +403,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('getIntegration', async () => ({
     port: integrationPort(),
     key: await integrationToken(),
-    folder: extensionFolder()
+    folder: installedExtensionFolder()
   }))
   handle('regenerateIntegrationKey', async () => regenerateToken())
   handle('openExtensionFolder', async () => {
-    const failure = await shell.openPath(extensionFolder())
+    // The visible copy: a browser's folder picker cannot step inside the app bundle.
+    const failure = await shell.openPath(await installExtension())
     if (failure) throw new Error(failure)
   })
+  handle('listBrowsers', async () => installedBrowsers())
+  handle('addExtensionToBrowser', async (_event, id) => addExtensionToBrowser(String(id)))
   handle('scanPage', async (_event, url, all, extras) =>
     scanPage(url, sanitizeExtras(extras), all === true)
   )

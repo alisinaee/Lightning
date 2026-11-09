@@ -60,7 +60,7 @@ Faster networks take more pieces, so a slow one never holds the others back.
 - **When downloads finish.** Optionally ask whether to quit, sleep or shut down; a file can also open itself, or show in its folder, when done.
 - **Sign-in, cookies and headers.** Basic auth (or `user:pass@` in a link), a Referer, cookies (paste or import `cookies.txt`), a User-Agent and extra headers per download. They are never sent on to another host after a redirect.
 - **Checksums.** Paste a SHA-256, SHA-1 or MD5 and the finished file is verified.
-- **Browser extension.** Chrome, Edge, Brave and Firefox can hand downloads to Lightning (see `extension/`).
+- **Browser extension.** Chrome, Edge, Brave, Arc, Opera, Vivaldi, Firefox and Safari can hand downloads to Lightning. Settings → Browser adds it in a click or two and it pairs by itself (see `extension/`).
 - **Extras.** Start at login (hidden in the tray) and offer to download links you copy.
 
 ### Your list

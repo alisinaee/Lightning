@@ -7,6 +7,8 @@ export const IpcChannels = {
   getIntegration: 'integration:get',
   regenerateIntegrationKey: 'integration:regenerate-key',
   openExtensionFolder: 'integration:open-folder',
+  listBrowsers: 'integration:list-browsers',
+  addExtensionToBrowser: 'integration:add-to-browser',
   getInitialState: 'app:get-initial-state',
   updateSettings: 'app:update-settings',
   openSettingsWindow: 'settings:open-window',

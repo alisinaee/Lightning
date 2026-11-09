@@ -21,6 +21,7 @@ import type {
   FinishedDownload,
   GroupInfo,
   GroupPatch,
+  BrowserInfo,
   IntegrationInfo,
   NetworkInterfaceInfo,
   PendingLink,
@@ -69,6 +70,10 @@ export interface IpcContract {
   /** A new pairing key: the extension paired with the old one has to be paired again. */
   regenerateIntegrationKey: { args: []; result: string }
   openExtensionFolder: { args: []; result: void }
+  /** Browsers on this computer the extension can be added to. */
+  listBrowsers: { args: []; result: BrowserInfo[] }
+  /** Sets the extension up in Documents and opens the browser's extensions page; returns the folder. */
+  addExtensionToBrowser: { args: [id: string]; result: string }
   probeUrl: { args: [url: string, extras?: RequestExtras]; result: ProbeResult }
   chooseDestinationFolder: { args: [defaultPath: string]; result: string | null }
   chooseTorrentFile: { args: []; result: string | null }

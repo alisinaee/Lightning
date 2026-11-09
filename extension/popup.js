@@ -40,4 +40,5 @@ $('save').addEventListener('click', async () => {
   await refresh()
 })
 
-load().then(refresh)
+// The status check pairs from pairing.json first, so the key field shows the key it found.
+refresh().then(load)

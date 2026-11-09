@@ -651,6 +651,17 @@ export interface ChecksumResult {
 }
 
 /** What Settings shows of the browser integration. */
+/** A browser on this computer the extension can be added to. */
+export interface BrowserInfo {
+  id: string
+  name: string
+  firefox: boolean
+  /** Loaded only until the browser quits (Firefox, Safari). */
+  temporary: boolean
+  /** The browser's app icon as a data URL ('' when it could not be read). */
+  icon: string
+}
+
 export interface IntegrationInfo {
   /** Null while it is off (or no port was free). */
   port: number | null

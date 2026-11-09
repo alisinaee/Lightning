@@ -15,10 +15,16 @@ controls what the browser shares for it:
 
 It talks to Lightning over `127.0.0.1` only. Lightning must be running.
 
-1. In Lightning: **Settings → Browser** → copy the pairing key.
-2. Load the extension:
-   - Chrome / Edge / Brave: `chrome://extensions` → Developer mode → **Load unpacked** → this folder.
-   - Firefox: `about:debugging` → This Firefox → **Load Temporary Add-on** → `manifest.json`.
-3. Click the extension's icon, paste the key, **Save**.
+1. In Lightning: **Settings → Browser** → **Add to Chrome** (or your browser). Lightning copies the
+   extension to `Documents/Lightning Extension`, writes its pairing key beside it, opens the browser's
+   extensions page and shows the folder in Finder.
+2. Load the extension from that folder:
+   - Chrome / Edge / Brave / Arc / Opera / Vivaldi: turn on Developer mode, then drag the folder onto
+     the extensions page (or **Load unpacked** → the folder).
+   - Firefox: `about:debugging` → This Firefox → **Load Temporary Add-on** → `manifest.json`
+     (removed when Firefox quits).
+   - Safari 18+: Settings → Advanced → show web developer features; Settings → Developer → allow
+     unsigned extensions → **Add Temporary Extension** → the folder (removed when Safari quits).
+3. The extension pairs by itself from `pairing.json`. Pasting the key in its popup still works.
 
 If Lightning is not running, the browser downloads the file itself as usual.
