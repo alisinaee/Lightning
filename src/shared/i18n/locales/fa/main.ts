@@ -38,6 +38,9 @@ export default {
   'Download this YouTube video?': 'این ویدیوی YouTube دانلود شود؟',
   'Click to review the links.': 'برای مرور پیوندها کلیک کنید.',
   'Download this link?': 'این پیوند دانلود شود؟',
+  'Closes by itself': 'بسته می‌شود خودکار',
+  'Closes in {seconds} s unless you use it':
+    'تا {seconds} ثانیهٔ دیگر بسته می‌شود، مگر اینکه از آن استفاده کنید',
   'Download {count} Telegram messages?': '{count} پیام Telegram دانلود شود؟',
   'That download is still finishing. Try again soon.':
     'این دانلود هنوز در حال پایان است. کمی بعد دوباره تلاش کنید.',

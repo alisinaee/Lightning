@@ -23,7 +23,7 @@ function Toggle({
   onChange: (on: boolean) => void
 }): React.JSX.Element {
   return (
-    <label className={`ios-row ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
+    <label className={`ios-row min-w-0 ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
       <span className="ios-label">
         {t(label)}
         {hint && <span className="ios-hint">{t(hint)}</span>}
@@ -71,7 +71,7 @@ export function ClipboardSettings({
       <div className="ios-title">{t('Which links')}</div>
       <Toggle
         label="File links"
-        hint="Links to archives, videos, installers, magnet links and the like."
+        hint="Any web link or magnet link you copy."
         checked={prefs.watchClipboard}
         disabled={!tracking}
         onChange={(watchClipboard) => save({ watchClipboard })}
@@ -106,8 +106,8 @@ export function ClipboardSettings({
       ) : (
         <>
           {entries.map((entry) => (
-            <div key={entry.id} className="ios-row">
-              <span className="ios-label min-w-0">
+            <div key={entry.id} className="ios-row min-w-0">
+              <span className="ios-label min-w-0 overflow-hidden">
                 <span
                   dir="ltr"
                   className="block truncate text-start font-mono text-[12.5px]"

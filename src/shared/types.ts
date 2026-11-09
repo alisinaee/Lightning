@@ -691,6 +691,8 @@ export interface IntegrationInfo {
 export interface PendingLink {
   url: string
   extras?: RequestExtras
+  /** Copied to the clipboard and noticed by Lightning: the dialog closes by itself after a while. */
+  fromClipboard?: boolean
 }
 
 /** Sign-in details for HTTP Basic authentication. */

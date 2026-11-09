@@ -12,7 +12,8 @@ export function useOpenedLinks(): void {
       void window.lightning
         .takePendingLink()
         .then((pending) => {
-          if (pending) openNewDownload(pending.url, undefined, pending.extras)
+          if (pending)
+            openNewDownload(pending.url, undefined, pending.extras, pending.fromClipboard)
         })
         .catch(() => {})
     }

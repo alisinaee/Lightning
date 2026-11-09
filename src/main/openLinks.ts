@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { PendingLink, RequestExtras } from '../shared/types'
 
@@ -38,12 +38,15 @@ export function linkFromArgs(argv: readonly string[]): string | null {
 export function offerLink(
   link: string,
   window: BrowserWindow | null,
-  extras?: RequestExtras
+  extras?: RequestExtras,
+  fromClipboard = false
 ): void {
-  pending = { url: link, extras }
+  pending = { url: link, extras, fromClipboard }
   if (!window || window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
   window.show()
+  // Brings Lightning itself to the front, not just its window, when another app is in front.
+  app.focus({ steal: true })
   window.focus()
   window.webContents.send(IpcChannels.linkReceived)
 }
@@ -55,11 +58,28 @@ export function takePendingLink(): PendingLink | null {
   return link
 }
 
+/** Brings the window forward and opens Add several links with the links that were copied together. */
+export function offerSeveralLinks(links: string[], window: BrowserWindow | null): void {
+  if (!window || window.isDestroyed()) return
+  if (window.isMinimized()) window.restore()
+  window.show()
+  // Brings Lightning itself to the front, not just its window, when another app is in front.
+  app.focus({ steal: true })
+  window.focus()
+  window.webContents.send(
+    IpcChannels.appCommand,
+    'several-links',
+    JSON.stringify({ links, fromClipboard: true })
+  )
+}
+
 /** Brings the window forward and hands it Telegram message links to fill the Add dialog with. */
 export function offerTelegram(links: string[], window: BrowserWindow | null): void {
   if (!window || window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
   window.show()
+  // Brings Lightning itself to the front, not just its window, when another app is in front.
+  app.focus({ steal: true })
   window.focus()
   window.webContents.send(IpcChannels.appCommand, 'telegram-links', JSON.stringify({ links }))
 }

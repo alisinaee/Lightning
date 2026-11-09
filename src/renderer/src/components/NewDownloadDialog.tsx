@@ -3,6 +3,7 @@ import { localeTag } from '@shared/i18n'
 import type { ProbeResult } from '@shared/types'
 import type { DuplicateMatch } from '@shared/duplicates'
 import { DnsPicker } from './DnsPicker'
+import { CloseCountdown } from './CloseCountdown'
 import { VpnSwitch } from './VpnSwitch'
 import { FormatBadge } from './downloads/FileKindIcon'
 import { cn } from 'cn'
@@ -65,17 +66,28 @@ export function NewDownloadDialog(): React.JSX.Element {
   const open = useAppStore((store) => store.newDownloadOpen)
   const close = useAppStore((store) => store.closeNewDownload)
 
+  // Any click or key in the dialog stops the countdown of a link the clipboard offered.
+  const keepOpen = (): void => {
+    if (useAppStore.getState().newDownloadCloseAt !== null)
+      useAppStore.setState({ newDownloadCloseAt: null })
+  }
+
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
       <DialogContent className="flex max-h-[calc(100%-2rem)] flex-col gap-0 p-0 sm:max-w-[560px]">
         {/* Mounted only while open, so each opening starts fresh from the link field. */}
-        {open && <NewDownloadForm onDone={close} />}
+        {open && (
+          <div className="contents" onPointerDownCapture={keepOpen} onKeyDownCapture={keepOpen}>
+            <NewDownloadForm onDone={close} />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
 function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element {
+  const closeAt = useAppStore((store) => store.newDownloadCloseAt)
   const interfaces = useAppStore((store) => store.interfaces)
   const networkPreferences = useAppStore((store) => store.networkPreferences)
   const useVpn = useAppStore((store) => store.useVpn)
@@ -608,6 +620,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
       </div>
 
       <div className="flex items-center gap-2 border-t-[0.5px] border-border px-4 py-2">
+        {closeAt !== null && <CloseCountdown closeAt={closeAt} onExpire={onDone} />}
         {startError ? (
           <div className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--color-danger)]">
             {startError}

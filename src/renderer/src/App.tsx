@@ -156,6 +156,7 @@ function App(): React.JSX.Element {
       } else if (command === 'several-links') {
         // From the browser extension: the links it found on the page, with its cookies.
         let seed: { links: string[]; extras?: RequestExtras } | undefined
+        let fromClipboard = false
         try {
           const parsed: unknown = argument ? JSON.parse(argument) : null
           if (
@@ -164,11 +165,12 @@ function App(): React.JSX.Element {
             Array.isArray((parsed as { links?: unknown }).links)
           ) {
             seed = parsed as { links: string[]; extras?: RequestExtras }
+            fromClipboard = (parsed as { fromClipboard?: unknown }).fromClipboard === true
           }
         } catch {
           seed = undefined
         }
-        store.openMultiLinks(seed)
+        store.openMultiLinks(seed, fromClipboard)
       } else if (command === 'telegram-links') {
         // From the clipboard offer: the Telegram message links that were copied.
         let links: string[] = []

@@ -38,6 +38,9 @@ export default {
   'Download this YouTube video?': 'Скачать это видео с YouTube?',
   'Click to review the links.': 'Нажмите, чтобы просмотреть ссылки.',
   'Download this link?': 'Скачать эту ссылку?',
+  'Closes by itself': 'Закроется само',
+  'Closes in {seconds} s unless you use it':
+    'Закроется через {seconds} с, если вы им не воспользуетесь',
   'Download {count} Telegram messages?': {
     one: 'Скачать сообщение Telegram?',
     few: 'Скачать {count} сообщения Telegram?',

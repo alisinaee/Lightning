@@ -126,8 +126,7 @@ export default {
   'Lightning {version}': 'Lightning {version}',
   'Lightning {version} is available.': 'Lightning {version} در دسترس است.',
   'Limit speed to': 'محدود کردن سرعت به',
-  'Links to archives, videos, installers, magnet links and the like.':
-    'پیوند آرشیوها، ویدیوها، نصب‌کننده‌ها، پیوندهای magnet و مانند آن.',
+  'Any web link or magnet link you copy.': 'هر پیوند وب یا magnet که کپی می‌کنید.',
   'Listening on': 'گوش دادن روی',
   'MB/s': 'MB/s',
   Manual: 'دستی',

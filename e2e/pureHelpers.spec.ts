@@ -193,7 +193,7 @@ test('parseChecksum reads the forms people paste', () => {
   expect(isChecksum({ algo: 'sha1', value: 'B'.repeat(40) })).toBe(false)
 })
 
-test('downloadableLink offers links to files and nothing else', () => {
+test('downloadableLink offers any single web or magnet link, whatever its extension', () => {
   expect(downloadableLink(' https://h.test/dl/Ubuntu%2024.iso?token=1 ')).toBe(
     'https://h.test/dl/Ubuntu%2024.iso?token=1'
   )
@@ -201,9 +201,9 @@ test('downloadableLink offers links to files and nothing else', () => {
     'magnet:?xt=urn:btih:abc123&dn=x'
   )
   expect(downloadableLink('https://h.test/movie.MKV')).toBe('https://h.test/movie.MKV')
-  expect(downloadableLink('https://h.test/page.html')).toBeNull()
-  expect(downloadableLink('https://h.test/picture.png')).toBeNull()
-  expect(downloadableLink('https://h.test/')).toBeNull()
+  expect(downloadableLink('https://h.test/download?id=123')).toBe('https://h.test/download?id=123')
+  expect(downloadableLink('https://h.test/page.html')).toBe('https://h.test/page.html')
+  expect(downloadableLink('https://h.test/')).toBe('https://h.test/')
   expect(downloadableLink('see https://h.test/a.zip please')).toBeNull()
   expect(downloadableLink('ftp://h.test/a.zip')).toBeNull()
   expect(downloadableLink('')).toBeNull()

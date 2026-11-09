@@ -127,8 +127,8 @@ export default {
   'Lightning {version}': 'Lightning {version}',
   'Lightning {version} is available.': 'Доступна версия Lightning {version}.',
   'Limit speed to': 'Ограничить скорость до',
-  'Links to archives, videos, installers, magnet links and the like.':
-    'Ссылки на архивы, видео, установщики, magnet-ссылки и подобное.',
+  'Any web link or magnet link you copy.':
+    'Любая веб-ссылка или magnet-ссылка, которую вы копируете.',
   'Listening on': 'Слушает на',
   'MB/s': 'МБ/с',
   Manual: 'Вручную',

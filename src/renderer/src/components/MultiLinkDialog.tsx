@@ -1,3 +1,4 @@
+import { CloseCountdown } from './CloseCountdown'
 import { t, tn } from '@shared/i18n/react'
 import type { ProbeResult } from '@shared/types'
 import type { DuplicateMatch } from '@shared/duplicates'
@@ -41,16 +42,31 @@ export function MultiLinkDialog(): React.JSX.Element {
   const open = useAppStore((store) => store.multiLinksOpen)
   const close = useAppStore((store) => store.closeMultiLinks)
 
+  // Any click or key in the dialog stops the countdown of links the clipboard offered.
+  const keepOpen = (): void => {
+    if (useAppStore.getState().multiLinksCloseAt !== null)
+      useAppStore.setState({ multiLinksCloseAt: null })
+  }
+
   return (
     <Dialog open={open} disablePointerDismissal onOpenChange={(next) => !next && close()}>
       <DialogContent className="flex h-[560px] max-h-[calc(100%-2rem)] min-h-[360px] w-[760px] max-w-[calc(100%-2rem)] min-w-[480px] resize flex-col gap-0 overflow-auto p-0 sm:max-w-[calc(100%-2rem)]">
-        {open && <MultiLinkForm onDone={close} />}
+        {open && (
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onPointerDownCapture={keepOpen}
+            onKeyDownCapture={keepOpen}
+          >
+            <MultiLinkForm onDone={close} />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
 function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
+  const closeAt = useAppStore((store) => store.multiLinksCloseAt)
   const interfaces = useAppStore((store) => store.interfaces)
   const destinationDir = useAppStore((store) => store.destinationDir)
   const setDestinationDir = useAppStore((store) => store.setDestinationDir)
@@ -587,6 +603,11 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
       </div>
 
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border px-5 py-3">
+        {closeAt !== null && (
+          <div className={rows ? undefined : 'me-auto'}>
+            <CloseCountdown closeAt={closeAt} onExpire={onDone} />
+          </div>
+        )}
         {rows && (
           <Button
             type="button"

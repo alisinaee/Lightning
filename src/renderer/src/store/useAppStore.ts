@@ -1,3 +1,4 @@
+import { CLIPBOARD_OFFER_MS } from '@shared/clipboardLinks'
 import { connectionsOnly, isVpn } from '@shared/networks'
 import type { FileKind } from '../utils/fileKind'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
@@ -252,14 +253,24 @@ interface AppStore {
   /** Removes a download (cancelling one under way), or forgets a finished one. */
   removeDownload: (id: string, options?: { trashFile?: boolean }) => void
   setView: (view: View) => void
-  /** Opens New download, with `link` in its link field when one is given. */
-  openNewDownload: (link?: string, replacesId?: string, extras?: RequestExtras) => void
+  /** Opens New download, with `link` in its link field when one is given. `autoClose` (a link the
+   * clipboard offered) closes it after a while, unless the person uses it. */
+  openNewDownload: (
+    link?: string,
+    replacesId?: string,
+    extras?: RequestExtras,
+    autoClose?: boolean
+  ) => void
+  /** When the open New download closes by itself, as a time in ms; null when it stays open. */
+  newDownloadCloseAt: number | null
+  /** When the open Add several links closes by itself; null when it stays open. */
+  multiLinksCloseAt: number | null
   /** What the browser knew about the link New download was opened with (see PendingLink). */
   draftExtras: RequestExtras | null
   /** A finished download whose file is gone, which the download now being set up replaces. */
   replacesId: string | null
   closeNewDownload: () => void
-  openMultiLinks: (seed?: { links: string[]; extras?: RequestExtras }) => void
+  openMultiLinks: (seed?: { links: string[]; extras?: RequestExtras }, autoClose?: boolean) => void
   closeMultiLinks: () => void
   setDownloadsAtOnce: (count: number) => void
   /** Each one applies at once, to every download (see main/network/limits.ts). */
@@ -543,21 +554,41 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   replacesId: null,
   draftExtras: null,
-  openNewDownload: (link, replacesId, extras) =>
+  newDownloadCloseAt: null,
+  multiLinksCloseAt: null,
+  openNewDownload: (link, replacesId, extras, autoClose) =>
     set(
       link === undefined
-        ? { newDownloadOpen: true, replacesId: null, draftExtras: null }
+        ? {
+            newDownloadOpen: true,
+            replacesId: null,
+            draftExtras: null,
+            newDownloadCloseAt: null
+          }
         : {
             newDownloadOpen: true,
             draftUrl: link,
             replacesId: replacesId ?? null,
-            draftExtras: extras ?? null
+            draftExtras: extras ?? null,
+            newDownloadCloseAt: autoClose === true ? Date.now() + CLIPBOARD_OFFER_MS : null
           }
     ),
 
-  closeNewDownload: () => set({ newDownloadOpen: false, replacesId: null, draftExtras: null }),
-  openMultiLinks: (seed) => set({ multiLinksOpen: true, multiLinksSeed: seed ?? null }),
-  closeMultiLinks: () => set({ multiLinksOpen: false, multiLinksSeed: null }),
+  closeNewDownload: () =>
+    set({
+      newDownloadOpen: false,
+      replacesId: null,
+      draftExtras: null,
+      newDownloadCloseAt: null
+    }),
+  openMultiLinks: (seed, autoClose) =>
+    set({
+      multiLinksOpen: true,
+      multiLinksSeed: seed ?? null,
+      multiLinksCloseAt: autoClose === true ? Date.now() + CLIPBOARD_OFFER_MS : null
+    }),
+  closeMultiLinks: () =>
+    set({ multiLinksOpen: false, multiLinksSeed: null, multiLinksCloseAt: null }),
 
   setDownloadsAtOnce: (downloadsAtOnce) => {
     set({ downloadsAtOnce })
