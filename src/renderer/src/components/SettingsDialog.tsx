@@ -348,7 +348,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
 
   return (
     <div className="settings-ios flex h-screen w-screen bg-background text-foreground">
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <nav className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto p-3 pt-4">
           <h1 className="px-2 pb-3 text-[20px] font-semibold tracking-tight">{t('Settings')}</h1>
           <div className="relative mb-2">
