@@ -75,6 +75,12 @@ app.on('second-instance', (_event, argv) => {
 // macOS hands links over as events, and may do so before the app is ready.
 app.on('open-url', (event, url) => {
   event.preventDefault()
+  // lightning:// only starts or wakes the app (the browser extension opens it); it carries no link.
+  if (/^lightning:/i.test(url)) {
+    if (mainWindow?.isMinimized()) mainWindow.restore()
+    mainWindow?.focus()
+    return
+  }
   offer(url)
 })
 app.on('open-file', (event, path) => {

@@ -1,5 +1,9 @@
 appId: com.lightning.app
 productName: Lightning
+# Only the lightning:// scheme: the browser extension opens it to start the app when it is closed.
+protocols:
+  - name: Lightning
+    schemes: [lightning]
 afterPack: scripts/check-torrent-package.mjs
 directories:
   buildResources: build
@@ -39,8 +43,8 @@ win:
     - from: vendor/yt-dlp/win32-${arch}
       to: yt-dlp
       filter: ['yt-dlp.exe']
-  # No protocols or fileAssociations: the NSIS installer would register Lightning as *the* handler for
-  # magnet links and .torrent files, taking them from a torrent client the user already has.
+  # No fileAssociations and no magnet scheme: the NSIS installer would register Lightning as *the*
+  # handler for magnet links and .torrent files, taking them from a torrent client the user already has.
   # A .torrent can still be opened with Lightning through "Open with".
   executableName: lightning
   target:

@@ -139,11 +139,44 @@ async function refreshMenus() {
 }
 refreshMenus()
 
-/** Sends a link to Lightning. Resolves 'ok', or why not: 'down' (app not running), 'key' (not
- * paired or the key is old), 'error'. */
+// Lightning registers the lightning:// scheme: opening it starts the app when it is closed.
+const APP_LINK = 'lightning://open'
+const APP_WAIT_MS = 20000
+let launching = null
+
+/** Starts Lightning when it is not running and waits until it answers. Resolves its port, or null
+ * when it did not come up in time. One start at a time. */
+function launchApp() {
+  if (launching) return launching
+  launching = (async () => {
+    const running = await findPort(true)
+    if (running) return running
+    try {
+      const tab = await api.tabs.create({ url: APP_LINK, active: false })
+      // The browser's hand-off page is not needed once the app has taken the link.
+      setTimeout(() => api.tabs.remove(tab.id).catch(() => {}), 3000)
+    } catch {
+      // The browser refused the link (no app registered for it): nothing more to try.
+      return null
+    }
+    const until = Date.now() + APP_WAIT_MS
+    while (Date.now() < until) {
+      await new Promise((done) => setTimeout(done, 500))
+      const port = await findPort(true)
+      if (port) return port
+    }
+    return null
+  })().finally(() => {
+    launching = null
+  })
+  return launching
+}
+
+/** Sends a link to Lightning. Resolves 'ok', or why not: 'down' (app not running and could not be
+ * started), 'key' (not paired or the key is old), 'error'. */
 async function sendToLightning(payload) {
   const { key } = await settings()
-  const port = await findPort()
+  const port = (await findPort()) || (await launchApp())
   if (!port) return 'down'
   try {
     const response = await fetch(`http://127.0.0.1:${port}/v1/add`, {
@@ -532,6 +565,11 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
     sendYoutubeBatch(Array.isArray(message.videos) ? message.videos : []).then((outcome) =>
       respond({ ...outcome, message: problem(outcome.result) })
     )
+    return true
+  }
+  // The popup's Retry when Lightning is closed: starts it, then the popup checks again.
+  if (message?.type === 'launch') {
+    launchApp().then((port) => respond({ port }))
     return true
   }
   if (message?.type === 'status') {

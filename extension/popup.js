@@ -105,7 +105,11 @@ $('save-key').addEventListener('click', async () => {
   await refresh()
 })
 
-$('retry').addEventListener('click', refresh)
+$('retry').addEventListener('click', async () => {
+  // Starts Lightning when it is closed (the browser asks once to open it), then checks again.
+  await api.runtime.sendMessage({ type: 'launch' }).catch(() => {})
+  refresh()
+})
 
 $('repair').addEventListener('click', async () => {
   const { changed } = await api.runtime.sendMessage({ type: 'repair' })
