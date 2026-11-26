@@ -630,6 +630,8 @@ export const DEFAULT_SLOW_MODE_SPEED = 2 * 1024 ** 2
 /** Everything the renderer needs for its first paint, read synchronously by the preload so no
  * saved value flashes in over a default a moment after launch. */
 export interface InitialState {
+  /** An e2e run: no first-run intro or tour. */
+  skipFirstRun?: boolean
   /** "Lightning", or "Lightning" for that build. */
   appName?: string
   homeDir: string

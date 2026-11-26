@@ -40,10 +40,9 @@ test.describe('status bar menu @smoke', () => {
     await expect(page.getByText('↓')).toBeVisible({ timeout: 15_000 })
 
     const choose = async (name: string | RegExp): Promise<void> => {
-      await page.getByRole('button', { name: 'Settings', exact: true }).click()
-      await page.getByRole('button', { name: 'Status bar', exact: true }).click()
-      await page.getByRole('checkbox', { name, exact: typeof name === 'string' }).click()
-      await page.keyboard.press('Escape')
+      const settings = await lightning.openSettings('Status bar')
+      await settings.getByRole('switch', { name, exact: typeof name === 'string' }).click()
+      await lightning.closeSettings()
     }
 
     // An item of the bar goes.
@@ -69,10 +68,9 @@ test.describe('status bar menu @smoke', () => {
 
   test('the choices survive a restart', async ({ lightning }) => {
     const page = lightning.page
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Status bar', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Free disk space', exact: true }).click()
-    await page.keyboard.press('Escape')
+    const settings = await lightning.openSettings('Status bar')
+    await settings.getByRole('switch', { name: 'Free disk space', exact: true }).click()
+    await lightning.closeSettings()
     await expect(page.getByText(/ free$/)).toBeHidden()
     // Saved at once, so a restart finds it as chosen.
     await expect(async () => {

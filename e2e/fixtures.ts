@@ -245,6 +245,40 @@ export class LightningApp {
         )
   })
 
+  /** Opens Settings (its own window) from the title bar, at `pageName` when given, and returns
+   * that window's page. */
+  async openSettings(pageName?: string): Promise<Page> {
+    const find = (): Page | undefined =>
+      this.electronApp
+        .windows()
+        .find((page) => !page.isClosed() && page.url().includes('#settings'))
+    await this.page.getByRole('button', { name: 'Settings', exact: true }).click()
+    // Another window (the menu-bar panel) can appear first: wait for the one that is Settings.
+    let settings = find()
+    for (let tries = 0; !settings && tries < 100; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      settings = find()
+    }
+    if (!settings) throw new Error('Settings did not open')
+    await settings.waitForLoadState('domcontentloaded')
+    if (pageName) {
+      await settings.getByRole('button', { name: pageName, exact: true }).first().click()
+    }
+    return settings
+  }
+
+  /** Closes the Settings window, if it is open. */
+  async closeSettings(): Promise<void> {
+    const open = this.electronApp.windows().filter((page) => page.url().includes('#settings'))
+    const closed = Promise.all(open.map((page) => page.waitForEvent('close').catch(() => {})))
+    await this.evaluateMain(({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.webContents.getURL().includes('#settings')) window.close()
+      }
+    }, null)
+    await closed
+  }
+
   /** Main-process code, e.g. to replace a dialog or make a network disappear. */
   evaluateMain<R, A>(fn: (electron: typeof import('electron'), arg: A) => R, arg: A): Promise<R> {
     return this.electronApp.evaluate(fn as never, arg) as Promise<R>

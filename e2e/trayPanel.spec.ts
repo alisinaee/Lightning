@@ -47,19 +47,15 @@ test.describe('menu bar panel @smoke', () => {
     await expect(region.getByRole('button', { name: 'Open alpha.rar' })).toBeVisible()
     await expect(region.getByRole('button', { name: 'Open beta.rar' })).toBeVisible()
     await expect(region.getByText('waiting')).toBeVisible()
-    await expect(region.getByRole('button', { name: 'New download' })).toBeVisible()
+    await expect(region.getByRole('button', { name: 'New', exact: true })).toBeVisible()
     await expect(region.getByRole('button', { name: 'Quit' })).toBeVisible()
-    await panel.waitForTimeout(1500)
-    await panel.screenshot({
-      path: '/private/tmp/claude-501/-Users-ali-Works-Lightning/2947f1ce-1f8b-4bb3-a1ec-f36e4dcfd144/scratchpad/panel.png'
-    })
   })
 
   test('says so when nothing is downloading', async ({ lightning }) => {
     const panel = await panelOf(lightning)
     const region = panel.getByRole('region', { name: 'Lightning status' })
     await expect(region.getByText('Nothing is downloading')).toBeVisible({ timeout: 20_000 })
-    await expect(region.getByRole('button', { name: 'New download' })).toBeVisible()
+    await expect(region.getByRole('button', { name: 'New', exact: true })).toBeVisible()
   })
 
   test('the panel obeys Settings → Status bar', async ({ lightning, serve }) => {
@@ -71,20 +67,18 @@ test.describe('menu bar panel @smoke', () => {
       timeout: 20_000
     })
 
-    const page = lightning.page
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Status bar', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'A speed graph in the panel' }).click()
-    await page.getByRole('checkbox', { name: /^Quick buttons in the panel/ }).click()
-    await page
-      .getByRole('checkbox', { name: 'The downloads running now (click one to open it)' })
+    const settings = await lightning.openSettings('Status bar')
+    await settings.getByRole('switch', { name: 'A speed graph in the panel' }).click()
+    await settings.getByRole('switch', { name: /^Quick buttons in the panel/ }).click()
+    await settings
+      .getByRole('switch', { name: 'The downloads running now (click one to open it)' })
       .click()
-    await page.keyboard.press('Escape')
+    await lightning.closeSettings()
 
     await expect(region.getByRole('img', { name: 'Total speed over the last minute' })).toBeHidden({
       timeout: 20_000
     })
-    await expect(region.getByRole('button', { name: 'New download' })).toBeHidden()
+    await expect(region.getByRole('button', { name: 'New', exact: true })).toBeHidden()
     await expect(region.getByRole('button', { name: 'Open delta.bin' })).toBeHidden()
   })
 })

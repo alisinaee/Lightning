@@ -10,6 +10,51 @@
 
   root.LightningChangelog = [
     {
+      version: 'v1.0.0-rc.46',
+      items: [
+        {
+          kind: 'new',
+          title: 'Video from any site',
+          text: 'The extension finds the video on any page, and .m3u8 streams go to the video queue, where yt-dlp saves them as one file instead of a playlist.'
+        },
+        {
+          kind: 'new',
+          title: 'Permissions in Settings, with drag to allow',
+          text: 'Settings → Permissions shows what macOS lets Lightning do. Allow opens System Settings with a small panel over it: drag the Lightning icon into Full Disk Access and it closes once the permission is on.'
+        },
+        {
+          kind: 'new',
+          title: 'Every copied link, and batches',
+          text: 'Any link you copy is offered, whatever its type. Links copied together open Add several links, and a copied YouTube link goes straight to its confirmation.'
+        },
+        {
+          kind: 'new',
+          title: 'Auto sync',
+          text: 'A finished download whose file you moved or deleted leaves the list by itself. Only the entry goes; your files are never touched. Turn it off in Settings → General.'
+        },
+        {
+          kind: 'improved',
+          title: 'The extension starts Lightning',
+          text: 'With Lightning closed, the extension opens it and hands over the link, instead of falling back to the browser.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Links that expire mid-download',
+          text: 'A signed link (Hugging Face, S3) that stops working during or after a pause is fetched fresh from the page it came from, and the download goes on.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Pasted .torrent paths in quotes',
+          text: 'A .torrent path pasted with quotes around it is accepted.'
+        },
+        {
+          kind: 'fixed',
+          title: 'Security update',
+          text: 'Electron 44.11.6 closes two published security advisories.'
+        }
+      ]
+    },
+    {
       version: 'v1.0.0-rc.39',
       items: [
         {

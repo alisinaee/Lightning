@@ -19,6 +19,9 @@ export const testKnobs = {
     process.env['LIGHTNING_USER_DATA'] && !app?.isPackaged
       ? (env['LIGHTNING_E2E_LANG'] ?? 'en')
       : null,
+  /** e2e runs start past the first-run intro and tour (they would cover what a test clicks),
+   * unless a test sets LIGHTNING_E2E_FIRST_RUN=1 to look at them. */
+  skipFirstRun: Boolean(env['LIGHTNING_USER_DATA']) && env['LIGHTNING_E2E_FIRST_RUN'] !== '1',
   /** Keeps the window off-screen so a test run doesn't pop windows up over the desktop. */
   hideWindow: env['LIGHTNING_E2E_HIDE_WINDOW'] === '1',
   blockBytes: positiveNumber('LIGHTNING_E2E_BLOCK_BYTES', 8 * 1024 * 1024),

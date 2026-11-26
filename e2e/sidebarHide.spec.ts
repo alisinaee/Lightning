@@ -29,10 +29,9 @@ test.describe('side panel, slow mode and the website line @smoke', () => {
     await expect(page.getByRole('button', { name: 'Filter' })).toBeVisible()
 
     // Brought back in Settings → Interface, and the choice is saved.
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Interface', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Show the side panel' }).click()
-    await page.keyboard.press('Escape')
+    const settings = await lightning.openSettings('Interface')
+    await settings.getByRole('switch', { name: 'Show the side panel' }).click()
+    await lightning.closeSettings()
     await expect(page.getByRole('navigation').first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Filter' })).toBeHidden()
   })
@@ -74,10 +73,9 @@ test.describe('side panel, slow mode and the website line @smoke', () => {
     await expect(page.getByText('host.bin').first()).toBeVisible()
     await expect(page.getByText(host)).toBeHidden()
 
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Interface', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Show the website under file names' }).click()
-    await page.keyboard.press('Escape')
+    const settings = await lightning.openSettings('Interface')
+    await settings.getByRole('switch', { name: 'Show the website under file names' }).click()
+    await lightning.closeSettings()
     await expect(page.getByText(host).first()).toBeVisible()
   })
 })

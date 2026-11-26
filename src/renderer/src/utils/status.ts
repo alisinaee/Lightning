@@ -1,5 +1,4 @@
 import { t } from '@shared/i18n/react'
-import type { DownloadState, FinishedDownload } from '@shared/types'
 import {
   ArrowLineDown as ArrowDownToLine,
   WarningCircle as CircleAlert,
@@ -9,12 +8,12 @@ import {
   Warning as TriangleAlert,
   type Icon
 } from '@phosphor-icons/react'
-import { describeError, linkExpired, wantedBytes, formatPercent } from './format'
+import { describeError, wantedBytes, formatPercent } from './format'
 
-export type Item = DownloadState | FinishedDownload
+import { isFinished, statusKeyOf, type Item, type StatusKey } from './statusKey'
 
-/** One vocabulary for how a download is doing, used by the list and by each download's screen. */
-export type StatusKey = 'downloading' | 'queued' | 'paused' | 'completed' | 'failed' | 'attention'
+// The icon-free part lives in statusKey.ts, so code the e2e specs load (downloadList) needs no icons.
+export { isFinished, STATUS_ORDER, statusKeyOf, type Item, type StatusKey } from './statusKey'
 
 export const STATUS_STYLE: Record<StatusKey, { label: string; icon: Icon; color: string }> = {
   // Labels are getters so they are read in the current language each time.
@@ -65,34 +64,6 @@ export const STATUS_STYLE: Record<StatusKey, { label: string; icon: Icon; color:
 /** A style for any key, even one this version doesn't know: never undefined. */
 export const statusStyle = (key: string): (typeof STATUS_STYLE)[StatusKey] =>
   STATUS_STYLE[key as StatusKey] ?? STATUS_STYLE.attention
-
-export const isFinished = (item: Item): item is FinishedDownload => 'unitsWritten' in item
-
-export function statusKeyOf(item: Item): StatusKey {
-  if (isFinished(item)) return 'completed'
-  switch (item.status) {
-    case 'completed':
-      return 'completed'
-    case 'downloading':
-      return 'downloading'
-    case 'queued':
-      return 'queued'
-    case 'error':
-      return linkExpired(item) ? 'attention' : 'failed'
-    default:
-      return 'paused'
-  }
-}
-
-/** Sort order of statuses: what is moving first, then what waits, then what is done. */
-export const STATUS_ORDER: Record<StatusKey, number> = {
-  downloading: 0,
-  queued: 1,
-  paused: 2,
-  attention: 3,
-  failed: 4,
-  completed: 5
-}
 
 export interface RowInfo {
   status: StatusKey

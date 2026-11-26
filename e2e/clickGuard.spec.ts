@@ -27,10 +27,7 @@ test('a page blocked with nothing open is released', async ({ lightning }) => {
 
 test('an open dialog may block the page behind it', async ({ lightning }) => {
   const { page } = lightning
-  await page
-    .getByRole('button', { name: /settings/i })
-    .first()
-    .click()
+  await lightning.newDownload()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.evaluate(() => (document.body.style.pointerEvents = 'none'))
   await page.waitForTimeout(7000)

@@ -533,10 +533,10 @@ test.describe('Check for updates in Settings @smoke', () => {
   test('says a newer version is available, with a link to it', async ({ lightning }) => {
     const page = lightning.page
     await page.getByRole('button', { name: 'Not now' }).click()
-    await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Check for updates' }).click()
-    await expect(page.getByRole('status')).toContainText('Lightning 9.9.9 is available')
-    await expect(page.getByRole('link', { name: 'Download it' })).toBeVisible()
+    const settings = await lightning.openSettings()
+    await settings.getByRole('button', { name: 'Check for updates' }).click()
+    await expect(settings.getByRole('status')).toContainText('Lightning 9.9.9 is available')
+    await expect(settings.getByRole('link', { name: 'Download it' })).toBeVisible()
   })
 })
 
@@ -545,12 +545,10 @@ test.describe('title bar buttons @smoke', () => {
     const page = lightning.page
     const logs = page.getByRole('button', { name: 'Open the logs' })
     const debug = page.getByRole('button', { name: /^Debug/ })
-    // Settings is modal, so the title bar is only looked at with it closed.
     const toggle = async (name: RegExp | string): Promise<void> => {
-      await page.getByRole('button', { name: 'Settings', exact: true }).click()
-      await page.getByRole('button', { name: 'Interface' }).click()
-      await page.getByRole('checkbox', { name }).click()
-      await page.keyboard.press('Escape')
+      const settings = await lightning.openSettings('Interface')
+      await settings.getByRole('switch', { name }).click()
+      await lightning.closeSettings()
     }
     await expect(logs).toBeVisible()
     await expect(debug).toBeVisible()

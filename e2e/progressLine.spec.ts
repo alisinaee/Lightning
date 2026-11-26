@@ -52,12 +52,11 @@ test('a running row has a progress line and a percentage, and Settings can turn 
     .toBeGreaterThan(first)
 
   // Off: the old bar is back inside the cell, and the line is gone.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Interface', exact: true }).click()
-  await page
-    .getByRole('checkbox', { name: 'Show a progress line along the bottom of each row' })
+  const settings = await lightning.openSettings('Interface')
+  await settings
+    .getByRole('switch', { name: 'Show a progress line along the bottom of each row' })
     .click()
-  await page.keyboard.press('Escape')
+  await lightning.closeSettings()
   const bar = row.getByRole('progressbar', { name: 'Progress' })
   await expect(bar).toHaveCount(1)
   const barBox = await bar.boundingBox()

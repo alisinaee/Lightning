@@ -2,7 +2,7 @@ import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } fro
 import type { DownloadFilter, SortKey } from '../store/useAppStore'
 import { connectionsOf, sourceOf, wantedBytes } from './format'
 import { kindOfDownload, type FileKind } from '@shared/fileKind'
-import { isFinished, STATUS_ORDER, statusKeyOf, type Item, type StatusKey } from './status'
+import { isFinished, STATUS_ORDER, statusKeyOf, type Item, type StatusKey } from './statusKey'
 
 /** A download group, with its files (finished ones too) to show when it is opened. */
 export interface GroupEntry {

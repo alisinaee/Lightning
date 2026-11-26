@@ -34,7 +34,7 @@ test.describe('YouTube screen UI & yt-dlp', () => {
     expect(status.version).toBe('2026.10.26')
     expect(status.ffmpeg).toBe(true)
 
-    const youtubeBtn = page.getByRole('button', { name: 'YouTube' })
+    const youtubeBtn = page.getByRole('tab', { name: /^YouTube/ })
     await expect(youtubeBtn).toBeVisible()
     await youtubeBtn.click()
 

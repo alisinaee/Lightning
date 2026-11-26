@@ -40,6 +40,7 @@ export function FirstRunIntro(): React.JSX.Element | null {
   // Only the first time the app opens, and not at all when the system asks for reduced motion.
   const [visible, setVisible] = useState(() => {
     try {
+      if (window.lightning.initialState.skipFirstRun) return false
       if (localStorage.getItem(STORAGE_KEY) !== null) return false
     } catch {
       return false

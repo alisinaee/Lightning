@@ -161,6 +161,16 @@ async function grouped(
 async function openFileTypes(page: Page): Promise<void> {
   const toggle = page.getByRole('button', { name: 'File type' })
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  // The entries slide in (up to 180 ms late, 260 ms long): measured before that ends, they move.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          (animation as CSSAnimation).animationName !== 'lightning-entry-in' ||
+          animation.playState !== 'running'
+      )
+  )
 }
 
 /** Clicks every sidebar entry, then every one again off the menu, expecting no error. */

@@ -4,39 +4,13 @@ import type { ClipboardHistoryEntry, ClipboardLinkKind, ResolvedPrefs } from '@s
 import { redactUrl } from '@shared/urlTools'
 import { t, formatDate, formatTime } from '@shared/i18n/react'
 import { Button } from '../ui/button'
-import { Switch } from '../ui/switch'
+import { Row } from './SettingsControls'
 
 const kindLabel = (kind: ClipboardLinkKind): string =>
   kind === 'file' ? t('File') : kind === 'youtube' ? 'YouTube' : 'Telegram'
 
-function Toggle({
-  label,
-  hint,
-  checked,
-  disabled,
-  onChange
-}: {
-  label: string
-  hint?: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (on: boolean) => void
-}): React.JSX.Element {
-  return (
-    <label className={`ios-row min-w-0 ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
-      <span className="ios-label">
-        {t(label)}
-        {hint && <span className="ios-hint">{t(hint)}</span>}
-      </span>
-      <Switch
-        checked={checked}
-        onCheckedChange={onChange}
-        disabled={disabled}
-        aria-label={t(label)}
-      />
-    </label>
-  )
-}
+/** A switch row, the same as the other Settings pages'. */
+const Toggle = Row
 
 function when(at: number): string {
   return `${formatDate(at, { month: 'short', day: 'numeric' })} ${formatTime(at, { hour: '2-digit', minute: '2-digit' })}`

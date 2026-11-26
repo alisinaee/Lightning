@@ -226,6 +226,7 @@ export function OnboardingTour(): React.JSX.Element | null {
   // Waiting to start (after the intro) counts as busy too, so nothing pops up in between.
   const [pending, setPending] = useState(() => {
     try {
+      if (window.lightning.initialState.skipFirstRun) return false
       return localStorage.getItem(STORAGE_KEY) === null
     } catch {
       return false
@@ -254,6 +255,7 @@ export function OnboardingTour(): React.JSX.Element | null {
   // Start once, after the intro if there is one.
   useEffect(() => {
     try {
+      if (window.lightning.initialState.skipFirstRun) return
       if (localStorage.getItem(STORAGE_KEY) !== null) return
     } catch {
       return

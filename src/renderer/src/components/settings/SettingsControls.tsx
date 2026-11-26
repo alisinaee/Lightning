@@ -1,5 +1,6 @@
 import type { AppPrefs, ResolvedPrefs } from '@shared/types'
 import { t } from '@shared/i18n/react'
+import { useId } from 'react'
 import { Switch } from '../ui/switch'
 
 export interface SettingsSectionProps {
@@ -20,17 +21,25 @@ export function Row({
   hint?: string
   disabled?: boolean
 }): React.JSX.Element {
+  const id = useId()
+  // Named by its label alone and described by the hint: labelled by the whole row, a screen reader
+  // would read the label twice (the row's text plus the switch's own name).
   return (
     <label className={`ios-row ${disabled ? 'opacity-50' : ''}`} data-setting={label}>
       <span className="ios-label">
-        {t(label)}
-        {hint && <span className="ios-hint">{t(hint)}</span>}
+        <span id={`${id}-label`}>{t(label)}</span>
+        {hint && (
+          <span id={`${id}-hint`} className="ios-hint">
+            {t(hint)}
+          </span>
+        )}
       </span>
       <Switch
         checked={checked}
         onCheckedChange={onChange}
         disabled={disabled}
-        aria-label={t(label)}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={hint ? `${id}-hint` : undefined}
       />
     </label>
   )

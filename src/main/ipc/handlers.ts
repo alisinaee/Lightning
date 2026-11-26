@@ -337,6 +337,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         ]))
       event.returnValue = {
         appName: appVariant().name,
+        skipFirstRun: testKnobs.skipFirstRun,
         homeDir: getHomeDir(),
         downloadsDir: getDefaultDownloadsDir(),
         themeSource: currentThemeSource(),
