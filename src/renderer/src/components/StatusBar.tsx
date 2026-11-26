@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PencilSimple as Pencil } from '@phosphor-icons/react'
+import { ClipboardText, PencilSimple as Pencil } from '@phosphor-icons/react'
 import { isVpn } from '@shared/networks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
@@ -132,6 +132,7 @@ export function StatusBar(): React.JSX.Element {
             </span>
           ))}
       </div>
+      {bar.showClipboard && <ClipboardControl />}
       {bar.showSlowMode && <SlowModeControl />}
       {bar.showFree && free !== null && (
         <span className="shrink-0">{t('{size} free', { size: formatBytes(free) })}</span>
@@ -139,6 +140,33 @@ export function StatusBar(): React.JSX.Element {
       <UpdateIndicator />
       <ThemeToggle />
     </ScreenFooter>
+  )
+}
+
+/** Clipboard tracking in the status bar: the same switch as Settings → Clipboard's first row. */
+function ClipboardControl(): React.JSX.Element {
+  const tracking = useAppStore((store) => store.prefsSnapshot.clipboardTrack)
+  const setPrefsSnapshot = useAppStore((store) => store.setPrefsSnapshot)
+  const toggle = (clipboardTrack: boolean): void => {
+    const prefs = { ...useAppStore.getState().prefsSnapshot, clipboardTrack }
+    setPrefsSnapshot(prefs)
+    window.lightning.updateSettings({ prefs }).catch(() => {})
+  }
+  return (
+    <label
+      className="flex shrink-0 cursor-pointer items-center gap-2"
+      title={
+        tracking
+          ? t('Lightning reads the text you copy to spot links. Click to stop.')
+          : t('Off: Lightning never reads the clipboard. Click to start.')
+      }
+    >
+      <Switch aria-label={t('Track the clipboard')} checked={tracking} onCheckedChange={toggle} />
+      <span className={`flex items-center gap-1 ${tracking ? 'text-foreground' : ''}`}>
+        <ClipboardText aria-hidden className="size-3.5" />
+        {t('Clipboard')}
+      </span>
+    </label>
   )
 }
 

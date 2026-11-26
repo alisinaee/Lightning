@@ -253,6 +253,12 @@ export default {
   'Total speed': 'سرعت کل',
   'Limits the combined download speed across all networks.':
     'مجموع سرعت دانلود در همه شبکه‌ها را محدود می‌کند.',
+  'Clipboard tracking': 'پیگیری کلیپ‌بورد',
+  'Track the clipboard': 'پیگیری کلیپ‌بورد',
+  'Lightning reads the text you copy to spot links. Click to stop.':
+    'Lightning متنی را که کپی می‌کنید برای یافتن پیوند می‌خواند. برای توقف کلیک کنید.',
+  'Off: Lightning never reads the clipboard. Click to start.':
+    'خاموش: Lightning کلیپ‌بورد را نمی‌خواند. برای شروع کلیک کنید.',
   'Slow mode': 'حالت کند',
   'Replaces the total speed limit while enabled. Useful during calls or streaming. Also editable from the status bar.':
     'تا زمانی که فعال است جایگزین محدودیت سرعت کل می‌شود. هنگام تماس یا پخش آنلاین مفید است. از نوار وضعیت هم قابل ویرایش است.',

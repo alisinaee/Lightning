@@ -70,6 +70,11 @@ export function StatusBarSettings({
         label="Slow mode"
       />
       <Row
+        checked={bar.showClipboard}
+        onChange={(showClipboard) => setBar({ showClipboard })}
+        label="A switch to track the clipboard"
+      />
+      <Row
         checked={bar.showFree}
         onChange={(showFree) => setBar({ showFree })}
         label="Free disk space"

@@ -91,6 +91,7 @@ export default {
     'Firefox هنگام بسته شدن آن را حذف می‌کند: بعد از راه‌اندازی مجدد دوباره اضافه کنید.',
   'For the app’s own requests, such as checking for updates. Downloads connect through the networks you chose and don’t use it.':
     'برای درخواست‌های خود برنامه، مثل بررسی به‌روزرسانی. دانلود‌ها از شبکه‌هایی که انتخاب کرده‌اید متصل می‌شوند و از آن استفاده نمی‌کنند.',
+  'A switch to track the clipboard': 'کلید پیگیری کلیپ‌بورد',
   'Free disk space': 'فضای آزاد دیسک',
   'Free disk space and the folder': 'فضای آزاد دیسک و پوشه',
   Fri: 'جمعه',

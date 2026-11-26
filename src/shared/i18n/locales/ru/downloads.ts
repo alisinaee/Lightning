@@ -327,6 +327,12 @@ export default {
   'Total speed': 'Общая скорость',
   'Limits the combined download speed across all networks.':
     'Ограничивает суммарную скорость загрузки по всем сетям.',
+  'Clipboard tracking': 'Отслеживание буфера обмена',
+  'Track the clipboard': 'Отслеживать буфер обмена',
+  'Lightning reads the text you copy to spot links. Click to stop.':
+    'Lightning читает копируемый текст, чтобы находить ссылки. Нажмите, чтобы остановить.',
+  'Off: Lightning never reads the clipboard. Click to start.':
+    'Выключено: Lightning не читает буфер обмена. Нажмите, чтобы включить.',
   'Slow mode': 'Медленный режим',
   'Replaces the total speed limit while enabled. Useful during calls or streaming. Also editable from the status bar.':
     'Заменяет ограничение общей скорости, пока включён. Полезно во время звонков и потокового видео. Также можно изменить в строке состояния.',

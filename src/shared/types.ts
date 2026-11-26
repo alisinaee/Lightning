@@ -359,6 +359,8 @@ export interface StatusBarPrefs {
   showWaiting: boolean
   showNetworks: boolean
   showSlowMode: boolean
+  /** A switch that turns clipboard tracking on and off (Settings → Clipboard's main switch). */
+  showClipboard: boolean
   showFree: boolean
   /** Clicking the count and speed opens a menu of live details. */
   menu: boolean
@@ -427,6 +429,7 @@ export const DEFAULT_STATUS_BAR: StatusBarPrefs = {
   showWaiting: true,
   showNetworks: true,
   showSlowMode: true,
+  showClipboard: true,
   showFree: true,
   menu: true,
   menuGraph: true,

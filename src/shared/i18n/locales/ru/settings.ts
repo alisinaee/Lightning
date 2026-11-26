@@ -92,6 +92,7 @@ export default {
     'Firefox удаляет его при выходе: после перезапуска добавьте снова.',
   'For the app’s own requests, such as checking for updates. Downloads connect through the networks you chose and don’t use it.':
     'Для собственных запросов приложения, например проверки обновлений. Загрузки идут через выбранные вами сети и не используют его.',
+  'A switch to track the clipboard': 'Переключатель отслеживания буфера обмена',
   'Free disk space': 'Свободное место на диске',
   'Free disk space and the folder': 'Свободное место и папка',
   Fri: 'Пт',

@@ -249,6 +249,7 @@ export const SETTINGS_INDEX: SettingEntry[] = [
     keywords: ['interface', 'wifi', 'ethernet']
   },
   { page: 'Status bar', label: 'Slow mode', keywords: ['limit'] },
+  { page: 'Status bar', label: 'A switch to track the clipboard', keywords: ['clipboard', 'copy'] },
   { page: 'Status bar', label: 'Free disk space', keywords: ['storage', 'space'] },
   { page: 'Status bar', label: 'The menu', keywords: ['status bar', 'popover'] },
   {

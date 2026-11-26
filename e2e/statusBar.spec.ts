@@ -66,6 +66,33 @@ test.describe('status bar menu @smoke', () => {
     await expect(page.getByText('↓')).toBeVisible()
   })
 
+  test('the clipboard switch in the bar turns tracking on and off', async ({ lightning }) => {
+    const page = lightning.page
+    // What main has saved, read back the way a new window reads it.
+    const saved = (): Promise<boolean> =>
+      page.evaluate(() => window.lightning.readInitialState().prefs.clipboardTrack)
+    const toggle = page.getByRole('switch', { name: 'Track the clipboard' })
+    await expect(toggle).toBeVisible()
+    const before = await toggle.isChecked()
+    await toggle.click()
+    await expect(toggle).toBeChecked({ checked: !before })
+    await expect.poll(saved).toBe(!before)
+    // Settings → Clipboard shows the same choice.
+    const settings = await lightning.openSettings('Clipboard')
+    await expect(
+      settings.getByRole('switch', { name: 'Track the clipboard for download links' })
+    ).toBeChecked({ checked: !before })
+    await lightning.closeSettings()
+    await toggle.click()
+    await expect.poll(saved).toBe(before)
+
+    // Settings → Status bar can take the switch away.
+    const bar = await lightning.openSettings('Status bar')
+    await bar.getByRole('switch', { name: 'A switch to track the clipboard', exact: true }).click()
+    await lightning.closeSettings()
+    await expect(toggle).toBeHidden()
+  })
+
   test('the choices survive a restart', async ({ lightning }) => {
     const page = lightning.page
     const settings = await lightning.openSettings('Status bar')
