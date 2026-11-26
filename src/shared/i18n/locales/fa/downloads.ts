@@ -259,6 +259,10 @@ export default {
     'Lightning متنی را که کپی می‌کنید برای یافتن پیوند می‌خواند. برای توقف کلیک کنید.',
   'Off: Lightning never reads the clipboard. Click to start.':
     'خاموش: Lightning کلیپ‌بورد را نمی‌خواند. برای شروع کلیک کنید.',
+  'Asking your browser for a fresh YouTube sign-in…':
+    'در حال گرفتن ورود تازهٔ YouTube از مرورگر شما…',
+  'YouTube asked for a sign-in. The Lightning extension sends it within half a minute, then the download starts again by itself.':
+    'YouTube ورود به حساب خواست. افزونهٔ Lightning ظرف نیم دقیقه آن را می‌فرستد و دانلود خودبه‌خود دوباره شروع می‌شود.',
   'Slow mode': 'حالت کند',
   'Replaces the total speed limit while enabled. Useful during calls or streaming. Also editable from the status bar.':
     'تا زمانی که فعال است جایگزین محدودیت سرعت کل می‌شود. هنگام تماس یا پخش آنلاین مفید است. از نوار وضعیت هم قابل ویرایش است.',

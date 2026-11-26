@@ -133,7 +133,9 @@ export function StatusBar(): React.JSX.Element {
           ))}
       </div>
       {bar.showClipboard && <ClipboardControl />}
+      {bar.showClipboard && bar.showSlowMode && <Divider />}
       {bar.showSlowMode && <SlowModeControl />}
+      {(bar.showClipboard || bar.showSlowMode) && bar.showFree && free !== null && <Divider />}
       {bar.showFree && free !== null && (
         <span className="shrink-0">{t('{size} free', { size: formatBytes(free) })}</span>
       )}
@@ -141,6 +143,11 @@ export function StatusBar(): React.JSX.Element {
       <ThemeToggle />
     </ScreenFooter>
   )
+}
+
+/** A thin line between two groups of controls, so each switch reads with its own label. */
+function Divider(): React.JSX.Element {
+  return <span aria-hidden className="mx-1 h-3.5 w-px shrink-0 bg-border" />
 }
 
 /** Clipboard tracking in the status bar: the same switch as Settings → Clipboard's first row. */
@@ -162,8 +169,10 @@ function ClipboardControl(): React.JSX.Element {
       }
     >
       <Switch aria-label={t('Track the clipboard')} checked={tracking} onCheckedChange={toggle} />
-      <span className={`flex items-center gap-1 ${tracking ? 'text-foreground' : ''}`}>
-        <ClipboardText aria-hidden className="size-3.5" />
+      <span
+        className={`flex h-[18px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-1.5 ${tracking ? 'text-foreground' : ''}`}
+      >
+        <ClipboardText aria-hidden className="size-3" />
         {t('Clipboard')}
       </span>
     </label>

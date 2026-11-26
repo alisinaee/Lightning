@@ -1,5 +1,5 @@
 import { t } from '@shared/i18n/react'
-import { Cookie, Globe, Plugs, ShieldCheck } from '@phosphor-icons/react'
+import { CircleNotch, Cookie, Globe, Plugs, ShieldCheck } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useYoutubeStore } from '../../store/useYoutubeStore'
 import { Button } from '../ui/button'
@@ -201,7 +201,39 @@ export function YoutubeSignInBanner({
   const stuck = Object.values(jobs).filter(
     (job) => job.status === 'error' && needsSignIn(job.error)
   )
+  // Lightning asked the browser extension for a fresh sign-in: wait for it before the usual fix.
+  const [now, setNow] = useState(() => Date.now())
+  const askingUntil = Math.max(0, ...stuck.map((job) => job.askingBrowserUntil ?? 0))
+  useEffect(() => {
+    if (askingUntil <= now) return
+    const timer = setTimeout(() => setNow(Date.now()), askingUntil - now + 50)
+    return () => clearTimeout(timer)
+  }, [askingUntil, now])
   if (stuck.length === 0) return null
+  if (askingUntil > now) {
+    return (
+      <div className="border-b-[0.5px] border-border px-3 pb-3">
+        <div
+          role="status"
+          className="mt-2 flex items-center gap-2.5 rounded-xl border-[0.5px] border-border bg-card p-3.5 text-foreground"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+            <CircleNotch className="size-[18px] motion-safe:animate-spin" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">
+              {t('Asking your browser for a fresh YouTube sign-in…')}
+            </div>
+            <div className="text-[12px] leading-snug text-muted-foreground">
+              {t(
+                'YouTube asked for a sign-in. The Lightning extension sends it within half a minute, then the download starts again by itself.'
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="border-b-[0.5px] border-border px-3 pb-3">
       <YoutubeSignInFix

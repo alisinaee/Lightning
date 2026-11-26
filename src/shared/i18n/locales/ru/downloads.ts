@@ -333,6 +333,10 @@ export default {
     'Lightning читает копируемый текст, чтобы находить ссылки. Нажмите, чтобы остановить.',
   'Off: Lightning never reads the clipboard. Click to start.':
     'Выключено: Lightning не читает буфер обмена. Нажмите, чтобы включить.',
+  'Asking your browser for a fresh YouTube sign-in…':
+    'Запрашиваем у браузера свежий вход в YouTube…',
+  'YouTube asked for a sign-in. The Lightning extension sends it within half a minute, then the download starts again by itself.':
+    'YouTube запросил вход. Расширение Lightning передаст его в течение полминуты, и загрузка начнётся заново сама.',
   'Slow mode': 'Медленный режим',
   'Replaces the total speed limit while enabled. Useful during calls or streaming. Also editable from the status bar.':
     'Заменяет ограничение общей скорости, пока включён. Полезно во время звонков и потокового видео. Также можно изменить в строке состояния.',

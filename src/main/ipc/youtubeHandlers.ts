@@ -5,6 +5,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { dialog, type BrowserWindow } from 'electron'
+import { log } from '../logger'
+import { needsSignIn } from '../../shared/signIn'
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { ResolvedPrefs } from '../../shared/types'
 import { isYoutubeUrl, type YoutubeJob } from '../../shared/youtube'
@@ -27,7 +29,23 @@ export interface YoutubeHandlers {
   fromBrowser(body: Record<string, unknown>): Promise<boolean>
   /** Video pages the browser's select mode picked. Returns how many downloads started. */
   fromBrowserBatch(body: Record<string, unknown>): Promise<number>
+  /** What Lightning wants from the browser extension now (it asks every half minute). */
+  browserRequests(): BrowserRequests
+  /** The YouTube cookies the extension sent for downloads stuck on a sign-in. Returns how many
+   * downloads started again. */
+  fromBrowserCookies(body: Record<string, unknown>): Promise<number>
 }
+
+export interface BrowserRequests {
+  /** A download failed for want of a YouTube sign-in: fresh cookies from the browser may fix it. */
+  youtubeCookies: boolean
+}
+
+/** How long a download waits for the browser's sign-in before the usual fix shows. */
+const ASK_BROWSER_MS = 90_000
+/** The extension counts as there when it asked for requests this recently. */
+const EXTENSION_SEEN_MS = 2 * 60_000
+const YOUTUBE_COOKIE_DOMAIN = /(^|\.)youtube\.com$/i
 
 const MAX_BATCH = 200
 // Best video and audio, merged; the same default a single download uses when no quality is picked.
@@ -60,10 +78,79 @@ export async function registerYoutubeHandlers(
     getOptions: loadYoutubeOptions,
     onChange: throttler.push,
     onFinished: (job) => {
+      void askBrowser(job)
       throttler.flush(job)
       void notifyFinished(job, getWindow)
     }
   })
+
+  // A download that stopped for want of a YouTube sign-in asks the browser extension for fresh
+  // cookies (once per download), and starts again by itself when they come.
+  let extensionSeenAt = 0
+  const asking = new Set<string>()
+  async function askBrowser(job: YoutubeJob): Promise<void> {
+    if (job.status !== 'error' || job.browserSignInTried || !needsSignIn(job.error)) return
+    if (Date.now() - extensionSeenAt > EXTENSION_SEEN_MS) return
+    // A cookies.txt the person chose is theirs: the browser's sign-in does not replace it.
+    if ((await loadYoutubeOptions()).cookieMode === 'manual') return
+    job.askingBrowserUntil = Date.now() + ASK_BROWSER_MS
+    asking.add(job.id)
+    log.info('youtube', 'asking the browser extension for a fresh YouTube sign-in', { id: job.id })
+    throttler.push(job)
+  }
+  const stillAsking = (): YoutubeJob[] => {
+    const now = Date.now()
+    const waiting: YoutubeJob[] = []
+    for (const id of asking) {
+      const job = jobs.getJob(id)
+      if (job?.status === 'error' && (job.askingBrowserUntil ?? 0) > now) waiting.push(job)
+      else asking.delete(id)
+    }
+    return waiting
+  }
+  const browserRequests = (): BrowserRequests => {
+    extensionSeenAt = Date.now()
+    return { youtubeCookies: stillAsking().length > 0 }
+  }
+  const fromBrowserCookies = async (body: Record<string, unknown>): Promise<number> => {
+    const waiting = stillAsking()
+    asking.clear()
+    if (waiting.length === 0) return 0
+    const cookies = sanitizeCookies(body.cookies).filter((cookie) =>
+      YOUTUBE_COOKIE_DOMAIN.test(cookie.domain.replace(/^\./, ''))
+    )
+    for (const job of waiting) {
+      job.browserSignInTried = true
+      job.askingBrowserUntil = undefined
+    }
+    if (cookies.length === 0) {
+      // Not signed in to YouTube in the browser: the usual fix shows.
+      log.info('youtube', 'the browser sent no YouTube sign-in')
+      for (const job of waiting) throttler.flush(job)
+      return 0
+    }
+    await mkdir(youtubeDataDir(), { recursive: true })
+    // 'send': for these downloads only. Otherwise it becomes Lightning's YouTube sign-in.
+    const temporary = body.mode === 'send'
+    if (!temporary) {
+      await writeCookiesFile(savedCookiesPath(), cookies)
+      await saveYoutubeOptions({ cookieMode: 'saved' })
+    }
+    for (const job of waiting) {
+      if (temporary) {
+        const file = join(youtubeDataDir(), `cookies-${randomUUID()}.txt`)
+        await writeCookiesFile(file, cookies)
+        await jobs.retryJob(job.id, { file, temporary: true })
+      } else {
+        await jobs.retryJob(job.id)
+      }
+    }
+    log.info('youtube', 'fresh YouTube sign-in from the browser: trying again', {
+      count: waiting.length,
+      saved: !temporary
+    })
+    return waiting.length
+  }
   await jobs.load()
 
   handle('youtubeStatus', async () => getYoutubeStatus())
@@ -244,7 +331,9 @@ export async function registerYoutubeHandlers(
       await jobs.dispose()
     },
     fromBrowser,
-    fromBrowserBatch
+    fromBrowserBatch,
+    browserRequests,
+    fromBrowserCookies
   }
 }
 

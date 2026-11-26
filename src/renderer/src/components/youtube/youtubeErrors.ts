@@ -1,4 +1,5 @@
 import { t } from '@shared/i18n'
+import { needsSignIn } from '@shared/signIn'
 
 /** Turns a raw yt-dlp or IPC error into one plain sentence for the person, and keeps the raw text
  * for the Details disclosure. The raw text stays the source of truth; only the wording changes. */
@@ -17,13 +18,7 @@ const cleanRaw = (raw: string): string =>
     .replace(/^(Error|ERROR):\s*/, '')
     .trim()
 
-/** The errors a sign-in can fix: YouTube asking for one, or the sign-in that was set up not being
- * readable (a locked or protected browser store). */
-const SIGN_IN =
-  /sign in to confirm|confirm your age|age-restricted|members[- ]only|login required|cookies? (database|file)|could not (find|copy|decrypt)[^\n]*cookie|failed to (decrypt|read)[^\n]*cookie|operation not permitted[^\n]*cookie/i
-
-export const needsSignIn = (raw: string | null | undefined): boolean =>
-  SIGN_IN.test(cleanRaw((raw ?? '').trim()))
+export { needsSignIn }
 
 const RULES: { match: RegExp; summary: () => string }[] = [
   {

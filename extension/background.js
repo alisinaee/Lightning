@@ -330,6 +330,46 @@ async function youtubeCookies(url) {
   return { cookieMode: mode, cookies: await cookiesFor([url]) }
 }
 
+// Lightning cannot call the extension, so the extension asks it what it wants: every half minute,
+// and when the browser starts. Today that is only a fresh YouTube sign-in, for downloads that
+// stopped on one. Asking never starts the app.
+const REQUESTS_ALARM = 'lightning-requests'
+
+async function checkRequests() {
+  const { enabled, key } = await settings()
+  if (!enabled || !key) return
+  const port = await findPort()
+  if (!port) return
+  let wants
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/requests`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(2000)
+    })
+    if (!response.ok) return
+    wants = await response.json()
+  } catch {
+    cachedPort = null
+    return
+  }
+  if (wants?.youtubeCookies) await sendFreshYoutubeSignIn()
+}
+
+/** The browser's YouTube cookies, as the Video cookies setting allows. With sharing off, an empty
+ * answer tells Lightning at once to show its usual sign-in fix instead of waiting. */
+async function sendFreshYoutubeSignIn() {
+  const mode = await videoCookieMode('https://www.youtube.com/')
+  const share = mode === 'save' || mode === 'send'
+  const cookies = share ? await cookiesFor(['https://www.youtube.com/']) : []
+  await callApp('/v1/cookies', { mode: share ? mode : 'none', cookies })
+}
+
+api.alarms.create(REQUESTS_ALARM, { periodInMinutes: 0.5 })
+api.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === REQUESTS_ALARM) checkRequests()
+})
+api.runtime.onStartup.addListener(() => checkRequests())
+
 /** Hands one link over, with the page it came from and the cookies the browser holds for it. */
 async function handOver(url, referrer, extra = {}) {
   const payload = {

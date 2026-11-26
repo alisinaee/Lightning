@@ -709,11 +709,17 @@ export class YoutubeJobManager {
     await this.persist()
   }
 
-  async retryJob(id: string): Promise<void> {
+  /** Starts a stopped download again; `cookies` (a file for this download only) signs it in. */
+  async retryJob(id: string, cookies?: CookieFile): Promise<void> {
     const job = this.jobs.get(id)
     if (!job) return
+    if (cookies) {
+      await this.dropCookies(id)
+      this.cookieFiles.set(id, cookies)
+    }
     job.status = 'queued'
     job.error = undefined
+    job.askingBrowserUntil = undefined
     this.options.onChange(job)
     this.runDownload(job)
   }

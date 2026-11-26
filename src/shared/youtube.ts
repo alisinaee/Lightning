@@ -44,6 +44,11 @@ export interface YoutubeJob {
   eta?: number
   percent: number
   error?: string
+  /** Lightning asked the browser extension for a fresh YouTube sign-in for this download and waits
+   * for it until this time (ms). */
+  askingBrowserUntil?: number
+  /** A fresh sign-in from the browser was already tried for this download: it is not asked again. */
+  browserSignInTried?: boolean
   /** The playlist this video belongs to (a group), when it came from one. */
   groupId?: string
   groupTitle?: string

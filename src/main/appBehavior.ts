@@ -30,7 +30,9 @@ export const integrationPort = (): number | null => localApi?.port ?? null
 export function installLocalApi(
   getWindow: () => BrowserWindow | null,
   onVideo: (body: Record<string, unknown>) => Promise<boolean>,
-  onVideoBatch: (body: Record<string, unknown>) => Promise<number>
+  onVideoBatch: (body: Record<string, unknown>) => Promise<number>,
+  requests: () => { youtubeCookies: boolean },
+  onCookies: (body: Record<string, unknown>) => Promise<number>
 ): void {
   localApi = new LocalApi({
     version: app.getVersion(),
@@ -38,6 +40,8 @@ export function installLocalApi(
     onAdd: (url, extras) => offerLink(url, getWindow(), extras),
     onVideo,
     onVideoBatch,
+    requests,
+    onCookies,
     readClipboard: () => clipboard.readText(),
     features: () => browserFeatures,
     onLinks: (urls, extras) => {

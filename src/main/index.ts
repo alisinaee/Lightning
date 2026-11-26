@@ -365,7 +365,9 @@ app.whenReady().then(async () => {
   installLocalApi(
     () => mainWindow,
     (body) => youtube?.fromBrowser(body) ?? Promise.resolve(false),
-    (body) => youtube?.fromBrowserBatch(body) ?? Promise.resolve(0)
+    (body) => youtube?.fromBrowserBatch(body) ?? Promise.resolve(0),
+    () => youtube?.browserRequests() ?? { youtubeCookies: false },
+    (body) => youtube?.fromBrowserCookies(body) ?? Promise.resolve(0)
   )
   await applyBehavior(await loadSettings())
   if (testKnobs.hideWindow) app.dock?.hide()

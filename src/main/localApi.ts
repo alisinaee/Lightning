@@ -57,6 +57,10 @@ export interface LocalApiDeps {
   onVideoBatch: (body: Record<string, unknown>) => Promise<number>
   /** The text on the system clipboard (the links the person copied). */
   readClipboard: () => Promise<string>
+  /** What Lightning wants from the extension now: it asks every half minute. */
+  requests: () => { youtubeCookies: boolean }
+  /** YouTube cookies the extension sent for downloads stuck on a sign-in; how many started again. */
+  onCookies: (body: Record<string, unknown>) => Promise<number>
 }
 
 const LINK_PATTERN = /(?:https?:\/\/|magnet:\?)[^\s<>"'`]+/gi
@@ -223,6 +227,23 @@ export class LocalApi {
     // Which features Settings has on: the extension shows and hides its menus by it.
     if (req.method === 'GET' && path === '/v1/config')
       return this.send(res, 200, this.deps.features(), origin)
+
+    // The extension asks what Lightning wants from it (only fresh YouTube cookies, for now).
+    if (req.method === 'GET' && path === '/v1/requests')
+      return this.send(res, 200, this.deps.requests(), origin)
+    if (req.method === 'POST' && path === '/v1/cookies') {
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
+      const body = await this.readJsonBody(req)
+      if (!body || !Array.isArray(body.cookies))
+        return this.send(res, 400, { error: 'cookies' }, origin)
+      try {
+        const retried = await this.deps.onCookies(body)
+        return this.send(res, 200, { ok: true, retried }, origin)
+      } catch (error) {
+        log.error('action', 'cookies from the browser could not be used', { error: String(error) })
+        return this.send(res, 500, { error: 'cookies' }, origin)
+      }
+    }
 
     if (req.method === 'POST' && path === '/v1/add') {
       if (!this.allowCall()) return this.send(res, 429, {}, origin)
