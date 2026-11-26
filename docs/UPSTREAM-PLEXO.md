@@ -84,7 +84,13 @@ the commits that were skipped on purpose with the reason.
 
 ## Status
 
-- Last upstream commit reviewed: `ec6dc5d` (Plexo `main`, 2026-11-18)
+- Last upstream commit reviewed: `38680b3` (Plexo `main`, 2026-11-25)
+- Synced on 2026-11-26: cherry-picked `399a395` (keep Retry-After out of probe test); ported by
+  hand `79fe5d1` + `38680b3` (pasted .torrent path with quotes or forward slashes; no .nzb) and
+  `9451db6` (Electron security advisories: we went to `^44.11.6`). Skipped: `e48f0ca` (Windows
+  adapter pinning: we ship macOS only and it conflicts in four files), `ae8fc26` (queue reordering,
+  a feature), `7825a72` (Sentry and Plexo onboarding, their product).
+- Previously reviewed: `ec6dc5d` (Plexo `main`, 2026-11-18)
 - Ported by hand on 2026-11-23 (all conflicted): `88470e9` (no split of a part waiting on its
   writer), `b485bb3` (fresh signed link), `0e5d922` (torrent names Windows can't take).
   Already ours: `933d46f` (Basic auth in a link). Not needed: `fe243f8` (we have no such menu guard).

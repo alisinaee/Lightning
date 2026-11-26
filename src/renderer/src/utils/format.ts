@@ -108,7 +108,11 @@ export function formatWhen(time: number, now: number): string {
 export function acceptedLink(text: string): string | null {
   const link = text.trim()
   if (/^(https?:\/\/|magnet:\?)/i.test(link)) return link
-  if (/^(\/|[a-z]:\\).*\.torrent$/i.test(link)) return link
+  // A path copied with quotes around it (Explorer's Copy as path, a shell), or with forward
+  // slashes on Windows, is still a file. A network share (//server, \\\\server) is not.
+  const quoted = /^(["']).*\1$/.test(link)
+  const file = quoted ? link.slice(1, -1) : link
+  if (/^(\/(?![\\/])|[a-z]:[\\/]).*\.torrent$/i.test(file)) return file
   return null
 }
 
