@@ -387,6 +387,7 @@ app.on('before-quit', (event) => {
 
   // Guarantee the process exits even if suspending hangs
   const forceQuitTimeout = setTimeout(() => {
+    app.releaseSingleInstanceLock()
     app.exit(0)
   }, 3000)
 
@@ -395,6 +396,10 @@ app.on('before-quit', (event) => {
       clearTimeout(forceQuitTimeout)
       quitAfterSuspending = true
       log.info('app', 'quit')
+      // Everything is saved: a Lightning opened while this one is still closing down (Quit, then
+      // the Dock at once, or macOS's Quit & Reopen) may start, instead of finding the lock held
+      // and leaving without a window.
+      app.releaseSingleInstanceLock()
       app.exit(0)
     }
   )
