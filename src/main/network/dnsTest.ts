@@ -147,7 +147,7 @@ export async function testDnsForUrl(
     )
   )
   const ips = [...new Set(found.flatMap((one) => (one.ip ? [one.ip] : [])))].slice(0, MAX_SERVERS)
-  const headers = buildHeaders(extras)
+  const headers = buildHeaders(extras, {}, target.href)
   const measured = new Map<string, Awaited<ReturnType<typeof measure>>>()
   for (const ip of ips) measured.set(ip, await measure(ip, target, network, headers))
   // A single sample is noisy (a slow start, one bad moment), so servers get a second one and

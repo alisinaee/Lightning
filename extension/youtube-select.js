@@ -17,26 +17,32 @@
       relabelBar()
     }
   }
-  api.storage.local.get({ lang: '' }).then((v) => relang(v.lang)).catch(() => {})
+  api.storage.local
+    .get({ lang: '' })
+    .then((v) => relang(v.lang))
+    .catch(() => {})
   api.storage.onChanged?.addListener((changes) => {
     if (changes.lang) relang(changes.lang.newValue)
   })
 
   const STYLE = `
     .lightning-box {
-      position: absolute; top: 6px; left: 6px; z-index: 5;
-      width: 22px; height: 22px; margin: 0; cursor: pointer;
-      accent-color: #d97706; opacity: .8;
-      box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 0 0 3px rgba(255,255,255,.25);
+      position: absolute; top: 8px; left: 8px; z-index: 2000; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; margin: 0; padding: 0; cursor: pointer; border-radius: 8px;
+      border: 2px solid #fff; background: rgba(0,0,0,.6); color: #fff;
+      font: 700 17px/1 system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0,0,0,.5);
     }
-    .lightning-box:hover, .lightning-picked .lightning-box { opacity: 1; }
-    .lightning-picked #thumbnail, .lightning-picked ytd-thumbnail, .lightning-picked yt-thumbnail-view-model {
-      outline: 3px solid #d97706; outline-offset: -3px; border-radius: 10px;
+    .lightning-box:hover { border-color: #fbbf24; }
+    .lightning-box[aria-checked="true"] { background: #d97706; }
+    .lightning-box[aria-checked="true"]::before { content: '✓'; }
+    .lightning-select-on [data-lightning-card] { cursor: pointer; }
+    /* The preview that plays on hover is laid over the card, outside it, and would take the click. */
+    .lightning-select-on ytd-video-preview, .lightning-select-on #video-preview {
+      display: none !important;
     }
-    .lightning-picked #thumbnail::after, .lightning-picked yt-thumbnail-view-model::after {
-      content: ''; position: absolute; inset: 0; border-radius: 10px;
-      background: rgba(217, 119, 6, .18); pointer-events: none;
-    }
+    .lightning-picked { outline: 3px solid #d97706; outline-offset: 2px; border-radius: 10px; }
+    [hidden].lightning-toggle, #lightning-select-bar [hidden] { display: none !important; }
     #lightning-select-bar button:focus-visible, #lightning-select-toggle:focus-visible,
     .lightning-box:focus-visible {
       outline: 2px solid #fbbf24; outline-offset: 2px;
@@ -64,6 +70,16 @@
     }
     #lightning-select-toggle[aria-pressed="true"] { background: #1f1f1f; }
   `
+  // A copy left by an earlier load of the extension no longer answers: its controls are replaced.
+  document.documentElement.classList.remove('lightning-select-on')
+  for (const old of document.querySelectorAll(
+    '#lightning-select-bar, #lightning-select-toggle, [data-lightning-box], .lightning-box'
+  ))
+    old.remove()
+  for (const card of document.querySelectorAll('[data-lightning-card]')) {
+    card.classList.remove('lightning-picked')
+    card.removeAttribute('data-lightning-card')
+  }
   const style = document.createElement('style')
   style.textContent = STYLE
   ;(document.head || document.documentElement).appendChild(style)
@@ -71,9 +87,12 @@
   // The card types YouTube uses for videos in its lists, grids and search results.
   const CARD =
     'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ' +
-    'ytd-grid-video-renderer, ytd-playlist-video-renderer, ytd-playlist-panel-video-renderer'
+    'ytd-grid-video-renderer, ytd-playlist-video-renderer, ytd-playlist-panel-video-renderer, ' +
+    'ytd-reel-item-renderer, ytm-video-with-context-renderer, ytm-rich-item-renderer, ' +
+    'ytm-compact-video-renderer, ytm-playlist-video-renderer'
   // Newer cards (channel pages, some search results) are yt-lockup-view-model with no #thumbnail id.
-  const LOOSE = 'yt-lockup-view-model'
+  const LOOSE =
+    'yt-lockup-view-model, ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2'
   const THUMB = '#thumbnail, yt-thumbnail-view-model'
   const LINK =
     'a#thumbnail[href], a#video-title[href], a#video-title-link[href], ' +
@@ -82,8 +101,12 @@
   /** Every video card on the page: the classic renderers, then newer lockups not already inside one. */
   function cardsOnPage() {
     const found = [...document.querySelectorAll(CARD)]
+    // A shelf or a playlist wraps other cards: only the inner ones are videos.
+    for (let i = found.length - 1; i >= 0; i -= 1) {
+      if (found[i].querySelector(CARD)) found.splice(i, 1)
+    }
     for (const lockup of document.querySelectorAll(LOOSE)) {
-      if (!lockup.closest(CARD)) found.push(lockup)
+      if (!lockup.closest(CARD) && !lockup.parentElement?.closest(LOOSE)) found.push(lockup)
     }
     return found
   }
@@ -97,7 +120,9 @@
 
   /** The video address and title on a card, or null when the card has no video link. */
   function videoOf(card) {
-    const link = card.querySelector(LINK)
+    const link = [...card.querySelectorAll(LINK)].find((entry) =>
+      /\/watch\?|\/shorts\//.test(entry.getAttribute('href') || '')
+    )
     if (!link) return null
     let url
     try {
@@ -125,14 +150,15 @@
   }
 
   function setCheck(box, on) {
-    box.checked = on
+    box.setAttribute('aria-checked', String(on))
     box.closest('[data-lightning-card]')?.classList.toggle('lightning-picked', on)
   }
 
   function toggle(video, card) {
     if (selected.has(video.id)) selected.delete(video.id)
-    else selected.set(video.id, { url: video.url, title: video.title })
-    const box = card.querySelector('input[data-lightning-box]')
+    else if (selected.size < MAX_BATCH)
+      selected.set(video.id, { url: video.url, title: video.title })
+    const box = card.querySelector('[data-lightning-box]')
     if (box) setCheck(box, selected.has(video.id))
     changed()
   }
@@ -161,7 +187,8 @@
     const video = currentVideo()
     if (!video) return
     if (selected.has(video.id)) selected.delete(video.id)
-    else if (selected.size < MAX_BATCH) selected.set(video.id, { url: video.url, title: video.title })
+    else if (selected.size < MAX_BATCH)
+      selected.set(video.id, { url: video.url, title: video.title })
     changed()
   }
 
@@ -177,51 +204,83 @@
     for (const card of cardsOnPage()) {
       const video = videoOf(card)
       if (!video) continue
-      const have = card.querySelector('input[data-lightning-box]')
+      const have = card.querySelector('[data-lightning-box]')
       if (have && card.dataset.lightningCard === video.id) continue
       // Either new, or YouTube put another video in this card (or dropped our checkbox): start over.
-      card.querySelectorAll('input[data-lightning-box]').forEach((old) => old.remove())
+      card.querySelectorAll('[data-lightning-box]').forEach((old) => old.remove())
       card.dataset.lightningCard = video.id
       card.setAttribute('data-lightning-card', video.id)
       const thumb = card.querySelector(THUMB) || card
       if (getComputedStyle(thumb).position === 'static') thumb.style.position = 'relative'
 
-      const box = document.createElement('input')
-      box.type = 'checkbox'
+      const box = document.createElement('span')
+      box.setAttribute('role', 'checkbox')
+      box.tabIndex = 0
       box.setAttribute('data-lightning-box', video.id)
       box.setAttribute('aria-label', t('yt_aria', { t: video.title || t('yt_video') }))
       box.className = 'lightning-box'
-      box.addEventListener('click', (event) => {
-        event.stopPropagation()
-        const current = videoOf(card)
-        if (current) toggle(current, card)
-      })
       thumb.appendChild(box)
       setCheck(box, selected.has(video.id))
     }
     updateBar()
   }
 
-  /** The card that a click or key press landed on, when select mode is on. */
-  function cardFrom(target) {
-    return target instanceof Element ? target.closest('[data-lightning-card]') : null
+  /** The card under a press. What is on top there may lie outside the card (a preview, a badge, an
+   * overlay), so everything under the pointer is looked at, not only the event's target. */
+  function cardFrom(event) {
+    const target = event.target instanceof Element ? event.target : null
+    if (target?.closest('#lightning-select-bar, #lightning-select-toggle')) return null
+    const own = target?.closest('[data-lightning-card]')
+    if (own) return own
+    // YouTube's header, menus, dialogs and the side guide stay usable over the cards.
+    if (
+      target?.closest(
+        '#masthead-container, ytd-masthead, tp-yt-app-drawer, ytd-popup-container, ' +
+          'tp-yt-iron-dropdown, ytd-mini-guide-renderer, #movie_player, ytd-feed-filter-chip-bar-renderer'
+      )
+    )
+      return null
+    if (event.type.startsWith('key')) return null
+    for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
+      const card = element.closest('[data-lightning-card]')
+      if (card) return card
+    }
+    return null
   }
 
-  // In select mode a click on a thumbnail or title ticks the video instead of opening it.
-  // The checkbox handles its own clicks, and other card controls (menus, channel links) are left alone.
-  document.addEventListener(
-    'click',
+  function swallow(event) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+
+  // In select mode a press anywhere on a card ticks its video and nothing else: YouTube acts on the
+  // press as well as the click, so all of them are kept from it. First on the window, before its own.
+  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'dblclick', 'click']) {
+    window.addEventListener(
+      type,
+      (event) => {
+        if (!active || event.button !== 0) return
+        const card = cardFrom(event)
+        const video = card && videoOf(card)
+        if (!video) return
+        swallow(event)
+        if (type === 'click') toggle(video, card)
+      },
+      true
+    )
+  }
+  // Space or Enter ticks: on the box, and on a card's own link, which Enter would open.
+  window.addEventListener(
+    'keydown',
     (event) => {
-      if (!active) return
+      if (!active || (event.key !== 'Enter' && event.key !== ' ')) return
       if (!(event.target instanceof Element)) return
-      if (event.target.closest('input[data-lightning-box]')) return
-      if (!event.target.closest(`${LINK}, ${THUMB}`)) return
-      const card = cardFrom(event.target)
-      if (!card) return
-      const video = videoOf(card)
+      const onBox = event.target.closest('[data-lightning-box]')
+      if (!onBox && !(event.key === 'Enter' && event.target.closest('a[href]'))) return
+      const card = cardFrom(event)
+      const video = card && videoOf(card)
       if (!video) return
-      event.preventDefault()
-      event.stopPropagation()
+      swallow(event)
       toggle(video, card)
     },
     true
@@ -263,6 +322,7 @@
   }
 
   let setActive = function setActiveState(on) {
+    if (on === active) return
     if (!on && selected.size > 0 && !confirm(t('yt_discard', { n: selected.size }))) return
     active = on
     document.documentElement.classList.toggle('lightning-select-on', on)
@@ -272,7 +332,7 @@
     } else {
       document.querySelectorAll('[data-lightning-card]').forEach((card) => {
         card.classList.remove('lightning-picked')
-        card.querySelector('input[data-lightning-box]')?.remove()
+        card.querySelector('[data-lightning-box]')?.remove()
         delete card.dataset.lightningCard
         card.removeAttribute('data-lightning-card')
       })
@@ -305,7 +365,7 @@
     for (const { card, video } of loadedVideos()) {
       if (selected.size >= MAX_BATCH) break
       if (!selected.has(video.id)) selected.set(video.id, { url: video.url, title: video.title })
-      const box = card.querySelector('input[data-lightning-box]')
+      const box = card.querySelector('[data-lightning-box]')
       if (box) setCheck(box, true)
     }
     changed()
@@ -316,7 +376,7 @@
       if (selected.has(video.id)) selected.delete(video.id)
       else if (selected.size < MAX_BATCH)
         selected.set(video.id, { url: video.url, title: video.title })
-      const box = card.querySelector('input[data-lightning-box]')
+      const box = card.querySelector('[data-lightning-box]')
       if (box) setCheck(box, selected.has(video.id))
     }
     changed()
@@ -324,7 +384,7 @@
 
   function clearSelection() {
     selected.clear()
-    document.querySelectorAll('input[data-lightning-box]').forEach((box) => setCheck(box, false))
+    document.querySelectorAll('[data-lightning-box]').forEach((box) => setCheck(box, false))
     changed()
   }
 
@@ -372,9 +432,7 @@
       const response = await api.runtime.sendMessage({ type: 'youtube-batch', videos })
       if (response?.result === 'ok') {
         selected.clear()
-        document
-          .querySelectorAll('input[data-lightning-box]')
-          .forEach((box) => setCheck(box, false))
+        document.querySelectorAll('[data-lightning-box]').forEach((box) => setCheck(box, false))
         flash(t('yt_sent', { n: response.started ?? videos.length }))
       } else {
         flash(response?.message || t('yt_fail'))
@@ -405,7 +463,7 @@
     const typing =
       event.target instanceof Element &&
       event.target.closest('input, textarea, [contenteditable="true"]')
-    if (typing && !event.target.matches('input[data-lightning-box]')) return
+    if (typing && !event.target.matches('[data-lightning-box]')) return
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault()
       selectAllLoaded()
@@ -435,7 +493,7 @@
   // The popup and the background can turn select mode on and off.
   api.runtime.onMessage.addListener((message, _sender, respond) => {
     if (message?.type === 'youtube-select') {
-      setActive(!active)
+      setActive(message.on === undefined ? !active : message.on)
       respond({ active })
       return false
     }

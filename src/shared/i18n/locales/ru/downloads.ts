@@ -382,5 +382,11 @@ export default {
   'Slow mode on': 'Медленный режим включён',
   'Enter a number above 0 in the highlighted field, or choose No limit.':
     'Введите в выделенном поле число больше 0 или выберите «Без ограничений».',
-  Save: 'Сохранить'
+  Save: 'Сохранить',
+  'That link is to a different file: its bytes don’t match what’s downloaded.':
+    'Эта ссылка ведёт на другой файл: его байты не совпадают со скачанными.',
+  'Couldn’t check that link against what’s downloaded. Try again.':
+    'Не удалось сверить ссылку со скачанным. Попробуйте ещё раз.',
+  'The download changed while its new link was checked.':
+    'Загрузка изменилась, пока проверялась новая ссылка.'
 } satisfies Dict

@@ -13,7 +13,7 @@ export function YoutubeFetchQueue({
 }: {
   onOpenSettings?: (page?: SettingsPage) => void
 }): React.JSX.Element | null {
-  const fetches = useYoutubeStore((store) => store.fetches)
+  const fetches = useYoutubeStore((store) => store.fetches).filter((item) => !item.inDialog)
   const openFetch = useYoutubeStore((store) => store.openFetch)
   const dismissFetch = useYoutubeStore((store) => store.dismissFetch)
   const retryFetch = useYoutubeStore((store) => store.retryFetch)
@@ -34,6 +34,11 @@ export function YoutubeFetchQueue({
                 <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
                   {t('Fetching {url}', { url: item.url })}
                 </span>
+                {!item.wanted && (
+                  <Button type="button" size="sm" onClick={() => openFetch(item.id)}>
+                    {t('Choose quality')}
+                  </Button>
+                )}
               </>
             )}
             {item.state === 'ready' && item.meta && (

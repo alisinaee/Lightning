@@ -1,14 +1,5 @@
 import type { DownloadState } from '@shared/types'
-import {
-  LinkSimple as Link2,
-  Funnel as ListFilter,
-  ListPlus,
-  Pause,
-  ArrowClockwise as RotateCw,
-  Play,
-  Plus,
-  X
-} from '@phosphor-icons/react'
+import { LinkSimple as Link2, Funnel as ListFilter, ListPlus, Plus, X } from '@phosphor-icons/react'
 import { t, tn } from '@shared/i18n/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombineDiagram } from '../components/CombineDiagram'
@@ -21,8 +12,9 @@ import { GroupTableRow } from '../components/downloads/GroupRows'
 import { STATUSES } from '../components/downloads/statusEntries'
 import { FixLinkDialog } from '../components/FixLinkDialog'
 import { NetworksMenu } from '../components/NetworksMenu'
-import { NewMenu, SearchField, SettingsButton } from '../components/ListTopBar'
+import { NewMenu, PauseAllButton, SearchField, SettingsButton } from '../components/ListTopBar'
 import { useLimitsDialog } from '../hooks/useLimitsDialog'
+import { useSelectionShortcuts } from '../hooks/useSelectionShortcuts'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +48,7 @@ import {
   sortEntries,
   type ListEntry
 } from '../utils/downloadList'
-import { FILE_KINDS, type FileKind } from '../utils/fileKind'
+import { FILE_KINDS, type FileKind } from '@shared/fileKind'
 import { describeError, linkExpired } from '../utils/format'
 import { useKeptOrder } from '../utils/keepOrder'
 import { isFinished, type Item } from '../utils/status'
@@ -110,8 +102,6 @@ export function DownloadsScreen({
   const sort = useAppStore((store) => store.tableLayout.sort)
   const selected = useAppStore((store) => store.selectedDownloads)
   const setSelected = useAppStore((store) => store.setSelectedDownloads)
-  const preferences = useAppStore((store) => store.networkPreferences)
-  const allInterfaces = useAppStore((store) => store.allInterfaces)
   const groupUi = useAppStore((store) => store.groupUi)
   const [fixing, setFixing] = useState<DownloadState | null>(null)
   const [confirmation, setConfirmation] = useState<{
@@ -157,14 +147,25 @@ export function DownloadsScreen({
   }, [matchIndex, search])
   // The match being looked at is marked (and the others found lightly), also when the list is
   // drawn again: marked on the page, not in the rows, so a progress update cannot clear it.
+  const hadCurrentHit = useRef(false)
   useEffect(() => {
+    if (matchCount === 0) {
+      if (hadCurrentHit.current) {
+        document
+          .querySelectorAll<HTMLElement>('[data-current="true"]')
+          .forEach((row) => row.removeAttribute('data-current'))
+        hadCurrentHit.current = false
+      }
+      return
+    }
     const hits = document.querySelectorAll<HTMLElement>('[data-hit="true"]')
     hits.forEach((row, index) => {
       if (index === matchIndex) row.setAttribute('data-current', 'true')
       else row.removeAttribute('data-current')
     })
+    hadCurrentHit.current = hits.length > 0
     return () => hits.forEach((row) => row.removeAttribute('data-current'))
-  })
+  }, [matchIndex, matchCount, shown])
 
   // Every file of what is listed, a group's included, open or not; a group narrowed by the
   // filters lists only the files that match, so those are the ones it can select.
@@ -186,7 +187,7 @@ export function DownloadsScreen({
   )
   const allItems = useMemo(() => entries.flatMap(entryItems), [entries])
   // Only what's still listed counts: one that finished or went is no longer selected.
-  const chosen = items.filter((item) => selected.has(item.id))
+  const chosen = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected])
 
   const orderedRef = useRef(orderedIds)
   const anchor = useRef<string | null>(null)
@@ -306,64 +307,85 @@ export function DownloadsScreen({
 
   // Colors are assigned across every network at once, so a row repaints only when that changes.
   const networkVisual = useNetworkVisuals()
-  const visualsKey = useMemo(
-    () =>
-      JSON.stringify([
-        preferences,
-        allInterfaces.map((iface) => [iface.id, iface.kind]),
-        [...new Set([...downloads, ...history].flatMap((d) => d.networks.map((n) => n.id)))].sort()
-      ]),
-    [preferences, allInterfaces, downloads, history]
-  )
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt only when the key says a color moved
-  const getVisual = useMemo(() => networkVisual, [visualsKey])
 
-  const pausable = chosen.filter(
-    (item): item is DownloadState =>
-      !isFinished(item) && (item.status === 'downloading' || item.status === 'queued')
+  const pausable = useMemo(
+    () =>
+      chosen.filter(
+        (item): item is DownloadState =>
+          !isFinished(item) && (item.status === 'downloading' || item.status === 'queued')
+      ),
+    [chosen]
   )
-  const resumable = chosen.filter(
-    (item): item is DownloadState => !isFinished(item) && item.status === 'paused'
+  const resumable = useMemo(
+    () =>
+      chosen.filter((item): item is DownloadState => !isFinished(item) && item.status === 'paused'),
+    [chosen]
   )
-  const retryable = chosen.filter(
-    (item): item is DownloadState =>
-      !isFinished(item) && item.status === 'error' && item.resumable !== false && !linkExpired(item)
+  const retryable = useMemo(
+    () =>
+      chosen.filter(
+        (item): item is DownloadState =>
+          !isFinished(item) &&
+          item.status === 'error' &&
+          item.resumable !== false &&
+          !linkExpired(item)
+      ),
+    [chosen]
   )
   // What the destructive buttons of the selection bar apply to: each only to the selected
   // downloads it fits, and each asks first (the same confirmations as a row's menu).
-  const removable = chosen.filter((item) => !isUnfinished(item))
-  const trashable = chosen.filter(isTrashable)
-  const cancelable = chosen.filter(isUnfinished)
-  const confirmationItems = confirmation
-    ? allItems.filter(
-        (item) =>
-          confirmation.ids.includes(item.id) &&
-          (confirmation.kind === 'cancel'
-            ? isUnfinished(item)
-            : confirmation.kind === 'trash'
-              ? isTrashable(item)
-              : confirmation.kind === 'remove'
-                ? !isUnfinished(item)
-                : true)
-      )
-    : []
-  const pausableAll = downloads.filter(
-    (download) => download.status === 'downloading' || download.status === 'queued'
+  const removable = useMemo(() => chosen.filter((item) => !isUnfinished(item)), [chosen])
+  const trashable = useMemo(() => chosen.filter(isTrashable), [chosen])
+  const cancelable = useMemo(() => chosen.filter(isUnfinished), [chosen])
+  const confirmationItems = useMemo(
+    () =>
+      confirmation
+        ? allItems.filter(
+            (item) =>
+              confirmation.ids.includes(item.id) &&
+              (confirmation.kind === 'cancel'
+                ? isUnfinished(item)
+                : confirmation.kind === 'trash'
+                  ? isTrashable(item)
+                  : confirmation.kind === 'remove'
+                    ? !isUnfinished(item)
+                    : true)
+          )
+        : [],
+    [confirmation, allItems]
   )
-  const resumableAll = downloads.filter((download) => download.status === 'paused')
+  const pausableAll = useMemo(
+    () =>
+      downloads.filter(
+        (download) => download.status === 'downloading' || download.status === 'queued'
+      ),
+    [downloads]
+  )
+  const resumableAll = useMemo(
+    () => downloads.filter((download) => download.status === 'paused'),
+    [downloads]
+  )
   // Failed downloads the button can try again: single ones that can continue, and the groups with
   // a file that failed (a group knows how to start over a file that can't continue).
-  const failedSingles = downloads.filter(
-    (download) =>
-      download.status === 'error' &&
-      download.resumable !== false &&
-      !download.groupId &&
-      !linkExpired(download)
+  const failedSingles = useMemo(
+    () =>
+      downloads.filter(
+        (download) =>
+          download.status === 'error' &&
+          download.resumable !== false &&
+          !download.groupId &&
+          !linkExpired(download)
+      ),
+    [downloads]
   )
-  const failedGroups = groupInfos.filter(
-    (group) =>
-      group.pending.some((item) => item.error) ||
-      downloads.some((download) => download.groupId === group.id && download.status === 'error')
+  const failedGroups = useMemo(
+    () =>
+      groupInfos.filter(
+        (group) =>
+          group.pending.some((item) => item.error) ||
+          downloads.some((download) => download.groupId === group.id && download.status === 'error')
+      ),
+    [groupInfos, downloads]
   )
   const retryAll = failedSingles.length > 0 || failedGroups.length > 0
   // One button for all of it: it pauses while anything is running; otherwise it resumes what is
@@ -382,28 +404,15 @@ export function DownloadsScreen({
   }
   const resumeLabel = resumableAll.length > 0 ? t('Resume all') : t('Retry all failed')
 
+  const itemIds = useMemo(() => items.map((item) => item.id), [items])
   // Keyboard, as a file manager has it: Esc lets go of the selection, ⌘/Ctrl+A takes everything
   // listed, ⌘/Ctrl+F goes to the search box.
-  useEffect(() => {
-    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const target = event.target
-      const typing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
-      if (event[mod] && event.key.toLowerCase() === 'f') {
-        event.preventDefault()
-        searchInput.current?.focus()
-      } else if (typing) return
-      else if (event.key === 'Escape') setSelected(new Set())
-      else if (event[mod] && event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        setSelected(new Set(items.map((item) => item.id)))
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [items, setSelected])
+  useSelectionShortcuts({
+    ids: itemIds,
+    selectedCount: chosen.length,
+    setSelected,
+    onSearch: () => searchInput.current?.focus()
+  })
 
   const chooseFilter = (next: DownloadFilter): void => {
     setFilter(next)
@@ -462,29 +471,14 @@ export function DownloadsScreen({
       {chosen.length === 0 ? (
         <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b-[0.5px] border-border px-3">
           <h1 className="sr-only">{filterLabel(filter)}</h1>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="secondary"
-                  aria-label={pausing ? t('Pause all') : resumeLabel}
-                  disabled={noDownloadsAtAll || (pausing && pausableAll.length === 0)}
-                  onClick={() => void (pausing ? runAction(pausableAll, 'pause') : resumeAll())}
-                >
-                  {pausing ? (
-                    <Pause className="fill-current" />
-                  ) : resumableAll.length > 0 ? (
-                    <Play className="fill-current" />
-                  ) : (
-                    <RotateCw />
-                  )}
-                </Button>
-              }
-            />
-            <TooltipContent>{pausing ? t('Pause all') : resumeLabel}</TooltipContent>
-          </Tooltip>
+          <PauseAllButton
+            pausing={pausing}
+            resumeLabel={resumeLabel}
+            resumeIcon={resumableAll.length > 0 ? 'play' : 'retry'}
+            disabled={noDownloadsAtAll || (pausing && pausableAll.length === 0)}
+            onPause={() => void runAction(pausableAll, 'pause')}
+            onResume={() => void resumeAll()}
+          />
           <NetworksMenu onOpenLimits={openLimits} />
           <NewMenu
             label={t('New download')}
@@ -744,8 +738,7 @@ export function DownloadsScreen({
                     selected={selected.has(entry.id)}
                     hit={filtered.hits.has(entry.id)}
                     handlers={handlers}
-                    getVisual={getVisual}
-                    visualsKey={visualsKey}
+                    getVisual={networkVisual}
                   />
                 ) : (
                   <GroupTableRow
@@ -755,7 +748,7 @@ export function DownloadsScreen({
                     only={filtered.only?.get(entry.id)}
                     forceOpen={filtered.only !== null}
                     hits={filtered.hits}
-                    getVisual={getVisual}
+                    getVisual={networkVisual}
                     onToggle={toggle}
                     onSelect={selectRow}
                     onOpen={openRow}

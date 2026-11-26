@@ -11,7 +11,7 @@ import {
   type Icon
 } from '@phosphor-icons/react'
 import { cn } from 'cn'
-import { fileKind, type FileKind } from '../../utils/fileKind'
+import { fileKind, type FileKind } from '@shared/fileKind'
 import { fileExtensionBadge } from '../../utils/format'
 
 const ICONS: Record<FileKind, Icon> = {

@@ -43,6 +43,7 @@ export function openSettingsWindow(page?: string, host?: BrowserWindow | null): 
   }
   const { x, y } = centeredOn(display, SIZE.width, SIZE.height)
   const window = new BrowserWindow({
+    acceptFirstMouse: true,
     ...SIZE,
     x,
     y,

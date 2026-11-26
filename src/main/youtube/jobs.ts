@@ -1,16 +1,25 @@
 import { type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdir, readdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
 import { shell } from 'electron'
 import type { ResolvedPrefs } from '../../shared/types'
-import type { StartYoutubeRequest, YoutubeJob, YoutubeOptions } from '../../shared/youtube'
+import {
+  DEFAULT_YOUTUBE_OPTIONS,
+  extractYoutubeId,
+  isYoutubeUrl,
+  type StartYoutubeRequest,
+  type YoutubeJob,
+  type YoutubeOptions
+} from '../../shared/youtube'
 import { getDefaultDownloadsDir } from '../download/paths'
+import { addFinishedSource, isFileGone } from '../fileSync'
 import { readJson, updateJson } from '../jsonFile'
 import { log } from '../logger'
 import { proxyArg, runYtDlp, spawnYtDlp, youtubeDataDir } from './binary'
-import { savedCookiesPath } from './cookies'
+import { optionCookies } from './cookies'
+import { canImpersonateChrome, looksBlocked, originReferer } from './anySite'
 
 /** A Netscape cookies file a download reads. A temporary one is deleted when the download ends. */
 export interface CookieFile {
@@ -29,6 +38,16 @@ export function safeFolderName(name: string): string {
     .trim()
   return cleaned.slice(0, 120) || 'Playlist'
 }
+
+/** A title as a file name: never hidden, and short enough for every file system. */
+function safeFileName(title: string): string {
+  let name = safeFolderName(title).replace(/^\.+/, '')
+  while (Buffer.byteLength(name) > 180) name = Array.from(name).slice(0, -1).join('')
+  return name.trim() || 'Video'
+}
+
+/** The name as part of a yt-dlp output template. */
+const templateText = (name: string): string => name.replace(/%/g, '%%')
 
 export interface YoutubeJobManagerOptions {
   getPrefs: () => Promise<ResolvedPrefs>
@@ -72,18 +91,46 @@ function parseEta(str: string): number | undefined {
   return undefined
 }
 
+/** Marks the line on which yt-dlp says where the finished file is. */
+const FILE_MARK = '[lightning-file] '
+
 export class YoutubeJobManager {
   private jobs: Map<string, YoutubeJob> = new Map()
   private active: Map<string, ActiveRun> = new Map()
   private options: YoutubeJobManagerOptions
   private loaded = false
   private cookieFiles: Map<string, CookieFile> = new Map()
+  /** The page a browser offer came from (referer and user agent), for that video's download only. */
+  private requestExtras: Map<string, { referer?: string; userAgent?: string }> = new Map()
   /** Playlist videos waiting for a free slot, and the ones downloading now. */
   private groupWaiting: string[] = []
   private groupRunning: Set<string> = new Set()
+  private disposed = false
 
   constructor(options: YoutubeJobManagerOptions) {
     this.options = options
+    addFinishedSource(() => this.removeMissingFinished())
+  }
+
+  /** Auto sync: a finished video whose file was moved or deleted leaves the list (the record
+   * only). One with no file recorded stays. Returns how many went. */
+  async removeMissingFinished(): Promise<number> {
+    if (!(await this.options.getPrefs()).autoSyncFiles) return 0
+    const candidates = [...this.jobs.values()].filter(
+      (job): job is YoutubeJob & { fileName: string } =>
+        job.status === 'completed' && Boolean(job.fileName)
+    )
+    const checks = await Promise.all(
+      candidates.map(async (job) => ((await isFileGone(job.fileName)) ? job.id : null))
+    )
+    const gone = checks.filter((id): id is string => id !== null)
+    if (gone.length === 0) return 0
+    for (const id of gone) {
+      if (this.jobs.get(id)?.status === 'completed') this.jobs.delete(id)
+    }
+    await this.persist()
+    log.info('youtube', `removed ${gone.length} finished from the list: their files are gone`)
+    return gone.length
   }
 
   private storageFile(): string {
@@ -100,10 +147,14 @@ export class YoutubeJobManager {
           if (job.status === 'downloading') {
             job.status = 'paused'
           }
+          await this.repairFileName(job)
           this.jobs.set(job.id, job)
           // A playlist video that never started goes back in line.
           if (job.groupId && job.status === 'queued') this.groupWaiting.push(job.id)
         }
+        this.redoMistakenForOthers()
+        // Not waited for: macOS may first ask the person about the folder.
+        void this.measureOld()
         this.pump()
       }
     } catch (err: unknown) {
@@ -117,6 +168,101 @@ export class YoutubeJobManager {
     await updateJson(this.storageFile(), () => list)
   }
 
+  /** Earlier versions gave different streams the same file name ("index", "1080p"): yt-dlp took the
+   * first one's file for the others and they ended without being downloaded. Those start again. */
+  private redoMistakenForOthers(): void {
+    const all = [...this.jobs.values()]
+    for (const job of all) {
+      if (job.status !== 'completed' || !job.fileName || job.outputName || job.received > 0)
+        continue
+      const mistaken = all.some(
+        (other) => other.fileName === job.fileName && other.received > 0 && other.url !== job.url
+      )
+      if (!mistaken) continue
+      job.fileName = undefined
+      job.status = 'queued'
+      job.finishedAt = undefined
+      job.percent = 0
+      job.total = 0
+      this.groupWaiting.push(job.id)
+      log.info('youtube', 'downloading again: another video had its file name', { id: job.id })
+    }
+  }
+
+  /** The output template of a job. A stream's title and id are often only "index" or "1080p", and one
+   * YouTube video can be wanted at two qualities: each job gets a file name nothing else has, or
+   * yt-dlp would take the other file for this video and download nothing. */
+  private outputFor(
+    job: YoutubeJob,
+    options: YoutubeOptions,
+    generic: boolean,
+    files: string[]
+  ): string {
+    if (generic && options.outputTemplate === DEFAULT_YOUTUBE_OPTIONS.outputTemplate) {
+      // One an earlier version began continues under the name it has.
+      if (!job.outputName && job.received > 0) return options.outputTemplate
+      if (!job.outputName) {
+        const taken = new Set<string>()
+        const jobs = [...this.jobs.values()].filter((other) => other.id !== job.id)
+        for (const other of jobs) {
+          if (other.outputName) taken.add(other.outputName.toLowerCase())
+          if (other.fileName) {
+            const file = basename(other.fileName)
+            taken.add(file.slice(0, file.length - extname(file).length).toLowerCase())
+          }
+        }
+        const isTaken = (name: string): boolean => {
+          const lower = name.normalize('NFC').toLowerCase()
+          return (
+            taken.has(lower) ||
+            files.some((file) => file.normalize('NFC').toLowerCase().startsWith(`${lower}.`))
+          )
+        }
+        const base = safeFileName(job.title)
+        let name = base
+        for (let n = 2; isTaken(name); n += 1) name = `${base} (${n})`
+        job.outputName = name
+      }
+      return `${templateText(job.outputName)}.%(ext)s`
+    }
+    const id = extractYoutubeId(job.url)
+    const other = [...this.jobs.values()].some(
+      (item) =>
+        item.id !== job.id &&
+        item.createdAt <= job.createdAt &&
+        item.destDir === job.destDir &&
+        (generic
+          ? item.url !== job.url && item.title === job.title
+          : id !== null && extractYoutubeId(item.url) === id && item.formatId !== job.formatId)
+    )
+    if (!other || (!job.outputName && job.received > 0)) return options.outputTemplate
+    job.outputName ??= generic ? job.id.slice(0, 8) : safeFileName(job.resolution)
+    const mark = ` (${templateText(job.outputName)})`
+    return options.outputTemplate.includes('.%(ext)s')
+      ? options.outputTemplate.replace('.%(ext)s', `${mark}.%(ext)s`)
+      : `${options.outputTemplate}${mark}`
+  }
+
+  /** The finished file's own size: the last progress seen is only its sound track, when video and
+   * sound are separate. */
+  private async measure(job: YoutubeJob): Promise<void> {
+    if (job.status !== 'completed' || !job.fileName) return
+    const size = await stat(job.fileName).then(
+      (info) => info.size,
+      () => 0
+    )
+    if (size > 0) job.total = job.received = size
+  }
+
+  /** Sizes recorded by earlier versions, corrected. */
+  private async measureOld(): Promise<void> {
+    for (const job of [...this.jobs.values()]) {
+      const before = job.total
+      await this.measure(job)
+      if (job.total !== before) this.options.onChange(job)
+    }
+  }
+
   /** A playlist becomes a group: one job per video, in a folder named for the playlist. The videos
    * download two at a time (see pump). Returns the new jobs. */
   async startPlaylist(request: StartYoutubeRequest, cookies?: CookieFile): Promise<YoutubeJob[]> {
@@ -125,7 +271,7 @@ export class YoutubeJobManager {
     const proxy = proxyArg(await this.options.getPrefs())
     const args = ['--flat-playlist', '--yes-playlist', '--dump-single-json', '--no-warnings']
     if (proxy) args.push('--proxy', proxy)
-    const shared = cookies ?? this.optionCookies(options)
+    const shared = cookies ?? optionCookies(options)
     if (shared) args.push('--cookies', shared.file)
     if (options.playlistItems) args.push('--playlist-items', options.playlistItems)
     args.push(request.url)
@@ -193,6 +339,7 @@ export class YoutubeJobManager {
 
   /** Starts playlist videos while fewer than GROUP_SLOTS are running. */
   private pump(): void {
+    if (this.disposed) return
     while (this.groupRunning.size < GROUP_SLOTS && this.groupWaiting.length > 0) {
       const id = this.groupWaiting.shift()
       const job = id ? this.jobs.get(id) : undefined
@@ -220,7 +367,11 @@ export class YoutubeJobManager {
     return this.jobs.get(id)
   }
 
-  async startJob(request: StartYoutubeRequest, cookies?: CookieFile): Promise<YoutubeJob> {
+  async startJob(
+    request: StartYoutubeRequest,
+    cookies?: CookieFile,
+    extras?: { referer?: string; userAgent?: string }
+  ): Promise<YoutubeJob> {
     await this.load()
     const options = await this.options.getOptions()
     const destDir = request.destDir || options.folder || getDefaultDownloadsDir()
@@ -243,6 +394,7 @@ export class YoutubeJobManager {
 
     this.jobs.set(job.id, job)
     if (cookies) this.cookieFiles.set(job.id, cookies)
+    if (extras) this.requestExtras.set(job.id, extras)
     await this.persist()
     this.options.onChange(job)
 
@@ -250,17 +402,27 @@ export class YoutubeJobManager {
     return job
   }
 
-  private async runDownload(job: YoutubeJob): Promise<void> {
+  /** `impersonated`: this run is the Chrome retry for a site that refused a plain client. */
+  private async runDownload(job: YoutubeJob, impersonated = false): Promise<void> {
     const prefs = await this.options.getPrefs()
     const proxy = proxyArg(prefs)
 
     await mkdir(job.destDir, { recursive: true })
 
     const options = await this.options.getOptions()
-    const outputTemplate = join(job.destDir, options.outputTemplate)
+    const generic = !isYoutubeUrl(job.url)
+    // Asked for without blocking: macOS may first ask the person about the folder.
+    const files = await readdir(job.destDir).catch(() => [] as string[])
+    const outputTemplate = join(
+      templateText(job.destDir),
+      this.outputFor(job, options, generic, files)
+    )
+    await this.persist()
     const progressTemplate =
       '%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s'
 
+    // Any site but YouTube: its own rules (see anySite.ts); the YouTube-only options stay off there.
+    const extras = this.requestExtras.get(job.id)
     const audioOnly = options.quality === 'audio' || job.formatId.startsWith('bestaudio')
     const args = [
       '--newline',
@@ -268,6 +430,13 @@ export class YoutubeJobManager {
       '--no-warnings',
       '--progress-template',
       progressTemplate,
+      // The finished file's own path, after merging and conversion (--print alone would hush the rest).
+      '--print',
+      `after_move:${FILE_MARK}%(filepath)s`,
+      '--no-quiet',
+      '--progress',
+      '--encoding',
+      'utf-8',
       '-f',
       options.formatOverride || job.formatId,
       '-o',
@@ -282,14 +451,18 @@ export class YoutubeJobManager {
       args.push('-x', '--audio-format', options.audioFormat)
     } else {
       // Video and audio are merged into one file by ffmpeg.
-      args.push('--merge-output-format', options.mergeFormat)
+      args.push('--merge-output-format', generic ? 'mp4' : options.mergeFormat)
     }
     if (options.formatSort) args.push('-S', options.formatSort)
     if (options.metadata) args.push('--embed-metadata')
     if (options.embedThumbnail) args.push('--embed-thumbnail')
     if (options.embedChapters) args.push('--embed-chapters')
-    if (options.sponsorBlock === 'mark') args.push('--sponsorblock-mark', 'default')
-    if (options.sponsorBlock === 'remove') args.push('--sponsorblock-remove', 'default')
+    if (!generic && options.sponsorBlock === 'mark') {
+      args.push('--sponsorblock-mark', 'default')
+    }
+    if (!generic && options.sponsorBlock === 'remove') {
+      args.push('--sponsorblock-remove', 'default')
+    }
     if (options.subtitles) {
       args.push('--write-subs', '--sub-langs', options.subtitleLangs, '--embed-subs')
     }
@@ -305,27 +478,43 @@ export class YoutubeJobManager {
     if (options.restrictFilenames) args.push('--restrict-filenames')
     if (options.windowsFilenames) args.push('--windows-filenames')
     if (options.limitRate) args.push('-r', options.limitRate)
-    if (options.concurrentFragments > 1) args.push('-N', String(options.concurrentFragments))
+    // Segmented (HLS, DASH) streams of other sites download eight fragments at a time.
+    // A stream left behind by a run that was cut short is repaired as a fresh one is.
+    if (generic) args.push('--fixup', 'force')
+    if (generic) args.push('-N', '8', '--continue', '--fragment-retries', String(options.retries))
+    else if (options.concurrentFragments > 1) {
+      args.push('-N', String(options.concurrentFragments))
+    }
     if (options.sleepInterval > 0) args.push('--sleep-interval', String(options.sleepInterval))
     if (options.dateAfter) args.push('--dateafter', options.dateAfter)
     if (options.dateBefore) args.push('--datebefore', options.dateBefore)
-    if (options.impersonate) args.push('--impersonate', options.impersonate)
-    if (options.skipDownloaded) {
+    if (impersonated) args.push('--impersonate', 'chrome')
+    else if (options.impersonate) args.push('--impersonate', options.impersonate)
+    if (!generic && options.skipDownloaded) {
       args.push('--download-archive', join(youtubeDataDir(), 'archive.txt'))
+    }
+    const referer = extras?.referer ?? (generic ? originReferer(job.url) : undefined)
+    if (referer) args.push('--referer', referer)
+    // As Chrome, the user agent is the impersonation's own: another one would give it away.
+    if (extras?.userAgent && !impersonated) args.push('--user-agent', extras.userAgent)
+    // The name the dialog showed: a stream's own is often only "index" or "master".
+    if (generic && job.title) {
+      args.push('--replace-in-metadata', 'title', '(?s)^.+$', job.title.replace(/\\/g, '\\\\'))
     }
     if (proxy) {
       args.push('--proxy', proxy)
     }
     // A cookies file sent with this download wins; otherwise the one chosen in the options.
-    const cookies = this.cookieFiles.get(job.id) ?? this.optionCookies(options)
+    const cookies = this.cookieFiles.get(job.id) ?? optionCookies(options)
     if (cookies) {
       args.push('--cookies', cookies.file)
     } else if (options.cookiesBrowser) {
       args.push('--cookies-from-browser', options.cookiesBrowser)
     }
 
-    args.push(job.url)
+    args.push('--', job.url)
 
+    if (this.disposed) return
     job.status = 'downloading'
     job.error = undefined
     this.options.onChange(job)
@@ -351,8 +540,10 @@ export class YoutubeJobManager {
     let lineBuffer = ''
     let lastError = ''
 
-    child.stdout?.on('data', (chunk: Buffer) => {
-      lineBuffer += chunk.toString('utf-8')
+    // Decoded as a stream, so a character split between two chunks stays whole.
+    child.stdout?.setEncoding('utf-8')
+    child.stdout?.on('data', (chunk: string) => {
+      lineBuffer += chunk
       const lines = lineBuffer.split('\n')
       lineBuffer = lines.pop() ?? ''
 
@@ -368,6 +559,19 @@ export class YoutubeJobManager {
 
     child.on('close', async (code) => {
       this.active.delete(job.id)
+      // A site that refused a plain client gets one more run as Chrome, when this yt-dlp can do that.
+      if (
+        generic &&
+        !impersonated &&
+        !options.impersonate &&
+        code !== 0 &&
+        run.stopped === undefined &&
+        looksBlocked(lastError) &&
+        (await canImpersonateChrome())
+      ) {
+        void this.runDownload(job, true)
+        return
+      }
       this.groupRunning.delete(job.id)
       this.pump()
       // A paused download keeps its cookies so it can resume.
@@ -383,7 +587,10 @@ export class YoutubeJobManager {
         job.status = 'completed'
         job.percent = 100
         job.finishedAt = Date.now()
-        await this.detectOutputFile(job)
+        if (lineBuffer) this.handleProgressLine(job, lineBuffer)
+        // Only a file that is really there: another file must never be opened or deleted for this video.
+        if (job.fileName && !existsSync(job.fileName)) job.fileName = undefined
+        await this.measure(job)
         this.options.onFinished(job)
       } else {
         job.status = 'error'
@@ -409,19 +616,6 @@ export class YoutubeJobManager {
     })
   }
 
-  /** The cookies file the options point to, if it exists. */
-  private optionCookies(options: YoutubeOptions): CookieFile | undefined {
-    if (options.cookieMode === 'manual' && options.manualCookiesFile) {
-      return existsSync(options.manualCookiesFile)
-        ? { file: options.manualCookiesFile, temporary: false }
-        : undefined
-    }
-    if (options.cookieMode === 'saved' && existsSync(savedCookiesPath())) {
-      return { file: savedCookiesPath(), temporary: false }
-    }
-    return undefined
-  }
-
   /** Forgets a download's cookies file, deleting it when the file was made for that download only. */
   private async dropCookies(id: string): Promise<void> {
     const cookies = this.cookieFiles.get(id)
@@ -434,6 +628,11 @@ export class YoutubeJobManager {
     const line = rawLine.trim()
     if (!line) return
 
+    if (line.startsWith(FILE_MARK)) {
+      job.fileName = line.slice(FILE_MARK.length)
+      this.options.onChange(job)
+      return
+    }
     // Template format: percent|speed|eta|downloaded|total
     if (line.includes('|')) {
       const [pctStr, speedStr, etaStr, dlStr, totalStr] = line.split('|')
@@ -460,17 +659,19 @@ export class YoutubeJobManager {
     }
   }
 
-  private async detectOutputFile(job: YoutubeJob): Promise<void> {
-    try {
-      const files = await readdir(job.destDir)
-      // Find file that contains the youtube video title or video id
-      const match = files.find((f) => !f.endsWith('.part') && !f.endsWith('.ytdl'))
-      if (match) {
-        job.fileName = join(job.destDir, match)
-      }
-    } catch {
-      // ignore
-    }
+  /** Earlier versions took any file of the folder (often a hidden one) as the finished video. Such a
+   * record is given its real file, found by the video's id, or none. */
+  private async repairFileName(job: YoutubeJob): Promise<void> {
+    if (!job.fileName || !basename(job.fileName).startsWith('.')) return
+    const id = /(?:[?&]v=|\/shorts\/|youtu\.be\/)([\w-]{6,})/.exec(job.url)?.[1]
+    const files = id ? await readdir(job.destDir).catch(() => [] as string[]) : []
+    const match = files.find(
+      (file) =>
+        !file.startsWith('.') &&
+        file.includes(`[${id}]`) &&
+        /\.(mp4|mkv|webm|mov|m4a|mp3|opus|ogg|flac|wav|aac)$/i.test(file)
+    )
+    job.fileName = match ? join(job.destDir, match) : undefined
   }
 
   async pauseJob(id: string): Promise<void> {
@@ -520,7 +721,7 @@ export class YoutubeJobManager {
   async removeJob(id: string, deleteFile = false): Promise<void> {
     await this.cancelJob(id)
     const job = this.jobs.get(id)
-    if (deleteFile && job?.fileName && existsSync(job.fileName)) {
+    if (deleteFile && job?.fileName) {
       try {
         await rm(job.fileName, { force: true })
       } catch {
@@ -529,6 +730,24 @@ export class YoutubeJobManager {
     }
     this.jobs.delete(id)
     await this.persist()
+  }
+
+  /** Stops active yt-dlp processes on shutdown so jobs resume as paused on next launch. */
+  async dispose(): Promise<void> {
+    this.disposed = true
+    for (const [id, run] of this.active) {
+      run.stopped = 'pause'
+      run.child.kill('SIGTERM')
+      const job = this.jobs.get(id)
+      if (job && job.status === 'downloading') {
+        job.status = 'paused'
+        job.pid = undefined
+        job.speed = 0
+      }
+    }
+    this.active.clear()
+    this.groupRunning.clear()
+    if (this.loaded) await this.persist()
   }
 
   revealJob(id: string): void {

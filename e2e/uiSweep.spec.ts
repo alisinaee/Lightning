@@ -240,6 +240,8 @@ test.describe('sidebar', () => {
     serve
   }) => {
     const id = await finish(lightning, serve, 'lost.mp4')
+    // With auto sync on, the entry would leave the list: this one shows the file as missing.
+    await lightning.api.updateSettings({ prefs: { autoSyncFiles: false } })
     const state = await lightning.byId(id)
     await rename(state!.destinationPath, `${state!.destinationPath}.moved`)
     await lightning.page.reload()

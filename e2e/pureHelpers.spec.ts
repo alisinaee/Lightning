@@ -108,6 +108,12 @@ test('buildHeaders layers user headers, Referer, Cookie and Basic auth over the 
   expect(headers['Range']).toBe('bytes=0-9')
   expect(Object.keys(headers).some((name) => name.includes('Bad'))).toBe(false)
   expect(buildHeaders(undefined)['User-Agent']).toBe('Lightning/1.0')
+  // A bare link comes from its own site, unless a Referer was given.
+  const bare = 'https://me:secret@media.test/a/b.mp4?k=1'
+  expect(buildHeaders(undefined, {}, bare)['Referer']).toBe('https://media.test/')
+  expect(buildHeaders({ headers: { referer: 'https://x.test/' } }, {}, bare)).not.toHaveProperty(
+    'Referer'
+  )
 })
 
 test('headersForRedirect keeps cookies and sign-in on the same host only', () => {

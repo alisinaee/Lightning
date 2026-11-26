@@ -37,8 +37,8 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   },
   {
     page: 'General',
-    label: 'Remove a finished download from the list when its file is deleted or moved',
-    keywords: ['missing', 'clean']
+    label: 'Auto sync',
+    keywords: ['missing', 'moved', 'deleted', 'removed', 'gone', 'list', 'clean', 'file']
   },
   {
     page: 'General',

@@ -33,6 +33,20 @@ function invoke<K extends keyof IpcContract>(
   return ipcRenderer.invoke(IpcChannels[channel], ...args)
 }
 
+/** Typed wrapper around ipcRenderer.on + removeListener so each push subscription strips the
+ * Electron event argument and returns a stable unsubscribe function. */
+function subscribe<Args extends unknown[]>(
+  channel: keyof typeof IpcChannels,
+  callback: (...args: Args) => void
+): () => void {
+  const ipcChannel = IpcChannels[channel]
+  const listener = (_event: IpcRendererEvent, ...args: unknown[]): void => {
+    callback(...(args as Args))
+  }
+  ipcRenderer.on(ipcChannel, listener)
+  return () => ipcRenderer.removeListener(ipcChannel, listener)
+}
+
 const lightningApi = {
   platform: process.platform,
   // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
@@ -48,11 +62,7 @@ const lightningApi = {
   /** The saved state as it is now (initialState is the one read at start). */
   readInitialState: () => ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
   /** Settings were saved from some window: read them again. */
-  onSettingsRefresh: (callback: () => void): (() => void) => {
-    const listener = (): void => callback()
-    ipcRenderer.on(IpcChannels.settingsRefresh, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.settingsRefresh, listener)
-  },
+  onSettingsRefresh: (callback: () => void): (() => void) => subscribe('settingsRefresh', callback),
   tdlStatus: () => invoke('tdlStatus'),
   tdlLoginStart: (...args: IpcContract['tdlLoginStart']['args']) =>
     invoke('tdlLoginStart', ...args),
@@ -74,7 +84,8 @@ const lightningApi = {
   tdlOpenItem: (jobId: string, key: string) => invoke('tdlOpenItem', jobId, key),
 
   youtubeStatus: (): Promise<YoutubeStatus> => invoke('youtubeStatus'),
-  youtubeProbe: (url: string): Promise<YoutubeVideoMeta> => invoke('youtubeProbe', url),
+  youtubeProbe: (url: string, offerId?: string): Promise<YoutubeVideoMeta> =>
+    invoke('youtubeProbe', url, offerId),
   youtubeStart: (request: StartYoutubeRequest): Promise<YoutubeJob> =>
     invoke('youtubeStart', request),
   youtubeListJobs: (): Promise<YoutubeJob[]> => invoke('youtubeListJobs'),
@@ -170,14 +181,8 @@ const lightningApi = {
   clearClipboardHistory: () => invoke('clearClipboardHistory'),
   downloadClipboardEntry: (id: string) => invoke('downloadClipboardEntry', id),
   /** The clipboard history changed (a link was noticed, removed or cleared): the new list. */
-  onClipboardHistoryChanged: (
-    callback: (entries: ClipboardHistoryEntry[]) => void
-  ): (() => void) => {
-    const listener = (_event: IpcRendererEvent, entries: ClipboardHistoryEntry[]): void =>
-      callback(entries)
-    ipcRenderer.on(IpcChannels.clipboardHistoryChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.clipboardHistoryChanged, listener)
-  },
+  onClipboardHistoryChanged: (callback: (entries: ClipboardHistoryEntry[]) => void): (() => void) =>
+    subscribe('clipboardHistoryChanged', callback),
   labList: () => invoke('labList'),
   labGetState: () => invoke('labGetState'),
   labRun: (planId: string) => invoke('labRun', planId),
@@ -186,106 +191,54 @@ const lightningApi = {
   labStop: () => invoke('labStop'),
 
   /** Settings were changed from main (the Test lab): the switches must follow. */
-  onSettingsChanged: (callback: (settings: SettingsPush) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, settings: SettingsPush): void => callback(settings)
-    ipcRenderer.on(IpcChannels.settingsChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.settingsChanged, listener)
-  },
+  onSettingsChanged: (callback: (settings: SettingsPush) => void): (() => void) =>
+    subscribe('settingsChanged', callback),
 
   /** The Test lab's state changed (a step, an assertion, a sample). */
-  onLabEvent: (callback: (event: LabEvent) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, event: LabEvent): void => callback(event)
-    ipcRenderer.on(IpcChannels.labEvent, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.labEvent, listener)
-  },
+  onLabEvent: (callback: (event: LabEvent) => void): (() => void) =>
+    subscribe('labEvent', callback),
 
   /** The OS handed Lightning a link (a magnet link, a .torrent): takePendingLink() has it. */
-  onAppCommand: (callback: (command: string, argument?: string) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, command: string, argument?: string): void =>
-      callback(command, argument)
-    ipcRenderer.on(IpcChannels.appCommand, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.appCommand, listener)
-  },
+  onAppCommand: (callback: (command: string, argument?: string) => void): (() => void) =>
+    subscribe('appCommand', callback),
 
   /** A Telegram job changed (throttled in main); the whole job is sent. */
-  onTdlJobUpdated: (callback: (job: TdlJob) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, job: TdlJob): void => callback(job)
-    ipcRenderer.on(IpcChannels.tdlJobUpdated, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.tdlJobUpdated, listener)
-  },
+  onTdlJobUpdated: (callback: (job: TdlJob) => void): (() => void) =>
+    subscribe('tdlJobUpdated', callback),
 
-  onYoutubeJobUpdated: (callback: (job: YoutubeJob) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, job: YoutubeJob): void => callback(job)
-    ipcRenderer.on(IpcChannels.youtubeJobUpdated, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.youtubeJobUpdated, listener)
-  },
+  onYoutubeJobUpdated: (callback: (job: YoutubeJob) => void): (() => void) =>
+    subscribe('youtubeJobUpdated', callback),
 
   /** What a Telegram sign-in needs or has reached. */
-  onTdlLoginEvent: (callback: (sessionId: string, event: TdlLoginEvent) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, sessionId: string, event: TdlLoginEvent): void =>
-      callback(sessionId, event)
-    ipcRenderer.on(IpcChannels.tdlLoginEvent, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.tdlLoginEvent, listener)
-  },
+  onTdlLoginEvent: (callback: (sessionId: string, event: TdlLoginEvent) => void): (() => void) =>
+    subscribe('tdlLoginEvent', callback),
 
   /** The schedule opened or closed (or its cap changed). */
-  onScheduleChanged: (callback: (status: ScheduleStatus) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, status: ScheduleStatus): void => callback(status)
-    ipcRenderer.on(IpcChannels.scheduleChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.scheduleChanged, listener)
-  },
+  onScheduleChanged: (callback: (status: ScheduleStatus) => void): (() => void) =>
+    subscribe('scheduleChanged', callback),
 
-  onLinkReceived: (callback: () => void): (() => void) => {
-    const listener = (): void => callback()
-    ipcRenderer.on(IpcChannels.linkReceived, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.linkReceived, listener)
-  },
+  onLinkReceived: (callback: () => void): (() => void) => subscribe('linkReceived', callback),
 
-  onDownloadUpdated: (callback: (update: DownloadUpdate) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, update: DownloadUpdate): void => callback(update)
-    ipcRenderer.on(IpcChannels.downloadUpdated, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.downloadUpdated, listener)
-  },
+  onDownloadUpdated: (callback: (update: DownloadUpdate) => void): (() => void) =>
+    subscribe('downloadUpdated', callback),
 
   /** A download was added to the finished ones or forgotten: listHistory() has them. */
-  onHistoryChanged: (callback: () => void): (() => void) => {
-    const listener = (): void => callback()
-    ipcRenderer.on(IpcChannels.historyChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.historyChanged, listener)
-  },
+  onHistoryChanged: (callback: () => void): (() => void) => subscribe('historyChanged', callback),
 
   /** The saved DNS profiles or the app's default changed. */
-  onDnsChanged: (callback: (config: DnsConfig) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, config: DnsConfig): void => callback(config)
-    ipcRenderer.on(IpcChannels.dnsChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.dnsChanged, listener)
-  },
+  onDnsChanged: (callback: (config: DnsConfig) => void): (() => void) =>
+    subscribe('dnsChanged', callback),
 
   /** A group was made, changed or removed: listGroups() has them. */
-  onGroupsChanged: (callback: () => void): (() => void) => {
-    const listener = (): void => callback()
-    ipcRenderer.on(IpcChannels.groupsChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.groupsChanged, listener)
-  },
+  onGroupsChanged: (callback: () => void): (() => void) => subscribe('groupsChanged', callback),
 
-  onNetworksChanged: (callback: (networks: NetworkInterfaceInfo[]) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, networks: NetworkInterfaceInfo[]): void =>
-      callback(networks)
-    ipcRenderer.on(IpcChannels.networksChanged, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.networksChanged, listener)
-  },
+  onNetworksChanged: (callback: (networks: NetworkInterfaceInfo[]) => void): (() => void) =>
+    subscribe('networksChanged', callback),
 
   /** How a magnet link's check is going, while it waits: noPeersYet once its first search came back empty. */
   onMagnetStatus: (
     callback: (status: { link: string; noPeersYet: boolean }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: IpcRendererEvent,
-      status: { link: string; noPeersYet: boolean }
-    ): void => callback(status)
-    ipcRenderer.on(IpcChannels.magnetStatus, listener)
-    return () => ipcRenderer.removeListener(IpcChannels.magnetStatus, listener)
-  }
+  ): (() => void) => subscribe('magnetStatus', callback)
 }
 
 export type LightningApi = typeof lightningApi

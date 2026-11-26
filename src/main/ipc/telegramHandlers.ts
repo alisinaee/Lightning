@@ -2,16 +2,13 @@ import { t } from '../../shared/i18n'
 import { reportTelegram } from '../externalActivity'
 import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join, resolve, sep } from 'node:path'
-import { ipcMain, Notification, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
-import type { IpcContract } from '../../shared/ipc-contract'
 import { parseTelegramLinks, type TdlJob, type TdlStatus } from '../../shared/telegram'
 import type { ResolvedPrefs } from '../../shared/types'
-import { uiUpdateDelay } from '../../shared/uiThrottle'
 import { getDefaultDownloadsDir } from '../download/paths'
 import { log } from '../logger'
 import { loadSettings, prefsOf } from '../settings'
-import { testKnobs } from '../testKnobs'
 import {
   deleteSession,
   proxyArg,
@@ -22,23 +19,11 @@ import {
 import { exportPreview, listChats } from '../telegram/tdlExport'
 import { TdlJobManager } from '../telegram/tdlJobs'
 import { TdlLogin } from '../telegram/tdlLogin'
+import { createJobThrottler, handle, sendToWindow, showAppNotification } from './ipcHelpers'
 
 export interface TelegramHandlers {
   /** Stops tdl processes and writes the job list; for quitting. */
   dispose(): Promise<void>
-}
-
-function handle<K extends keyof IpcContract>(
-  channel: K,
-  listener: (
-    event: IpcMainInvokeEvent,
-    ...args: IpcContract[K]['args']
-  ) => IpcContract[K]['result'] | Promise<IpcContract[K]['result']>
-): void {
-  ipcMain.handle(
-    IpcChannels[channel],
-    listener as (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  )
 }
 
 async function currentPrefs(): Promise<ResolvedPrefs> {
@@ -55,51 +40,21 @@ export async function telegramDirectory(): Promise<string> {
 export async function registerTelegramHandlers(
   getWindow: () => BrowserWindow | null
 ): Promise<TelegramHandlers> {
-  const send = (channel: string, ...args: unknown[]): void => {
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(channel, ...args)
-  }
-
   // Progress goes to the window at the rate its visibility allows, the latest job state only.
-  const pending = new Map<string, { job: TdlJob; timer?: NodeJS.Timeout; last: number }>()
-  const push = (job: TdlJob): void => {
-    reportTelegram(job)
-    const entry = pending.get(job.id) ?? { job, last: 0 }
-    entry.job = job
-    pending.set(job.id, entry)
-    if (entry.timer) return
-    const window = getWindow()
-    const delay = window
-      ? uiUpdateDelay({
-          visible: window.isVisible(),
-          minimized: window.isMinimized(),
-          focused: window.isFocused()
-        })
-      : 2000
-    const wait = Math.max(0, entry.last + delay - Date.now())
-    entry.timer = setTimeout(() => {
-      entry.timer = undefined
-      entry.last = Date.now()
-      send(IpcChannels.tdlJobUpdated, entry.job)
-    }, wait)
-  }
-  /** A finished job's last state goes out at once, so a status change is never late. */
-  const flush = (job: TdlJob): void => {
-    reportTelegram(job)
-    const entry = pending.get(job.id)
-    if (entry?.timer) clearTimeout(entry.timer)
-    pending.set(job.id, { job, last: Date.now() })
-    send(IpcChannels.tdlJobUpdated, job)
-  }
+  const throttler = createJobThrottler<TdlJob>({
+    getWindow,
+    channel: IpcChannels.tdlJobUpdated,
+    onReport: reportTelegram
+  })
 
   const prefs = currentPrefs
   const proxy = async (): Promise<string | undefined> => proxyArg(await prefs())
 
   const jobs = new TdlJobManager({
     getPrefs: prefs,
-    onChange: push,
+    onChange: throttler.push,
     onFinished: (job) => {
-      flush(job)
+      throttler.flush(job)
       void notifyFinished(job, getWindow)
     }
   })
@@ -120,7 +75,7 @@ export async function registerTelegramHandlers(
       throw new Error('The Telegram Desktop folder must be an absolute path.')
     }
     return login.start(mode, options, (sessionId, event) =>
-      send(IpcChannels.tdlLoginEvent, sessionId, event)
+      sendToWindow(getWindow(), IpcChannels.tdlLoginEvent, sessionId, event)
     )
   })
   handle('tdlLoginAnswer', (_event, sessionId, value) => login.answer(sessionId, String(value)))
@@ -169,7 +124,7 @@ export async function registerTelegramHandlers(
   return {
     async dispose() {
       login.dispose()
-      for (const entry of pending.values()) if (entry.timer) clearTimeout(entry.timer)
+      throttler.dispose()
       await jobs.dispose()
     }
   }
@@ -177,10 +132,6 @@ export async function registerTelegramHandlers(
 
 async function notifyFinished(job: TdlJob, getWindow: () => BrowserWindow | null): Promise<void> {
   if (job.status !== 'completed' && job.status !== 'error') return
-  const settings = prefsOf(await loadSettings())
-  const allowed = job.status === 'completed' ? settings.notifyCompleted : settings.notifyFailed
-  if (!allowed || testKnobs.userDataDir || !Notification.isSupported()) return
-  if (settings.notifyWhenInactive && getWindow()?.isFocused()) return
   const done = job.items.filter((item) => item.status === 'done').length
   const title =
     job.status === 'completed' ? t('Telegram download finished') : t('Telegram download failed')
@@ -190,18 +141,5 @@ async function notifyFinished(job: TdlJob, getWindow: () => BrowserWindow | null
         ? (job.items[0]?.fileName ?? t('1 file'))
         : t('{done} of {total} files', { done, total: job.items.length })
       : (job.error ?? t('Some files could not be downloaded.'))
-  try {
-    const notification = new Notification({ title, body, silent: true })
-    notification.on('click', () => {
-      const window = getWindow()
-      if (window && !window.isDestroyed()) {
-        if (window.isMinimized()) window.restore()
-        window.show()
-        window.focus()
-      }
-    })
-    notification.show()
-  } catch {
-    // Notifications are a courtesy.
-  }
+  await showAppNotification({ getWindow, kind: job.status, title, body })
 }

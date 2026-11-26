@@ -10,6 +10,7 @@ export default {
   '1 video downloaded': '۱ ویدیو دانلود شد',
   'The download could not be completed.': 'دانلود کامل نشد.',
   'Add YouTube video': 'افزودن ویدیوی YouTube',
+  'Add video': 'افزودن ویدیو',
   'Sent from your browser. Check the quality, then download.':
     'از مرورگر شما فرستاده شد. کیفیت را بررسی و سپس دانلود کنید.',
   'Paste a link, check the video, then choose a quality.':
@@ -23,6 +24,10 @@ export default {
   Quality: 'کیفیت',
   'Download {quality}': 'دانلود {quality}',
   'Fetch queue': 'صف دریافت اطلاعات',
+  'Paste a link and choose a quality. Lightning does the rest.':
+    'پیوند را جای‌گذاری و کیفیت را انتخاب کنید. بقیه با Lightning است.',
+  'Use another link': 'استفاده از پیوند دیگر',
+  'Check the quality, then download.': 'کیفیت را بررسی کنید، سپس دانلود کنید.',
   'Fetching {url}': 'در حال دریافت {url}',
   'Choose quality': 'انتخاب کیفیت',
   Dismiss: 'بستن',
@@ -196,8 +201,9 @@ export default {
   'This video is private, so it cannot be downloaded.': 'این ویدیو خصوصی است و دانلود نمی‌شود.',
   'This video is unavailable. It may have been removed.':
     'این ویدیو در دسترس نیست. شاید حذف شده باشد.',
-  "This link isn't a YouTube video link that Lightning can download.":
-    'این پیوند، پیوند ویدیوی YouTube قابل‌دانلود برای Lightning نیست.',
+  'No downloadable video was found on this page.': 'در این صفحه ویدیوی قابل‌دانلودی پیدا نشد.',
+  'This is a web page.': 'این یک صفحه وب است.',
+  'Look for a video on this page': 'جستجوی ویدیو در این صفحه',
   'The YouTube downloader (yt-dlp) is missing. Reinstall Lightning or update yt-dlp.':
     'دانلودکنندهٔ YouTube (yt-dlp) پیدا نشد. Lightning را دوباره نصب یا yt-dlp را به‌روزرسانی کنید.',
   "Lightning couldn't reach YouTube. Check your internet connection or VPN.":

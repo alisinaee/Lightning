@@ -8,6 +8,16 @@ export function useTelegramEvents(): void {
     const store = useTelegramStore.getState()
     void store.refreshStatus()
     void store.loadJobs()
-    return window.lightning.onTdlJobUpdated((job) => useTelegramStore.getState().setJob(job))
+    const offJob = window.lightning.onTdlJobUpdated((job) =>
+      useTelegramStore.getState().setJob(job)
+    )
+    // Auto sync takes finished jobs whose files are gone out of the list: read the list again.
+    const offHistory = window.lightning.onHistoryChanged(() => {
+      void useTelegramStore.getState().loadJobs()
+    })
+    return () => {
+      offJob()
+      offHistory()
+    }
   }, [])
 }

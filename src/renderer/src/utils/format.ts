@@ -1,5 +1,6 @@
 import { describeError, linkRefused } from '@shared/errors'
 import { formatDate, formatNumber, formatTime, t, tn } from '@shared/i18n/react'
+import { connectionsOnly } from '@shared/networks'
 import type {
   DownloadNetwork,
   DownloadState,
@@ -163,7 +164,7 @@ export type NetworkGroup = HttpNetworkGroup | TorrentNetworkGroup
 export function connectionsOf<T extends { kind: NetworkInterfaceKind }>(networks: T[]): T[]
 export function connectionsOf(networks: DownloadNetwork[]): DownloadNetwork[]
 export function connectionsOf(networks: { kind: NetworkInterfaceKind }[]): unknown[] {
-  return networks.filter((network) => network.kind !== 'vpn')
+  return connectionsOnly(networks)
 }
 
 /** What went through VPN tunnels, folded into one figure — or null when none did. Shown on its

@@ -7,6 +7,7 @@ import { basename, join } from 'node:path'
 import { app, shell } from 'electron'
 import type { ResolvedPrefs } from '../../shared/types'
 import { mediaKindOf, type TdlItem, type TdlJob, type TgMediaKind } from '../../shared/telegram'
+import { addFinishedSource, isFileGone } from '../fileSync'
 import { readJson, updateJson } from '../jsonFile'
 import { log } from '../logger'
 import { baseArgs, failureReason, proxyArg, spawnTdl } from './tdlBinary'
@@ -91,7 +92,34 @@ export class TdlJobManager {
   private persistTimer?: NodeJS.Timeout
   private loaded = false
 
-  constructor(private readonly options: TdlJobManagerOptions) {}
+  constructor(private readonly options: TdlJobManagerOptions) {
+    addFinishedSource(() => this.removeMissingFinished())
+  }
+
+  /** Auto sync: a finished job whose files were all moved or deleted leaves the list (the record
+   * only). A job with no file recorded stays. Returns how many went. */
+  async removeMissingFinished(): Promise<number> {
+    if (!(await this.options.getPrefs()).autoSyncFiles) return 0
+    const candidates = [...this.jobs.values()].flatMap((job) => {
+      if (job.status !== 'completed') return []
+      const paths = job.items.flatMap((item) =>
+        item.status === 'done' && item.path ? [item.path] : []
+      )
+      return paths.length > 0 ? [{ id: job.id, paths }] : []
+    })
+    const checks = await Promise.all(
+      candidates.map(async ({ id, paths }) => {
+        const missing = await Promise.all(paths.map((path) => isFileGone(path)))
+        return missing.every(Boolean) ? id : null
+      })
+    )
+    const gone = checks.filter((id): id is string => id !== null)
+    if (gone.length === 0) return 0
+    for (const id of gone) this.jobs.delete(id)
+    await this.persistNow()
+    log.info('telegram', `removed ${gone.length} finished from the list: their files are gone`)
+    return gone.length
+  }
 
   private get file(): string {
     return join(app.getPath('userData'), 'telegram-jobs.json')

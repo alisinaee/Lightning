@@ -10,7 +10,7 @@ import {
   Trash as Trash2,
   X
 } from '@phosphor-icons/react'
-import type { YoutubeJob } from '@shared/youtube'
+import { isYoutubeUrl, type YoutubeJob } from '@shared/youtube'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -33,6 +33,16 @@ import { YoutubeJobDetails } from './YoutubeJobDetails'
 import { explainYoutubeError } from './youtubeErrors'
 import { cn } from 'cn'
 import type { Icon } from '@phosphor-icons/react'
+
+/** "YouTube", or the site another video came from. */
+function siteName(url: string): string {
+  if (isYoutubeUrl(url)) return 'YouTube'
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return 'Video'
+  }
+}
 
 /** A row's main action as an icon, the same look as the Downloads rows. */
 function IconAction({
@@ -185,7 +195,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
           {/* A non-breaking space when empty, so the row keeps its height, as on Downloads rows. */}
           <span className="truncate text-[11px] leading-none text-muted-foreground">
             {[
-              'YouTube',
+              siteName(job.url),
               job.resolution,
               job.error && job.status === 'error' ? explainYoutubeError(job.error).summary : ''
             ]

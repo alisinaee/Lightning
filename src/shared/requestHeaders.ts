@@ -64,11 +64,24 @@ function setHeader(headers: Record<string, string>, name: string, value: string)
   headers[name] = value
 }
 
+/** The front page of a web link's site: no path, query or sign-in details. */
+function siteOf(link: string): string | undefined {
+  try {
+    const { protocol, origin } = new URL(link)
+    return protocol === 'http:' || protocol === 'https:' ? `${origin}/` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The headers a download's requests carry: the user agent, then the user's own headers, then
- * Referer, Cookie and sign-in details. `extra` (a Range) is added last and always wins. */
+ * Referer, Cookie and sign-in details. With no Referer given, the site of `link` itself stands in
+ * for it: a hotlink-protected server hands a bare link a decoy file or a refusal, and takes a
+ * request that comes from its own pages. `extra` (a Range) is added last and always wins. */
 export function buildHeaders(
   extras: RequestExtras | undefined,
-  extra: Record<string, string> = {}
+  extra: Record<string, string> = {},
+  link?: string
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'User-Agent': extras?.userAgent?.trim() || DEFAULT_USER_AGENT
@@ -78,11 +91,16 @@ export function buildHeaders(
   }
   if (extras?.referer && isSendableHeader('Referer', extras.referer)) {
     setHeader(headers, 'Referer', extras.referer)
+  } else if (link && !Object.keys(headers).some((name) => name.toLowerCase() === 'referer')) {
+    const site = siteOf(link)
+    if (site) headers['Referer'] = site
   }
   if (extras?.cookie && isSendableHeader('Cookie', extras.cookie)) {
     setHeader(headers, 'Cookie', extras.cookie)
   }
-  if (extras?.auth && (extras.auth.user || extras.auth.pass)) {
+  // A user-entered Authorization header wins over sign-in details taken from a link.
+  const explicitAuth = Object.keys(headers).some((name) => name.toLowerCase() === 'authorization')
+  if (extras?.auth && (extras.auth.user || extras.auth.pass) && !explicitAuth) {
     const token = Buffer.from(`${extras.auth.user}:${extras.auth.pass}`, 'utf8').toString('base64')
     setHeader(headers, 'Authorization', `Basic ${token}`)
   }

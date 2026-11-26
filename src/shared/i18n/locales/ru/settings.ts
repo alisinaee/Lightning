@@ -190,8 +190,9 @@ export default {
     'Быстрые кнопки в панели: новая загрузка, приостановить все и другие',
   'Recent links': 'Недавние ссылки',
   Remove: 'Удалить',
-  'Remove a finished download from the list when its file is deleted or moved':
-    'Убирать завершённую загрузку из списка, если её файл удалён или перемещён',
+  'Auto sync': 'Автосинхронизация',
+  'Removes a finished download from the list when its file is moved or deleted.':
+    'Убирает завершённую загрузку из списка, когда её файл перемещён или удалён.',
   'Remove this window': 'Удалить этот интервал',
   'Remove {name} from history': 'Удалить {name} из истории',
   'Remove “{name}” from the history? The file stays where it is.':

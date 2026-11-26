@@ -6,6 +6,16 @@ export function useYoutubeEvents(): void {
     const store = useYoutubeStore.getState()
     void store.refreshStatus()
     void store.loadJobs()
-    return window.lightning.onYoutubeJobUpdated((job) => useYoutubeStore.getState().setJob(job))
+    const offJob = window.lightning.onYoutubeJobUpdated((job) =>
+      useYoutubeStore.getState().setJob(job)
+    )
+    // Auto sync takes finished videos whose file is gone out of the list: read the list again.
+    const offHistory = window.lightning.onHistoryChanged(() => {
+      void useYoutubeStore.getState().loadJobs()
+    })
+    return () => {
+      offJob()
+      offHistory()
+    }
   }, [])
 }

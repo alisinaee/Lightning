@@ -33,8 +33,8 @@ import { YoutubeIcon } from './youtube/YoutubeIcon'
 import { STATUSES } from './downloads/statusEntries'
 import { FileKindIcon } from './downloads/FileKindIcon'
 import { MEDIA_KINDS } from './telegram/telegramRowInfo'
-import { buildEntries, countEntries } from '../utils/downloadList'
-import { FILE_KINDS, type FileKind } from '../utils/fileKind'
+import { buildEntries, countEntries, type ListCounts } from '../utils/downloadList'
+import { FILE_KINDS, type FileKind } from '@shared/fileKind'
 import { STATUS_STYLE } from '../utils/status'
 import type { TgMediaKind } from '@shared/telegram'
 import {
@@ -317,21 +317,20 @@ export function AppSidebar(): React.JSX.Element {
   const kindFilter = useAppStore((store) => store.kindFilter)
   const setKindFilter = useAppStore((store) => store.setKindFilter)
   const setSelected = useAppStore((store) => store.setSelectedDownloads)
-  const downloadsById = useAppStore((store) => store.downloads)
-  const history = useAppStore((store) => store.history)
-  const groupInfos = useAppStore((store) => store.groups)
+  const countsKey = useAppStore((store) => {
+    const downloads = Object.values(store.downloads).filter(
+      (download) => download.status !== 'cancelled'
+    )
+    return JSON.stringify(countEntries(buildEntries(downloads, store.history, store.groups)))
+  })
+  const hasHistory = useAppStore((store) => store.history.length > 0)
   const telegramActive = useTelegramStore(
     (store) => Object.values(store.jobs).filter(isActiveJob).length
   )
   const youtubeActive = useYoutubeStore(
     (store) => Object.values(store.jobs).filter(isActiveYoutubeJob).length
   )
-  const counts = useMemo(() => {
-    const downloads = Object.values(downloadsById)
-      .filter((download) => download.status !== 'cancelled')
-      .sort((a, b) => a.startedAt - b.startedAt)
-    return countEntries(buildEntries(downloads, history, groupInfos))
-  }, [downloadsById, history, groupInfos])
+  const counts = useMemo(() => JSON.parse(countsKey) as ListCounts, [countsKey])
 
   const sectionName = view.name === 'telegram' || view.name === 'youtube' ? view.name : 'downloads'
   const sectionIndex = sectionName === 'downloads' ? 0 : sectionName === 'telegram' ? 1 : 2
@@ -601,17 +600,17 @@ export function AppSidebar(): React.JSX.Element {
         <div className="flex-1" />
         {/* Always in place, only hidden when there is nothing to clear: the list above would
           otherwise move (or gain a scrollbar) when the first download finishes. */}
-        <Tooltip disabled={history.length === 0}>
+        <Tooltip disabled={!hasHistory}>
           <TooltipTrigger
             render={
               <button
                 type="button"
                 onClick={() => void window.lightning.clearHistory()}
-                disabled={history.length === 0}
-                tabIndex={history.length > 0 ? 0 : -1}
-                aria-hidden={history.length === 0}
+                disabled={!hasHistory}
+                tabIndex={hasHistory ? 0 : -1}
+                aria-hidden={!hasHistory}
                 aria-label={t('Clear finished list')}
-                className={`mt-2 flex h-8 shrink-0 items-center ${collapsed ? 'justify-center' : 'gap-2 px-2 text-start'} rounded-md text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${history.length > 0 ? '' : 'invisible'}`}
+                className={`mt-2 flex h-8 shrink-0 items-center ${collapsed ? 'justify-center' : 'gap-2 px-2 text-start'} rounded-md text-[12px] text-[var(--text-secondary)] outline-none hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${hasHistory ? '' : 'invisible'}`}
               >
                 <Archive aria-hidden className="size-3.5" />
                 {!collapsed && t('Clear finished list')}

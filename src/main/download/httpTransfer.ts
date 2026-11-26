@@ -3,14 +3,13 @@ import type {
   HttpStreamState,
   DownloadNetwork,
   DownloadStatus,
-  NetworkStatus,
-  StartHttpDownloadRequest
+  NetworkStatus
 } from '../../shared/types'
-import { buildHeaders } from '../../shared/requestHeaders'
+import { buildHeaders, headersForRedirect } from '../../shared/requestHeaders'
 import { stallTimeoutMs, testKnobs, testStreamsPerNetwork } from '../testKnobs'
 import { advanceBlock, retractBlock } from './blockProgress'
 import {
-  ConcurrencyController,
+  type ConcurrencyController,
   DISK_PATIENCE_MS,
   DISK_RECOVER_MS,
   DiskWatch,
@@ -19,7 +18,7 @@ import {
 } from './concurrency'
 import { downloadChunk, fetchRange, HttpStatusError, RemoteChangedError } from './chunkDownloader'
 import { compareVersion, type FileVersion } from './fileVersion'
-import { interleave, MAX_STREAMS_PER_NETWORK, startingStreams } from './plan'
+import { interleave, startingStreams } from './plan'
 import { partEnd, pickWork, type SchedulerPolicy, type Segment, type Work } from './scheduler'
 import {
   delay,
@@ -29,6 +28,22 @@ import {
   type HttpTransferTarget
 } from './transfer'
 import { ConnectionError, NoCompatibleRouteError, StreamConnection } from '../network/routes'
+import {
+  compareSamples,
+  concurrencyFor,
+  MAX_SAMPLES,
+  median,
+  newStream,
+  pickedStreams,
+  requestedVersion,
+  retryDelayMs,
+  SAMPLE_BYTES,
+  SAMPLE_TRIES,
+  splittable,
+  unlessAborted
+} from './httpHelpers'
+
+export { compareSamples, pickedStreams, splittable }
 
 /** Why an attempt was called off by the manager rather than by a pause or a failure. */
 type AbortReason = 'refresh' | 'lost'
@@ -48,6 +63,9 @@ interface Attempt {
   block: HttpBlockState
   streamId: number
   networkId: string
+  /** The download's link when the request went out: it can be replaced since (see
+   * refreshLink). */
+  url: string
   /** Where the request begins, as an offset into the block. Null until it is known. */
   startOffset: number | null
   /** Where it stops, as an offset into the block, exclusive; null for a block of unknown length.
@@ -124,8 +142,8 @@ const debug: (...args: unknown[]) => void = process.env['LIGHTNING_DEBUG']
   : () => {}
 
 const MAX_CHUNK_RETRIES = 5
-const RETRY_BASE_DELAY_MS = testKnobs.retryBaseDelayMs
-const RETRY_MAX_DELAY_MS = 15_000
+/** What a server answers a link it no longer takes with: a signed one that ran out, say. */
+const LINK_REFUSED = [401, 403, 410]
 // A network that can't reach the server keeps one stream asking (see reconcile). That is one
 // cheap connection, so it asks often enough to find out soon after the network gets through.
 const UNREACHABLE_RETRY_MS = 5_000
@@ -134,13 +152,6 @@ const UNREACHABLE_RETRY_MS = 5_000
 // RETRY_AFTER_MAX_MS.
 const SERVER_BUSY_FOR_MS = testKnobs.serverBusyForMs
 const RETRY_AFTER_MAX_MS = 120_000
-
-/** Doubling from RETRY_BASE_DELAY_MS, with ±20% jitter as gRPC's backoff has: a network that
- * drops fails all its streams at once, and they shouldn't all come back at the same instant. */
-function retryDelayMs(attempt: number): number {
-  const exact = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
-  return exact * (0.8 + 0.4 * Math.random())
-}
 
 // A single TCP stream can get stuck at a crawl (loss-collapsed congestion window, a bad CDN node
 // or route) while its siblings on the same network run fine. It never goes silent, so the stall
@@ -169,69 +180,11 @@ interface AheadSegment extends Segment {
   streamId: number
 }
 
-/** Whether the file can be fetched in parts. Otherwise one request has to carry all of it: one
- * stream, on one network. */
-export function splittable(request: StartHttpDownloadRequest): boolean {
-  return request.supportsRanges && request.totalBytes > 0
-}
-
-/** How many streams a download runs is only for it to work out when there can be more than one,
- * and unless a test fixes it. */
-function concurrencyFor(
-  request: StartHttpDownloadRequest,
-  host: TransferHost
-): ConcurrencyController | null {
-  if (!splittable(request) || testStreamsPerNetwork() !== null) return null
-  const picked = pickedStreams(request)
-  return picked === undefined
-    ? new ConcurrencyController(MAX_STREAMS_PER_NETWORK, true, (networkId) =>
-        Math.floor(MAX_STREAMS_PER_NETWORK / Math.max(1, host.downloadsOn(networkId)))
-      )
-    : new ConcurrencyController(picked, false)
-}
-
-/** The streams per network the user picked for this download, if they didn't leave it on Auto. */
-export function pickedStreams(request: StartHttpDownloadRequest): number | undefined {
-  const picked = request.streamsPerNetwork
-  return Number.isInteger(picked) && picked! >= 1 && picked! <= MAX_STREAMS_PER_NETWORK
-    ? picked
-    : undefined
-}
 /** How often a stream with nothing to do looks for work again. */
 const IDLE_POLL_MS = 250
 // Just longer than an idle stream takes to look for work, so a refreshed block goes to a
 // connection that is already proven fast, if there is one.
 const REFRESH_HANDOFF_MS = IDLE_POLL_MS + 50
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = sorted.length >> 1
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
-}
-
-function newStream(id: number, networkId: string): HttpStreamState {
-  return {
-    id,
-    interfaceId: networkId,
-    rangeStart: 0,
-    rangeEnd: null,
-    bytesDownloaded: 0,
-    speedBytesPerSec: 0,
-    status: 'pending'
-  }
-}
-
-function requestedVersion(request: StartHttpDownloadRequest): FileVersion {
-  return { etag: request.etag, lastModified: request.lastModified, totalBytes: request.totalBytes }
-}
-
-// How much of the already-downloaded file to re-fetch and compare when a server labels a
-// response with an ETag or Last-Modified this download hasn't seen before.
-const SAMPLE_BYTES = 16 * 1024
-const MAX_SAMPLES = 8
-/** A sample must come from a server presenting the new label; behind a load balancer the next
- * request may land on another one, so take a few tries at reaching it. */
-const SAMPLE_TRIES = 4
 
 /**
  * Fetches a download over HTTP: streams, each one connection to the server through one network,
@@ -272,6 +225,11 @@ export class HttpTransfer implements Transfer {
   private concurrency: ConcurrencyController | null
   /** Whether the disk is what holds the download back, for Auto, the user and hedges. */
   private readonly disk = new DiskWatch()
+  /** The link the server last turned away this run, and whether a fresh one came of asking for it
+   * (see refreshLink). */
+  private linkRefresh: { refused: string; refreshed: Promise<boolean> } | null = null
+  /** The links a block came in from this run. */
+  private servedLinks = new Set<string>()
 
   constructor(
     private readonly runtime: HttpTransferTarget,
@@ -383,6 +341,8 @@ export class HttpTransfer implements Transfer {
     this.aheadByBlock.clear()
     this.reconciled.clear()
     this.disk.reset()
+    this.linkRefresh = null
+    this.servedLinks.clear()
   }
 
   systemResumed(now: number): void {
@@ -461,6 +421,16 @@ export class HttpTransfer implements Transfer {
         this.retireStreams(action.networkId, action.count)
       }
     }
+  }
+
+  /** What every request of this download carries, as if it came from the site of the link given.
+   * For `url`, the link it goes to: sign-in details and cookies go only to the host the link was
+   * given for, never to a signed link on another host. */
+  private requestHeaders(url: string = this.runtime.requestPayload.url): Record<string, string> {
+    const { requestPayload } = this.runtime
+    const asked = requestPayload.requestedUrl ?? requestPayload.url
+    const headers = buildHeaders(requestPayload, {}, asked)
+    return url === asked ? headers : headersForRedirect(headers, asked, url)
   }
 
   /**
@@ -613,6 +583,7 @@ export class HttpTransfer implements Transfer {
       block,
       streamId: chunk.id,
       networkId: chunk.interfaceId,
+      url: this.runtime.requestPayload.url,
       startOffset,
       end: work.kind === 'split' ? work.end! : partEnd(block, inFlight, segments, startOffset),
       received: 0,
@@ -694,14 +665,14 @@ export class HttpTransfer implements Transfer {
 
       attempt.startedAt = Date.now()
       await downloadChunk({
-        url: this.runtime.requestPayload.url,
+        url: attempt.url,
         rangeStart: block.rangeStart + startOffset,
         rangeEnd: attempt.end === null ? null : block.rangeStart + attempt.end - 1,
         // Its end can come forward while it runs (see beginAttempt).
         wanted: attempt.end === null ? undefined : () => attempt.end! - startOffset,
         wholeFile: !this.runtime.requestPayload.supportsRanges,
         connection: self.connection,
-        requestHeaders: buildHeaders(this.runtime.requestPayload),
+        requestHeaders: this.requestHeaders(attempt.url),
         createDestination: () => this.runtime.file.writer(block.rangeStart + startOffset),
         signal: AbortSignal.any([self.controller.signal, attempt.abort.signal]),
         acceptedVersions: this.acceptedVersions,
@@ -929,6 +900,7 @@ export class HttpTransfer implements Transfer {
     }
 
     this.endAttempt(self, attempt)
+    this.servedLinks.add(attempt.url)
     self.failures = 0
     self.strikes = 0
     if (block.rangeEnd === null) {
@@ -1037,6 +1009,22 @@ export class HttpTransfer implements Transfer {
       this.letGo(chunk, self, attempt, deliveredNothing)
       this.host.failNetwork(network, message)
       return 'stop'
+    }
+
+    // A link the server no longer takes, a signed one that ran out, say: with a fresh one from the
+    // link the download was given, every stream goes on, nothing counted against it.
+    if (error instanceof HttpStatusError && LINK_REFUSED.includes(error.status)) {
+      const refreshed = await unlessAborted(this.refreshLink(attempt.url), self.wait)
+      if (
+        self.controller.signal.aborted ||
+        (this.runtime.state.status as DownloadStatus) !== 'downloading'
+      ) {
+        return this.finishStopped(chunk, self, attempt)
+      }
+      if (refreshed) {
+        this.letGo(chunk, self, attempt, false)
+        return 'continue'
+      }
     }
 
     // What the server's answer says about the network: a connection failing while the whole
@@ -1309,6 +1297,25 @@ export class HttpTransfer implements Transfer {
   }
 
   /**
+   * After the server turned `url` away: whether there's a fresh link to go on with. A request
+   * sent before the link was replaced just goes again. Otherwise the manager is asked once per
+   * link turned away, and every stream it turned away waits on that one answer. A link a refresh
+   * switched to is only refreshed in turn once a block has come in from it, so a link that is
+   * turned away from the start doesn't have the one it came from asked again and again; a run
+   * (a resume) starts that over.
+   */
+  private refreshLink(url: string): Promise<boolean> {
+    const current = this.runtime.requestPayload.url
+    if (url !== current) return Promise.resolve(true)
+    if (this.linkRefresh?.refused === url) return this.linkRefresh.refreshed
+    if (this.linkRefresh && !this.servedLinks.has(url)) return Promise.resolve(false)
+    const refreshed = this.host.refreshLink?.()
+    if (!refreshed) return Promise.resolve(false)
+    this.linkRefresh = { refused: url, refreshed }
+    return refreshed
+  }
+
+  /**
    * Settles whether a server labelling the file differently (new ETag or Last-Modified, same
    * size) is serving the same bytes — load-balanced servers often disagree on labels for
    * identical files — or a new version. Re-fetches a spread of bytes this download already has
@@ -1352,7 +1359,7 @@ export class HttpTransfer implements Transfer {
             block.rangeStart,
             block.rangeStart + local.length - 1,
             connection,
-            buildHeaders(this.runtime.requestPayload)
+            this.requestHeaders()
           )
           // A reply from a server still presenting an accepted label proves nothing here.
           if (compareVersion([seen], remote.version).kind !== 'same') continue

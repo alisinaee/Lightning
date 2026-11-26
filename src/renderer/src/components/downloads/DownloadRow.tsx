@@ -83,8 +83,6 @@ export const DownloadRow = memo(function DownloadRow({
   hit?: boolean
   handlers: RowHandlers
   getVisual: ResolveNetworkVisual
-  /** Changes when a network's name or colour does, so the row repaints. */
-  visualsKey?: string
 }): React.JSX.Element {
   const columns = useColumns()
   const info = describeItem(item, queuePosition)

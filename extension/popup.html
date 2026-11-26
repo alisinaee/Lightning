@@ -30,7 +30,13 @@
     <details id="manual" class="card fold" hidden>
       <summary data-i18n="manual"></summary>
       <div class="fold-body">
-        <input id="key" type="password" autocomplete="off" spellcheck="false" data-i18n-ph="key_ph" />
+        <input
+          id="key"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          data-i18n-ph="key_ph"
+        />
         <button id="save-key" class="btn" data-i18n="save_key"></button>
       </div>
     </details>
@@ -53,7 +59,18 @@
           <span class="row-title" data-i18n="yt"></span>
           <span class="row-sub" data-i18n="yt_h"></span>
         </button>
+        <button id="find" class="action" hidden>
+          <span class="row-title" data-i18n="find"></span>
+          <span class="row-sub" data-i18n="find_h"></span>
+        </button>
       </div>
+    </section>
+
+    <section id="videos-card" class="card" hidden>
+      <div class="row-title" data-i18n="videos_h"></div>
+      <ul id="video-list" class="videos"></ul>
+      <div id="videos-none" class="st-hint" data-i18n="videos_none" hidden></div>
+      <div id="video-msg" class="st-hint" hidden></div>
     </section>
 
     <details class="card fold">

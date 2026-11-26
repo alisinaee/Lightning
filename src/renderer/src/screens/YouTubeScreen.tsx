@@ -26,6 +26,7 @@ import { NetworksMenu } from '../components/NetworksMenu'
 import { VpnControl } from '../components/VpnControl'
 import { NewMenu, PauseAllButton, SearchField, SettingsButton } from '../components/ListTopBar'
 import { useLimitsDialog } from '../hooks/useLimitsDialog'
+import { useSelectionShortcuts } from '../hooks/useSelectionShortcuts'
 
 /** Adds or removes one job from the selection. */
 const setJobSelected = (id: string, on: boolean): void => {
@@ -68,7 +69,7 @@ export function YouTubeScreen({
   const refreshStatus = useYoutubeStore((store) => store.refreshStatus)
   const loadJobs = useYoutubeStore((store) => store.loadJobs)
   const loadOptions = useYoutubeStore((store) => store.loadOptions)
-  const setAddOpen = useYoutubeStore((store) => store.setAddOpen)
+  const openAdd = useYoutubeStore((store) => store.openAdd)
   const pauseJob = useYoutubeStore((store) => store.pauseJob)
   const resumeJob = useYoutubeStore((store) => store.resumeJob)
   const cancelJob = useYoutubeStore((store) => store.cancelJob)
@@ -175,25 +176,14 @@ export function YouTubeScreen({
     (job) => job.status === 'downloading' || job.status === 'queued'
   )
 
+  const listedIds = useMemo(() => listed.map((job) => job.id), [listed])
   // Keyboard, as on Downloads: Esc lets go of the selection, ⌘/Ctrl+A takes everything listed.
   // Not while typing in a box or a dialog is open, so those keep their own keys.
-  useEffect(() => {
-    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const target = event.target
-      const typing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
-      if (typing || document.querySelector('[role="dialog"]')) return
-      if (event.key === 'Escape') setSelected(new Set())
-      else if (event[mod] && event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        setSelected(new Set(listed.map((job) => job.id)))
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [listed, setSelected])
+  useSelectionShortcuts({
+    ids: listedIds,
+    selectedCount: chosen.length,
+    setSelected
+  })
 
   // Running, paused and failed videos among those chosen or listed: what the top bar acts on.
   const running = listed.filter((job) => job.status === 'downloading' || job.status === 'queued')
@@ -241,13 +231,15 @@ export function YouTubeScreen({
             <NetworksMenu onOpenLimits={openLimits} />
             <NewMenu
               label={t('New download')}
-              items={[{ label: t('Video link'), icon: Plus, run: () => setAddOpen(true) }]}
+              items={[{ label: t('Video link'), icon: Plus, run: () => void openAdd() }]}
             />
             {/* After the + button, so a VPN turning up doesn't move it. */}
             <VpnControl />
-            <Badge variant="outline" className="shrink-0">
-              {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : t('yt-dlp missing')}
-            </Badge>{' '}
+            {(status === null || status.binary) && (
+              <Badge variant="outline" className="shrink-0">
+                {status?.binary ? `yt-dlp ${status.version ?? ''}`.trim() : t('yt-dlp missing')}
+              </Badge>
+            )}
             {status && !status.binary && (
               <Badge variant="destructive" className="shrink-0">
                 {t('yt-dlp missing')}
@@ -430,7 +422,7 @@ export function YouTubeScreen({
                   'Paste a link to a video, or right-click a video in your browser and choose “Download video with Lightning”.'
                 )}
               </div>
-              <Button type="button" variant="secondary" onClick={() => setAddOpen(true)}>
+              <Button type="button" variant="secondary" onClick={() => void openAdd()}>
                 <Plus />
                 {t('Add video')}
               </Button>

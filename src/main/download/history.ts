@@ -3,7 +3,7 @@ import { rename, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { FinishedDownload } from '../../shared/types'
-import { volumeRootOf } from '../../shared/volumes'
+import { isFileGone } from '../fileSync'
 import { readJson, updateJson } from '../jsonFile'
 import { sanitizeFileName } from './paths'
 
@@ -78,19 +78,36 @@ export async function findInHistory(id: string): Promise<FinishedDownload | unde
 }
 
 /** Forgets the finished downloads whose file has been deleted or moved away, and says how many.
- * An entry on a disk that is not connected stays: its files are only out of reach. */
+ * One kept after its file was trashed stays, and so does one whose file can't be checked. */
 export async function removeMissingFromHistory(): Promise<number> {
-  const gone: string[] = []
-  for (const entry of await listHistory()) {
-    if (!entry.missing) continue
-    const volume = await stat(volumeRootOf(entry.destinationPath)).then(
-      () => true,
-      () => false
-    )
-    if (volume) gone.push(entry.id)
+  const candidates = entriesOf(await readJson(historyPath()).catch(() => undefined)).filter(
+    (entry) => !entry.keepWhenMissing
+  )
+  const checks = await Promise.all(
+    candidates.map(async (entry) => ({
+      entry,
+      gone: await isFileGone(entry.destinationPath)
+    }))
+  )
+  const gone = new Map<string, string>()
+  for (const { entry, gone: missing } of checks) {
+    if (missing) gone.set(entry.id, entry.destinationPath)
   }
-  if (gone.length > 0) await removeFromHistory(gone)
-  return gone.length
+  if (gone.size === 0) return 0
+  // Only the entries checked: one renamed meanwhile (its new path is saved now) stays.
+  await updateJson(historyPath(), (current) =>
+    entriesOf(current).filter((entry) => gone.get(entry.id) !== entry.destinationPath)
+  )
+  return gone.size
+}
+
+/** Keeps a finished download in the list once its file is trashed: auto sync leaves it be. */
+export function keepHistoryEntryWhenMissing(id: string): Promise<void> {
+  return updateJson(historyPath(), (current) =>
+    entriesOf(current).map((entry) =>
+      entry.id === id ? { ...entry, keepWhenMissing: true } : entry
+    )
+  )
 }
 
 export function addToHistory(entry: FinishedDownload): Promise<void> {

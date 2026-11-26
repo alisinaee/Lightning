@@ -1,9 +1,7 @@
-import type { DownloadState, HttpDownloadState } from '@shared/types'
-import { isVpn } from '@shared/networks'
+import { percentOf, rankRunning, summarizeActivity } from '@shared/trayModel'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatDuration, formatSpeed } from '../utils/format'
-import { rankRunning } from '../utils/statusMenu'
 import { SpeedGraph } from './SpeedGraph'
 import { formatNumber, t, tn } from '@shared/i18n/react'
 
@@ -44,11 +42,6 @@ function Section({
   )
 }
 
-const percentOf = (download: DownloadState): number =>
-  download.totalBytes > 0
-    ? Math.min(100, Math.floor((download.bytesDownloaded / download.totalBytes) * 100))
-    : 0
-
 /** What the menu opened from the status bar shows, each part as Settings → Status bar has it. */
 export function StatusMenuContent({
   points,
@@ -64,64 +57,15 @@ export function StatusMenuContent({
   const setView = useAppStore((store) => store.setView)
   const networkVisual = useNetworkVisuals()
 
-  const all = Object.values(downloads)
-  const running = all.filter((download) => download.status === 'downloading')
-  const count = (status: DownloadState['status']): number =>
-    all.filter((download) => download.status === status).length
-  const speed = running.reduce((sum, download) => sum + download.speedBytesPerSec, 0)
-  const left = running.reduce(
-    (sum, download) =>
-      sum +
-      (download.totalBytes > 0 ? Math.max(0, download.totalBytes - download.bytesDownloaded) : 0),
-    0
-  )
-  const received = running.reduce((sum, download) => sum + download.bytesDownloaded, 0)
-
-  // Per network: its speed, the downloads on it and its connections (streams or peers) open now.
-  const perNetwork = new Map<
-    string,
-    { speed: number; downloads: number; active: number; open: number }
-  >()
-  for (const download of running) {
-    const own = new Set<string>()
-    for (const network of download.networks) {
-      if (isVpn(network)) continue
-      const row = perNetwork.get(network.id) ?? { speed: 0, downloads: 0, active: 0, open: 0 }
-      row.speed += network.speedBytesPerSec
-      if (network.speedBytesPerSec > 0 && !own.has(network.id)) {
-        own.add(network.id)
-        row.downloads += 1
-      }
-      perNetwork.set(network.id, row)
-    }
-    const connections =
-      download.kind === 'http'
-        ? (download as HttpDownloadState).streams.map((stream) => ({
-            id: stream.interfaceId,
-            moving: stream.status === 'downloading' && stream.speedBytesPerSec > 0,
-            open: stream.status === 'downloading' || stream.status === 'retrying'
-          }))
-        : download.peers.map((peer) => ({
-            id: download.networks[0]?.id ?? '',
-            moving: peer.speedBytesPerSec > 0,
-            open: true
-          }))
-    for (const connection of connections) {
-      const row = perNetwork.get(connection.id)
-      if (!row) continue
-      if (connection.open) row.open += 1
-      if (connection.moving) row.active += 1
-    }
-  }
-  const rows = [...perNetwork.entries()]
-    .map(([id, row]) => {
-      const iface = interfaces.find((entry) => entry.id === id)
-      const visual = iface
-        ? networkVisual(iface.id, iface.kind, iface.displayName)
-        : { name: id, solid: 'var(--text-secondary)' }
-      return { id, ...row, name: visual.name, color: visual.solid }
-    })
-    .sort((a, b) => b.speed - a.speed)
+  const activity = summarizeActivity(Object.values(downloads), {})
+  const { running, speed, left, received } = activity
+  const rows = activity.networks.map((row) => {
+    const iface = interfaces.find((entry) => entry.id === row.id)
+    const visual = iface
+      ? networkVisual(iface.id, iface.kind, iface.displayName)
+      : { name: row.id, solid: 'var(--text-secondary)' }
+    return { ...row, name: visual.name, color: visual.solid }
+  })
   const topSpeed = Math.max(1, ...rows.map((row) => row.speed))
   const connectionTotal = rows.reduce((sum, row) => sum + row.open, 0)
   const listed = rankRunning(running)
@@ -178,7 +122,7 @@ export function StatusMenuContent({
                 <div className="text-[11px] text-muted-foreground">
                   {t('{connections} · {moving} moving · {downloads}', {
                     connections: tn(row.open, '{count} connection', '{count} connections'),
-                    moving: row.active,
+                    moving: row.moving,
                     downloads: tn(row.downloads, '{count} download', '{count} downloads')
                   })}
                 </div>
@@ -241,7 +185,7 @@ export function StatusMenuContent({
         <Section title={t('Queue')}>
           <Line
             name={t('Waiting · paused · failed')}
-            value={`${count('queued')} · ${count('paused')} · ${count('error')}`}
+            value={`${activity.queued} · ${activity.paused} · ${activity.failed}`}
           />
         </Section>
       )}

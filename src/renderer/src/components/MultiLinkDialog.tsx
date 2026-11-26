@@ -10,7 +10,7 @@ import {
   ListDashes as ListX,
   Warning as TriangleAlert
 } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { RequestOptions } from './RequestOptions'
 import {
   EMPTY_DRAFT,
@@ -228,12 +228,15 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
       stale = true
     }
   }, [rows, checking, destinationDir, warnDuplicates])
-  const duplicateByUrl = new Map<string, DuplicateMatch>()
-  if (warnDuplicates && duplicates && duplicates.of === rows) {
-    for (const match of duplicates.matches) {
-      if (!duplicateByUrl.has(match.url)) duplicateByUrl.set(match.url, match)
+  const duplicateByUrl = useMemo(() => {
+    const map = new Map<string, DuplicateMatch>()
+    if (warnDuplicates && duplicates && duplicates.of === rows) {
+      for (const match of duplicates.matches) {
+        if (!map.has(match.url)) map.set(match.url, match)
+      }
     }
-  }
+    return map
+  }, [warnDuplicates, duplicates, rows])
   const folderName = folderNameOf(folder)
   const separator = destinationDir.includes('\\') && !destinationDir.includes('/') ? '\\' : '/'
   const target = folderName

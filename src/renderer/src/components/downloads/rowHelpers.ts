@@ -19,9 +19,6 @@ export interface RowHandlers {
   trash: (item: Item) => void
 }
 
-export const FINDER = window.lightning.platform === 'darwin' ? 'Finder' : 'folder'
-/** English only; prefer revealLabel(), which follows the language. */
-export const REVEAL_LABEL = `Show in ${FINDER}`
 export const revealLabel = (): string =>
   window.lightning.platform === 'darwin' ? t('Show in Finder') : t('Show in folder')
 

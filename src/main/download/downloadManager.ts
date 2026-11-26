@@ -1,13 +1,14 @@
 import { t } from '../../shared/i18n'
 import { prefsOf } from '../settings'
+import { addFinishedSource, startFinishedSync, stopFinishedSync } from '../fileSync'
 import { trashDownload } from './trashDownload'
 import { describeError } from '../../shared/errors'
 import { AUTO_RETRY_ATTEMPTS, autoRetryDelaySeconds, isTransientFailure } from '../../shared/retry'
 import type { KnownDownload } from '../../shared/duplicates'
 import { redactUrl } from '../../shared/urlTools'
 import { randomUUID } from 'node:crypto'
-import { lstat, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, sep } from 'node:path'
+import { readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { app, Notification, powerSaveBlocker, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
@@ -21,7 +22,6 @@ import {
   type DownloadUpdate,
   type FinishedDownload,
   type HttpBlockState,
-  type HttpDownloadNetwork,
   type HttpDownloadState,
   type NetworkInterfaceInfo,
   type NetworkPreferences,
@@ -29,11 +29,9 @@ import {
   type StartDownloadRequest,
   type StartHttpDownloadRequest,
   type StartTorrentDownloadRequest,
-  type TorrentDownloadNetwork,
   type TorrentDownloadState,
   type TorrentFileEntry,
-  type TorrentInfo,
-  type TorrentPieceState
+  type TorrentInfo
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { selectableNetworks } from '../../shared/networks'
@@ -42,6 +40,7 @@ import { loadSettings } from '../settings'
 import {
   addToHistory,
   findInHistory,
+  keepHistoryEntryWhenMissing,
   listHistory,
   removeMissingFromHistory,
   removeFromHistory,
@@ -50,7 +49,28 @@ import {
 } from './history'
 import { setStallTimeoutSec, testKnobs, stallTimeoutMs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
-import { HttpTransfer, pickedStreams, splittable } from './httpTransfer'
+import {
+  choiceOf,
+  choosePieces,
+  ensureDiskSpace,
+  formatGigabytes,
+  headersForLink,
+  isDone,
+  newHttpNetwork,
+  newTorrentNetwork,
+  sampleSpeeds,
+  unchosenPaths,
+  unitsOf,
+  webLink
+} from './downloadHelpers'
+import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
+import {
+  isCurrentManifest,
+  isNotFound,
+  partialLeftovers,
+  type PersistedDownload,
+  type PersistedState
+} from './manifestStore'
 import { ensureDirectory, pathExists, reserveDestinationPath } from './paths'
 import { planBlocks, planDownload, planPieces } from './plan'
 import { restoreBlocks, restorePieces, saveBlocks, type SavedBlocks } from './savedProgress'
@@ -80,6 +100,7 @@ import {
   compatibleInterfaces,
   NoCompatibleRouteError,
   resolveTargetWithin,
+  StreamConnection,
   systemResolve,
   type ResolveHost,
   targetHost
@@ -92,6 +113,7 @@ interface RuntimeFields {
   cancelPromise?: Promise<void>
   publishing: boolean
   pushScheduled: boolean
+  updateTimer?: ReturnType<typeof setTimeout>
   persistenceTimer?: NodeJS.Timeout
   /** A routine checkpoint waits its turn: it will save whatever has changed by then. */
   checkpointQueued?: boolean
@@ -135,22 +157,6 @@ interface TorrentDownloadRuntime extends RuntimeFields, TorrentTransferTarget {
 
 type DownloadRuntime = HttpDownloadRuntime | TorrentDownloadRuntime
 
-interface PersistedDownloadBase {
-  savedAt: number
-  partialPath: string
-  publicationPath?: string
-  publicationIdentity?: { dev: number; ino: number }
-  requestPayload: StartDownloadRequest
-}
-
-type PersistedState =
-  Omit<HttpDownloadState, 'blocks' | 'streams'> | Omit<TorrentDownloadState, 'pieces' | 'peers'>
-
-type PersistedDownload = PersistedDownloadBase & {
-  version: 7
-  state: PersistedState
-} & SavedBlocks
-
 /** How long after a download ends the manager waits to see whether the queue is really empty. */
 const IDLE_CHECK_MS = 3000
 /** How long a download may have none of its networks connected before others are switched on. */
@@ -161,155 +167,6 @@ const TICK_MS = 500
 // checkpoints independent of UI updates; pause and publication still force an immediate sync.
 const CHECKPOINT_INTERVAL_MS = 15_000
 
-const SPEED_HISTORY_LENGTH = 60
-// The peak is the best speed held this many samples (seconds): longer than a start's burst (an
-// ISP's burst allowance, every connection ramping up at once), which isn't the line's speed.
-const PEAK_SAMPLES = 5
-
-/** Adds each network's speed to the download's history, and 0 for one no longer listed. A
- * network seen for the first time starts at 0 too, so every series is as long as the others and
- * lines up with them. Then raises the peak, once the last PEAK_SAMPLES are in. */
-function sampleSpeeds(state: DownloadState): void {
-  const history = (state.speedHistory ??= {})
-  const length = Object.values(history)[0]?.length ?? 0
-  for (const network of state.networks) {
-    history[network.id] ??= new Array<number>(length).fill(0)
-  }
-  for (const [id, series] of Object.entries(history)) {
-    series.push(state.networks.find((network) => network.id === id)?.speedBytesPerSec ?? 0)
-    if (series.length > SPEED_HISTORY_LENGTH) series.shift()
-  }
-  const series = Object.values(history)
-  if (series[0].length < PEAK_SAMPLES) return
-  let held = 0
-  for (const values of series) for (const value of values.slice(-PEAK_SAMPLES)) held += value
-  state.peakSpeedBytesPerSec = Math.max(state.peakSpeedBytesPerSec ?? 0, held / PEAK_SAMPLES)
-}
-
-function newHttpNetwork(iface: NetworkInterfaceInfo, enabled: boolean): HttpDownloadNetwork {
-  return {
-    transfer: 'http',
-    id: iface.id,
-    label: iface.displayName,
-    kind: iface.kind,
-    enabled,
-    status: enabled ? 'on' : 'off',
-    bytesDownloaded: 0,
-    speedBytesPerSec: 0,
-    retries: 0
-  }
-}
-
-function newTorrentNetwork(iface: NetworkInterfaceInfo, enabled: boolean): TorrentDownloadNetwork {
-  return {
-    ...newHttpNetwork(iface, enabled),
-    transfer: 'torrent',
-    bytesUploaded: 0,
-    uploadSpeedBytesPerSec: 0
-  }
-}
-
-/** A block that needs nothing more: in, or skipped (see BlockStatus). */
-const isDone = (unit: DownloadUnitState): boolean =>
-  unit.status === 'completed' || unit.status === 'skipped'
-
-const unitsOf = (runtime: DownloadRuntime): DownloadUnitState[] =>
-  runtime.kind === 'http' ? runtime.blocks : runtime.pieces
-
-/** A torrent download's files as its state shows them, given those `chosen` (null: every one). */
-function choiceOf(chosen: Set<number> | null, total: number): TorrentDownloadState['files'] {
-  const selected = chosen ? [...chosen].sort((a, b) => a - b) : undefined
-  return { chosen: selected?.length ?? total, total, selected }
-}
-
-/** Sets each piece of `torrent` by whether a `chosen` file (null: every one) needs it: skipped
- * when none does, waiting again when one does. A piece that's in stays in, needed or not. The
- * skipped pieces' bytes, all together. As a download starts, comes back, or its choice changes. */
-function choosePieces(
-  pieces: TorrentPieceState[],
-  torrent: TorrentInfo,
-  chosen: Set<number> | null
-): number {
-  const wanted = chosen && wantedPieces(torrent.files, torrent.pieceLength, chosen)
-  let skipped = 0
-  for (const piece of pieces) {
-    if (piece.status === 'completed' || piece.rangeEnd === null) continue
-    if (!wanted || wanted[piece.index]) {
-      if (piece.status === 'skipped') piece.status = 'pending'
-      continue
-    }
-    piece.status = 'skipped'
-    piece.provisionalBytes = 0
-    skipped += piece.rangeEnd - piece.rangeStart + 1
-  }
-  return skipped
-}
-
-/** The files not `chosen`, as the torrent names them. */
-function unchosenPaths(torrent: TorrentInfo, chosen: Set<number> | null): string[] {
-  return chosen
-    ? torrent.files.filter((_, index) => !chosen.has(index)).map((file) => file.path)
-    : []
-}
-
-const isNotFound = (error: unknown): boolean =>
-  (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-
-/** A manifest this version writes, for the download in folder `id`. */
-function isCurrentManifest(value: unknown, id: string): value is PersistedDownload {
-  const manifest = value as Partial<PersistedDownload> | null
-  return manifest?.version === 7 && manifest.state?.id === id
-}
-
-/**
- * Where a saved download that can't be restored kept its partial data beside its destination:
- * only what is unmistakably Lightning's, so that a damaged manifest can never point it at a real file.
- * - A `<name>.lightning` staging file, or a torrent's `<name>.lightning/` staging folder.
- * - rc.1–rc.9 (manifest version 2) claimed the final name itself as an empty file, until the
- *   download's parts were joined into it: taken while it is still empty and the download
- *   unfinished, never once it holds anything.
- */
-async function partialLeftovers(persisted: unknown): Promise<string[]> {
-  const manifest = persisted as {
-    version?: unknown
-    partialPath?: unknown
-    state?: { status?: unknown; destinationPath?: unknown }
-  } | null
-  const leftovers: string[] = []
-  const partial = manifest?.partialPath
-  if (typeof partial === 'string' && isAbsolute(partial)) {
-    if (partial.endsWith('.lightning')) leftovers.push(partial)
-    else if (dirname(partial).endsWith('.lightning')) leftovers.push(dirname(partial))
-  }
-  const placeholder = manifest?.state?.destinationPath
-  if (
-    manifest?.version === 2 &&
-    manifest.state?.status !== 'completed' &&
-    typeof placeholder === 'string' &&
-    isAbsolute(placeholder)
-  ) {
-    const found = await lstat(placeholder).catch(() => null)
-    if (found?.isFile() && found.size === 0) leftovers.push(placeholder)
-  }
-  return leftovers
-}
-
-function formatGigabytes(bytes: number): string {
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-}
-
-/** The staging file is on the destination volume and becomes the final file by rename. */
-async function ensureDiskSpace(destinationDir: string, requiredBytes: number): Promise<void> {
-  if (requiredBytes <= 0) return // unknown size — nothing to check against
-  const stats = await statfs(destinationDir)
-  const availableBytes = stats.bavail * stats.bsize
-  if (availableBytes < requiredBytes) {
-    throw new Error(
-      `Not enough disk space: this download needs ${formatGigabytes(requiredBytes)} but only ${formatGigabytes(availableBytes)} is free`
-    )
-  }
-}
-
 export class DownloadManager {
   private runtimes = new Map<string, DownloadRuntime>()
   private readonly initialization: Promise<void>
@@ -317,6 +174,8 @@ export class DownloadManager {
   /** Each network's addresses as last seen, by id: what tells a network that has changed. */
   private seenAddresses = new Map<string, string[]>()
   private networkPreferences: NetworkPreferences = {}
+  /** Downloads whose link is being refreshed (see refreshLink). */
+  private relinking = new Set<string>()
   /** The powerSaveBlocker keeping the computer awake while a download runs (see keepAwake). */
   private awakeBlocker: number | null = null
   /** From Settings: which notices to show, and whether a running download keeps the Mac awake. */
@@ -337,6 +196,7 @@ export class DownloadManager {
       this.limits.loaded,
       loadSettings().then((settings) => this.applySettings(settings))
     ]).then(() => {})
+    addFinishedSource(() => this.removeMissingFinished())
   }
 
   /** Takes up what the user set: how many run at once, and the limits. One running past a
@@ -348,7 +208,7 @@ export class DownloadManager {
     this.prefs = prefsOf(settings)
     setHistoryLimit(this.prefs.historyLimit)
     setStallTimeoutSec(this.prefs.stallTimeoutSec)
-    this.watchMissingFiles()
+    this.watchFinishedFiles()
     this.limits.configure(settings)
     this.limitsChanged()
     this.keepAwake()
@@ -375,29 +235,20 @@ export class DownloadManager {
     }
   }
 
-  private missingTimer: NodeJS.Timeout | null = null
+  /** Auto sync (see fileSync.ts) is on: the finished downloads are checked now and then, and
+   * the ones whose file has gone leave the list. Off: no checks. */
+  private watchFinishedFiles(): void {
+    if (this.prefs.autoSyncFiles) startFinishedSync(() => this.historyChanged())
+    else stopFinishedSync()
+  }
 
-  /** While "Remove from the list when the file is deleted" is on, checks now and then, and
-   * takes out of the list what has gone from the disk. */
-  private watchMissingFiles(): void {
-    if (!this.prefs.removeMissingFiles) {
-      if (this.missingTimer) clearInterval(this.missingTimer)
-      this.missingTimer = null
-      return
-    }
-    if (this.missingTimer) return
-    const check = (): void => {
-      void removeMissingFromHistory()
-        .then((count) => {
-          if (count === 0) return
-          log.info('download', `removed ${count} finished from the list: their files are gone`)
-          this.historyChanged()
-        })
-        .catch(() => {})
-    }
-    check()
-    this.missingTimer = setInterval(check, 15_000)
-    this.missingTimer.unref()
+  /** The finished downloads' share of auto sync: gone files leave the history. */
+  private async removeMissingFinished(): Promise<number> {
+    if (!this.prefs.autoSyncFiles) return 0
+    const count = await removeMissingFromHistory()
+    if (count > 0)
+      log.info('download', `removed ${count} finished from the list: their files are gone`)
+    return count
   }
 
   /** "Use VPN for downloads" was switched on: every unfinished download gets the VPN tunnels
@@ -658,7 +509,8 @@ export class DownloadManager {
       failNetwork: (network, message) => this.failNetwork(runtime, network, message),
       scheduleUpdate: () => this.scheduleUpdate(runtime),
       resolveHost: (name) => this.resolverFor(runtime.state)(name),
-      getProxyForInterface: (networkId) => this.networkPreferences[networkId]?.proxy
+      getProxyForInterface: (networkId) => this.networkPreferences[networkId]?.proxy,
+      refreshLink: () => this.refreshLink(runtime)
     }
     const runtime: HttpDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'http' as const,
@@ -672,7 +524,8 @@ export class DownloadManager {
     requestPayload: StartTorrentDownloadRequest,
     file: TorrentDestination,
     pieces: TorrentDownloadState['pieces'],
-    torrentFile: Uint8Array
+    torrentFile: Uint8Array,
+    paths: readonly string[]
   ): TorrentDownloadRuntime {
     const target: TorrentTransferTarget = {
       state,
@@ -695,7 +548,7 @@ export class DownloadManager {
     }
     const runtime: TorrentDownloadRuntime = Object.assign(target, this.runtimeFields(), {
       kind: 'torrent' as const,
-      transfer: new TorrentTransfer(target, host, torrentFile, file.path)
+      transfer: new TorrentTransfer(target, host, torrentFile, file.path, paths)
     })
     return runtime
   }
@@ -877,7 +730,8 @@ export class DownloadManager {
           torrent.files.map((file) => file.path)
         ),
         pieces,
-        torrentFile
+        torrentFile,
+        torrent.files.map((file) => file.path)
       )
     } else if (persisted.state.kind === 'http' && requestPayload.kind === 'http') {
       const old = persisted.state
@@ -979,15 +833,18 @@ export class DownloadManager {
       .map((runtime) => {
         if (runtime.kind === 'http') {
           const { blocks, ...state } = runtime.state
-          return structuredClone({ seq: runtime.sentUpdates, state, blocks })
+          return { seq: runtime.sentUpdates, state, blocks }
         }
         const { pieces, ...state } = runtime.state
-        return structuredClone({ seq: runtime.sentUpdates, state, pieces })
+        return { seq: runtime.sentUpdates, state, pieces }
       })
   }
 
   async start(requestPayload: StartDownloadRequest): Promise<string> {
     await this.initialization
+    if (requestPayload.kind === 'http' && requestPayload.requestedUrl !== undefined) {
+      requestPayload = { ...requestPayload, requestedUrl: webLink(requestPayload.requestedUrl) }
+    }
 
     const available = await this.networks.refresh()
     const selected = selectableNetworks(available, this.networks.useVpn).filter((iface) =>
@@ -1047,7 +904,14 @@ export class DownloadManager {
         pieceLength: torrent.pieceLength,
         startedAt: Date.now()
       }
-      runtime = this.newTorrentRuntime(state, requestPayload, file, pieces, torrentFile)
+      runtime = this.newTorrentRuntime(
+        state,
+        requestPayload,
+        file,
+        pieces,
+        torrentFile,
+        torrent.files.map((entry) => entry.path)
+      )
     } else {
       const target = new URL(requestPayload.url)
       const usable = compatibleInterfaces(
@@ -1081,6 +945,7 @@ export class DownloadManager {
         id,
         kind: 'http',
         url: requestPayload.url,
+        requestedUrl: requestPayload.requestedUrl,
         fileName: basename(destinationPath),
         destinationPath,
         totalBytes: requestPayload.totalBytes,
@@ -1185,23 +1050,65 @@ export class DownloadManager {
 
   /** Gives a download whose link stopped working (a signed link ran out, say) a fresh link to the
    * same file, and resumes it from where it stopped. The file must be as big as before; whether
-   * its bytes are the same is checked as on any resume (see HttpTransfer's version check). */
+   * its bytes are the same is checked before the new link is used (see adoptLink). */
   async relink(id: string, url: string): Promise<void> {
     const runtime = this.runtimes.get(id)
     if (runtime?.kind !== 'http') throw new Error(t('Only web downloads support replacing a link.'))
-    const { status, resumable, totalBytes } = runtime.state
+    const { status, resumable } = runtime.state
     if (status !== 'error' && status !== 'paused') {
       throw new Error(t('Pause the download before replacing its link.'))
     }
     if (resumable === false) throw new Error(t('This download can’t resume. Start it again.'))
     // Sign-in details typed into the new link replace the saved ones; otherwise the saved ones carry on.
-    const { auth } = splitUrlCredentials(url)
-    const probe = await probeUrl(
-      url,
-      auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload,
-      () => this.networks.selectable()
-    )
+    const { url: link, auth } = splitUrlCredentials(url)
+    await this.adoptLink(runtime, link, () => true, auth)
+    this.resume(id)
+  }
+
+  /** The server turned a running download's link away (see TransferHost.refreshLink): the link
+   * it was given, checked as a link given to Fix is, takes its place. Undefined when there is no
+   * other link, or Fix is checking one. */
+  private refreshLink(runtime: HttpDownloadRuntime): Promise<boolean> | undefined {
+    const { id } = runtime.state
+    const { url, requestedUrl } = runtime.requestPayload
+    if (!requestedUrl || requestedUrl === url || this.relinking.has(id)) return undefined
+    const { signal } = runtime.stop
+    const running = (): boolean =>
+      this.runtimes.get(id) === runtime && !signal.aborted && runtime.state.status === 'downloading'
+    this.relinking.add(id)
+    return this.adoptLink(runtime, requestedUrl, running)
+      .then(
+        (adopted) => {
+          // The same link again: it was the link that was turned away, not one that ran out.
+          if (adopted === url) return false
+          this.scheduleUpdate(runtime)
+          return true
+        },
+        (error: unknown) => {
+          // The link turned away stays, and fails the download as it would have.
+          log.info('download', `link refresh failed ${runtime.state.fileName}`, {
+            id,
+            message: error instanceof Error ? error.message : String(error)
+          })
+          return false
+        }
+      )
+      .finally(() => this.relinking.delete(id))
+  }
+
+  /** Makes `url` the download's link once it's checked to serve the file downloaded so far, while
+   * `current` says the download is still as it was. A new sign-in replaces the saved one. The link
+   * the download now fetches. */
+  private async adoptLink(
+    runtime: HttpDownloadRuntime,
+    url: string,
+    current: () => boolean,
+    auth?: StartHttpDownloadRequest['auth']
+  ): Promise<string> {
+    const payload = auth ? { ...runtime.requestPayload, auth } : runtime.requestPayload
+    const probe = await probeUrl(url, payload, () => this.networks.selectable())
     if (probe.kind !== 'http') throw new Error(t('That isn’t a link to a file'))
+    const { totalBytes } = runtime.state
     if ((probe.totalBytes ?? 0) !== totalBytes) {
       throw new Error(
         `That link is to a different file: ${formatGigabytes(probe.totalBytes ?? 0)}, not ${formatGigabytes(totalBytes)}`
@@ -1212,11 +1119,56 @@ export class DownloadManager {
         t('This server doesn’t support resuming downloads. Try another link to the same file.')
       )
     }
+    // An ETag or date from another link proves nothing about its bytes: two different files can
+    // share them, so they're compared now, before anything from the new link is written.
+    const verdict = await this.compareWithDisk(
+      runtime,
+      probe.finalUrl,
+      headersForLink(payload, probe.requestedUrl, probe.finalUrl)
+    )
+    if (verdict === 'different') {
+      throw new Error(
+        t('That link is to a different file: its bytes don’t match what’s downloaded.')
+      )
+    }
+    if (verdict === 'unknown') {
+      throw new Error(t('Couldn’t check that link against what’s downloaded. Try again.'))
+    }
+    if (!current()) throw new Error(t('The download changed while its new link was checked.'))
+    // The link given is the one asked for a fresh link next time.
+    const requestedUrl = webLink(probe.requestedUrl)
     runtime.requestPayload.url = probe.finalUrl
+    runtime.requestPayload.requestedUrl = requestedUrl
     if (auth) runtime.requestPayload.auth = auth
     runtime.state.url = probe.finalUrl
+    runtime.state.requestedUrl = requestedUrl
     await this.persistNow(runtime)
-    this.resume(id)
+    return probe.finalUrl
+  }
+
+  /** Whether the bytes on disk are what `url` serves: 'same', 'different', or 'unknown' when
+   * nothing could be compared. */
+  private async compareWithDisk(
+    runtime: HttpDownloadRuntime,
+    url: string,
+    headers: Record<string, string>
+  ): Promise<'same' | 'different' | 'unknown'> {
+    // Nothing downloaded, nothing a different file could spoil.
+    if (!runtime.blocks.some((block) => block.bytesDownloaded > 0)) return 'same'
+    const available = await this.networks.refresh()
+    const enabled = (iface: NetworkInterfaceInfo): boolean =>
+      runtime.state.networks.some((network) => network.id === iface.id && network.enabled)
+    const network = available.find(enabled) ?? available[0]
+    if (!network) return 'unknown'
+    const connection = new StreamConnection(() => network, {
+      timeoutMs: stallTimeoutMs(),
+      proxy: () => this.networkPreferences[network.id]?.proxy
+    })
+    try {
+      return await compareSamples(runtime, url, headers, connection)
+    } finally {
+      connection.close()
+    }
   }
 
   /** For a failed download that can't continue (the file on the server changed, say): a fresh look
@@ -1267,7 +1219,8 @@ export class DownloadManager {
     // one must not start beside it — both would go on to publish, and act on each other's streams.
     await runtime.runPromise
     // Just after launch the networks may not have been looked at yet.
-    await this.networks.refresh()
+    if (this.networks.current === null) await this.networks.refresh()
+    else void this.networks.refresh()
 
     if ((await runtime.file.size().catch(() => -1)) < 0) {
       runtime.state.error =
@@ -1569,6 +1522,7 @@ export class DownloadManager {
 
   private async cancelRuntime(runtime: DownloadRuntime): Promise<void> {
     try {
+      this.clearScheduledUpdate(runtime)
       // Stop writing first, but keep the item visible until its files and manifest are gone.
       await this.pause(runtime.state.id)
       if (runtime.state.status !== 'error') {
@@ -1580,6 +1534,7 @@ export class DownloadManager {
       this.stopRun(runtime)
       this.pushUpdate(runtime, false)
       await runtime.runPromise?.catch(() => {})
+      this.clearScheduledUpdate(runtime)
       await runtime.file.discard()
       await this.removePersistedDownload(runtime, false)
       runtime.state.status = 'cancelled'
@@ -1638,6 +1593,7 @@ export class DownloadManager {
             : undefined
         await trashDownload(runtime.state, owned)
       }
+      this.clearScheduledUpdate(runtime)
       this.runtimes.delete(id)
       await this.removePersistedDownload(runtime)
       if (runtime.state.status === 'completed') {
@@ -1647,6 +1603,8 @@ export class DownloadManager {
       return
     }
     // A finished one, from history.
+    // Marked before the file goes, so auto sync can't take the record out in between.
+    if (keepEntry) await keepHistoryEntryWhenMissing(id)
     const entry = trashFile ? await findInHistory(id) : undefined
     if (entry && !entry.missing) await trashDownload(entry)
     log.info('download', `${keepEntry ? 'trashed file of' : 'removed'} ${entry?.fileName ?? id}`, {
@@ -1675,11 +1633,15 @@ export class DownloadManager {
   async suspendAll(): Promise<void> {
     await this.initialization
     this.suspending = true
-    for (const runtime of this.runtimes.values()) this.clearRetry(runtime)
+    for (const runtime of this.runtimes.values()) {
+      this.clearRetry(runtime)
+      this.clearScheduledUpdate(runtime)
+    }
     await Promise.all(
       [...this.runtimes.values()].map(async (runtime) => {
         if (runtime.state.status === 'downloading') await this.pause(runtime.state.id)
         else await this.persistNow(runtime)
+        this.clearScheduledUpdate(runtime)
       })
     )
     await this.limits.save()
@@ -2107,8 +2069,16 @@ export class DownloadManager {
     }
   }
 
+  private clearScheduledUpdate(runtime: DownloadRuntime): void {
+    if (runtime.updateTimer) {
+      clearTimeout(runtime.updateTimer)
+      runtime.updateTimer = undefined
+    }
+    runtime.pushScheduled = false
+  }
+
   private scheduleUpdate(runtime: DownloadRuntime): void {
-    if (runtime.pushScheduled) return
+    if (this.suspending || runtime.removed || runtime.pushScheduled) return
     runtime.pushScheduled = true
     const window = this.getWindow()
     const delay =
@@ -2120,13 +2090,15 @@ export class DownloadManager {
             focused: window.isFocused()
           })
         : UI_UPDATE_HIDDEN_MS)
-    setTimeout(() => {
+    runtime.updateTimer = setTimeout(() => {
+      runtime.updateTimer = undefined
       runtime.pushScheduled = false
       this.pushUpdate(runtime)
     }, delay)
   }
 
   private pushUpdate(runtime: DownloadRuntime, persist = true): void {
+    this.clearScheduledUpdate(runtime)
     this.keepAwake()
     // A removed download can still be winding down (workers finishing, cleanup). Its updates
     // would put it back on screen after the renderer has already moved on.
@@ -2146,12 +2118,12 @@ export class DownloadManager {
       const changed = this.changedUnits(runtime, runtime.blocks)
       const { blocks: omittedBlocks, ...state } = runtime.state
       void omittedBlocks
-      return structuredClone({ seq: ++runtime.sentUpdates, state, blocks: changed })
+      return { seq: ++runtime.sentUpdates, state, blocks: changed }
     }
     const changed = this.changedUnits(runtime, runtime.pieces)
     const { pieces: omittedPieces, ...state } = runtime.state
     void omittedPieces
-    return structuredClone({ seq: ++runtime.sentUpdates, state, pieces: changed })
+    return { seq: ++runtime.sentUpdates, state, pieces: changed }
   }
 
   private changedUnits<T extends DownloadUnitState>(runtime: DownloadRuntime, units: T[]): T[] {
@@ -2226,18 +2198,19 @@ export class DownloadManager {
         const persisted: PersistedDownload = {
           version: 7,
           savedAt: Date.now(),
-          state: structuredClone(state),
+          state,
           ...saveBlocks(unitsOf(runtime)),
           partialPath: runtime.file.path,
           publicationPath: runtime.publicationPath,
           publicationIdentity: runtime.publicationIdentity,
           requestPayload: sealRequest(runtime.requestPayload)
         }
+        const serialized = JSON.stringify(persisted)
         if (runtime.state.status === 'downloading' || runtime.state.status === 'paused') {
           await runtime.file.sync()
         }
         await ensureDirectory(dir)
-        await writeFile(temporaryPath, JSON.stringify(persisted), 'utf-8')
+        await writeFile(temporaryPath, serialized, 'utf-8')
         await rename(temporaryPath, path)
       })
     runtime.persistenceChain = operation.catch(() => {
@@ -2251,6 +2224,7 @@ export class DownloadManager {
     discardPartial = true
   ): Promise<void> {
     runtime.removed = true
+    this.clearScheduledUpdate(runtime)
     if (runtime.persistenceTimer) clearTimeout(runtime.persistenceTimer)
     await runtime.persistenceChain.catch(() => {})
     // A finished download is the user's now: only what's left of it goes.

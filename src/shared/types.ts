@@ -239,6 +239,8 @@ interface DownloadStateBase {
 
 export interface HttpDownloadState extends DownloadStateBase {
   kind: 'http'
+  /** The link it was given (see StartHttpDownloadRequest.requestedUrl). */
+  requestedUrl?: string
   networks: HttpDownloadNetwork[]
   streams: HttpStreamState[]
   peakStreams: number
@@ -280,6 +282,8 @@ export type FinishedDownload = (
   missing?: boolean
   /** Chosen torrent files relative to its destination folder, retained for safe file removal. */
   downloadedFiles?: string[]
+  /** Kept in the list after its file was trashed: auto sync leaves it be, even once it's gone. */
+  keepWhenMissing?: boolean
 }
 
 /** What the main process sends as a download changes: everything but its blocks, and only the
@@ -492,8 +496,9 @@ export interface AppPrefs {
   clipboardYoutube?: boolean
   /** Ask what to do (quit, sleep, shut down) when the last download finishes. */
   askWhenFinished?: boolean
-  /** Take a finished download out of the list when its file is deleted or moved away. */
-  removeMissingFiles?: boolean
+  /** Auto sync: a finished download, YouTube video or Telegram file whose file is moved or deleted
+   * leaves its list (the record only; the files are never touched). */
+  autoSyncFiles?: boolean
   /** Warn in the New download and several links dialogs when a link is already downloaded, queued or in the folder. */
   warnDuplicates?: boolean
   /** How many finished downloads the history keeps, newest first (50 to 5000). */
@@ -564,7 +569,7 @@ export const DEFAULT_PREFS: ResolvedPrefs = {
   clipboardOnlyInBackground: true,
   clipboardYoutube: true,
   askWhenFinished: false,
-  removeMissingFiles: false,
+  autoSyncFiles: true,
   warnDuplicates: true,
   historyLimit: 500,
   stallTimeoutSec: 20,
@@ -743,6 +748,10 @@ interface StartDownloadRequestBase extends RequestExtras {
 
 export interface StartHttpDownloadRequest extends StartDownloadRequestBase {
   kind: 'http'
+  /** The link as it was given, when `url` is where it redirected to. A signed link it redirects
+   * to (a CDN's, an S3 presigned one) can run out mid-download; this one is asked for a fresh
+   * one then. Unset in downloads saved before it was kept. */
+  requestedUrl?: string
   /** Streams per network the user picked; left out, the count is decided automatically. */
   streamsPerNetwork?: number
 }

@@ -1,5 +1,29 @@
 import { runYtDlp } from './binary'
-import type { YoutubeFormatOption, YoutubeVideoMeta } from '../../shared/youtube'
+import {
+  isStreamUrl,
+  isYoutubeUrl,
+  type YoutubeFormatOption,
+  type YoutubeVideoMeta
+} from '../../shared/youtube'
+import {
+  canImpersonateChrome,
+  fallbackTitle,
+  originReferer,
+  genericFormats,
+  looksBlocked,
+  NO_VIDEO_MESSAGE,
+  type GenericFormat
+} from './anySite'
+
+/** What a browser offer adds to a probe: the cookies it sent for this video only, and the page. */
+export interface ProbeExtras {
+  /** The Netscape cookies file of the offer (not deleted by the probe). */
+  cookieFile?: string
+  referer?: string
+  userAgent?: string
+  /** The page's title, used when the site gives none. */
+  title?: string
+}
 
 interface RawFormat {
   format_id: string
@@ -25,6 +49,9 @@ interface RawYtDlpMeta {
   uploader?: string
   description?: string
   formats?: RawFormat[]
+  _type?: string
+  url?: string
+  entries?: RawYtDlpMeta[]
 }
 
 const COMMON_RESOLUTIONS = [
@@ -39,14 +66,17 @@ const COMMON_RESOLUTIONS = [
 export async function probeYoutube(
   url: string,
   proxy?: string,
-  signIn: string[] = []
+  signIn: string[] = [],
+  extras?: ProbeExtras
 ): Promise<YoutubeVideoMeta> {
+  if (!isYoutubeUrl(url)) return probeAnySite(url, proxy, signIn, extras)
+
   // A stalled connection fails after 20s with yt-dlp's own message, not after the whole wait.
   const args = ['--dump-single-json', '--no-warnings', '--no-playlist', '--socket-timeout', '20']
   if (proxy) {
     args.push('--proxy', proxy)
   }
-  args.push(...signIn)
+  args.push(...(extras?.cookieFile ? ['--cookies', extras.cookieFile] : signIn))
   args.push(url)
 
   // Probing YouTube runs JavaScript challenge solving and can take well over 30s on
@@ -107,6 +137,76 @@ export async function probeYoutube(
     id: raw.id,
     title: raw.title ?? 'YouTube Video',
     url: raw.webpage_url ?? url,
+    thumbnail: raw.thumbnail,
+    duration: raw.duration,
+    channel: raw.channel ?? raw.uploader,
+    description: raw.description?.slice(0, 500),
+    formats
+  }
+}
+
+/** A video on any other site: yt-dlp's generic extractors, with the page's cookies and headers. A page
+ * with several videos takes its first one. A site that refuses a plain client is asked again as
+ * Chrome, when this yt-dlp can impersonate it. */
+async function probeAnySite(
+  url: string,
+  proxy: string | undefined,
+  signIn: string[],
+  extras: ProbeExtras | undefined,
+  depth = 0
+): Promise<YoutubeVideoMeta> {
+  const build = (impersonate: boolean): string[] => {
+    const args = [
+      '--dump-single-json',
+      '--no-warnings',
+      '--playlist-items',
+      '1',
+      '--socket-timeout',
+      '20'
+    ]
+    if (proxy) args.push('--proxy', proxy)
+    args.push(...(extras?.cookieFile ? ['--cookies', extras.cookieFile] : signIn))
+    const referer = extras?.referer ?? originReferer(url)
+    if (referer) args.push('--referer', referer)
+    if (extras?.userAgent && !impersonate) args.push('--user-agent', extras.userAgent)
+    if (impersonate) args.push('--impersonate', 'chrome')
+    args.push('--', url)
+    return args
+  }
+
+  let result = await runYtDlp(build(false), 90_000)
+  if (result.code !== 0 && looksBlocked(result.stderr) && (await canImpersonateChrome())) {
+    result = await runYtDlp(build(true), 90_000)
+  }
+  if (result.code !== 0 || !result.stdout.trim()) {
+    // yt-dlp's own words; the app turns "Unsupported URL" into a plain sentence.
+    throw new Error(result.stderr.trim() || `Failed to probe video: exit code ${result.code}`)
+  }
+
+  const raw = JSON.parse(result.stdout) as RawYtDlpMeta
+  if (raw._type === 'playlist' || Array.isArray(raw.entries)) {
+    const first = (raw.entries ?? []).find((entry) => entry && (entry.webpage_url || entry.url))
+    if (!first) throw new Error(NO_VIDEO_MESSAGE)
+    if (!first.formats?.length && depth === 0) {
+      return probeAnySite(first.webpage_url ?? first.url ?? url, proxy, signIn, extras, 1)
+    }
+    return anySiteMeta(first, first.webpage_url ?? url, extras)
+  }
+  return anySiteMeta(raw, raw.webpage_url ?? url, extras)
+}
+
+function anySiteMeta(raw: RawYtDlpMeta, url: string, extras?: ProbeExtras): YoutubeVideoMeta {
+  const formats = genericFormats((raw.formats ?? []) as GenericFormat[])
+  if (formats.length === 0) throw new Error(NO_VIDEO_MESSAGE)
+  // A stream's own title is only its file name ("index"): the browser's page title beats it. The file
+  // name in the address is the last resort.
+  const pageTitle = extras?.title && extras.title !== url ? extras.title : ''
+  const own = raw.title?.trim() ?? ''
+  const title = (isStreamUrl(url) ? pageTitle || own : own || pageTitle) || fallbackTitle(url)
+  return {
+    id: raw.id ?? url,
+    title,
+    url,
     thumbnail: raw.thumbnail,
     duration: raw.duration,
     channel: raw.channel ?? raw.uploader,

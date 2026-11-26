@@ -10,8 +10,7 @@ import {
   nativeTheme,
   powerMonitor,
   shell,
-  BrowserWindow,
-  type IpcMainInvokeEvent
+  BrowserWindow
 } from 'electron'
 import { describeError } from '../../shared/errors'
 import { IpcChannels } from '../../shared/ipc-channels'
@@ -67,6 +66,7 @@ import { DNS_PRESETS } from '../../shared/dnsPresets'
 import { SYSTEM_NAME } from '../../shared/dnsRecommend'
 import { testKnobs } from '../testKnobs'
 import { checkForUpdate, UPDATE_PAGE_URL } from '../updateCheck'
+import { handle, sendToWindow } from './ipcHelpers'
 
 async function openNetworkSettings(): Promise<void> {
   if (process.platform === 'win32') {
@@ -81,22 +81,6 @@ async function openNetworkSettings(): Promise<void> {
       // Best-effort
     }
   }
-}
-
-/** Typed wrapper around ipcMain.handle — the channel name picks its args/result shape out of
- * IpcContract, so a handler here that doesn't match what lightningApi (preload) actually calls is a
- * compile error instead of a silent runtime mismatch. */
-function handle<K extends keyof IpcContract>(
-  channel: K,
-  listener: (
-    event: IpcMainInvokeEvent,
-    ...args: IpcContract[K]['args']
-  ) => IpcContract[K]['result'] | Promise<IpcContract[K]['result']>
-): void {
-  ipcMain.handle(
-    IpcChannels[channel],
-    listener as (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  )
 }
 
 const DESTINATION_CHECK_MS = 300
@@ -129,14 +113,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     for (const n of known.filter((n) => !now.includes(n))) log.info('network', `gone: ${n}`)
     known = now
     manager.networksChanged()
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.networksChanged, list)
+    sendToWindow(getWindow(), IpcChannels.networksChanged, list)
   })
   const manager = new DownloadManager(getWindow, networks)
   // How a magnet link's check is going, for the window to show while it waits.
   onMagnetCheckStatus((status) => {
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.magnetStatus, status)
+    sendToWindow(getWindow(), IpcChannels.magnetStatus, status)
   })
   // Waking from sleep, the networks may have changed without a poll in between to see it.
   powerMonitor.on('resume', () => {
@@ -148,15 +130,13 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   void loadSettings().then((saved) => scheduleController.apply(saved.schedule))
 
   const groups = new GroupStore(() => {
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.groupsChanged)
+    sendToWindow(getWindow(), IpcChannels.groupsChanged)
   })
   void loadSettings().then((saved) => {
     networks.useVpn = saved.useVpn ?? true
   })
   const dns = new DnsService((config) => {
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(IpcChannels.dnsChanged, config)
+    sendToWindow(getWindow(), IpcChannels.dnsChanged, config)
   })
   manager.dnsFor = (dnsId, groupId) =>
     dns.resolverFor(dnsId, groupId ? groups.dnsOf(groupId) : undefined)
@@ -316,16 +296,13 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     manager.applySettings(saved)
     scheduleController.apply(saved.schedule)
     await applyBehavior(saved)
-    const window = getWindow()
-    if (window && !window.isDestroyed()) {
-      window.webContents.send(IpcChannels.settingsChanged, {
-        downloadsAtOnce: saved.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
-        speedLimit: saved.speedLimit,
-        slowMode: saved.slowMode ?? false,
-        slowModeSpeed: saved.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
-        useVpn: saved.useVpn ?? true
-      } satisfies SettingsPush)
-    }
+    sendToWindow(getWindow(), IpcChannels.settingsChanged, {
+      downloadsAtOnce: saved.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
+      speedLimit: saved.speedLimit,
+      slowMode: saved.slowMode ?? false,
+      slowModeSpeed: saved.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
+      useVpn: saved.useVpn ?? true
+    } satisfies SettingsPush)
     broadcastSettingsRefresh()
   }
   setSettingsApplier(applySettings)
@@ -338,7 +315,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (!window || window.isDestroyed()) return
     if (!window.isVisible()) window.show()
     window.focus()
-    window.webContents.send(IpcChannels.appCommand, command)
+    sendToWindow(window, IpcChannels.appCommand, command)
   })
 
   // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
@@ -453,14 +430,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('clearClipboardHistory', async () => getClipboardWatcher()?.clear())
   handle('downloadClipboardEntry', async (_event, id) => getClipboardWatcher()?.download(id))
 
+  const revealLogFile = (): void => {
+    const path = logFilePath()
+    if (path) shell.showItemInFolder(path)
+  }
+
   handle('readLog', async (_event, limit) => {
     const count = Number.isFinite(limit) ? Math.trunc(limit) : 0
     return readLog(Math.min(Math.max(count, 1), 10_000))
   })
-  handle('openLogFolder', async () => {
-    const path = logFilePath()
-    if (path) shell.showItemInFolder(path)
-  })
+  handle('openLogFolder', async () => revealLogFile())
   handle('clearLog', async () => {
     clearLog()
     log.info('app', 'log cleared by the user')
@@ -482,18 +461,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     )
   )
 
-  handle('openLogs', async () => {
-    const path = logFilePath()
-    if (path) shell.showItemInFolder(path)
-  })
+  handle('openLogs', async () => revealLogFile())
 
   handle('revealDownload', async (_event, id) => manager.reveal(id))
 
   // Only a download Lightning knows can be opened: the window sends an id, never a path to run.
   handle('openDownloadedFile', async (_event, id) => {
     const path =
-      (await findInHistory(id))?.destinationPath ??
-      (await manager.listDownloads()).find((entry) => entry.state.id === id)?.state.destinationPath
+      manager.liveStates().find((state) => state.id === id)?.destinationPath ??
+      (await findInHistory(id))?.destinationPath
     if (!path) throw new Error('That download is no longer listed.')
     const failure = await shell.openPath(path)
     if (failure) throw new Error(failure)
@@ -755,10 +731,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         }
       },
       push: () => {
-        const window = getWindow()
-        if (window && !window.isDestroyed()) {
-          window.webContents.send(IpcChannels.labEvent, { kind: 'state', state: lab.getState() })
-        }
+        sendToWindow(getWindow(), IpcChannels.labEvent, { kind: 'state', state: lab.getState() })
       }
     })
     handle('labList', async () => lab.list())

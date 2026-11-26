@@ -35,6 +35,8 @@ export interface YoutubeJob {
   resolution: string
   destDir: string
   fileName?: string
+  /** The file's name without its extension, kept for resuming. No other job has it. */
+  outputName?: string
   status: YoutubeJobStatus
   received: number
   total: number
@@ -68,11 +70,33 @@ export interface StartYoutubeRequest {
 }
 
 const YOUTUBE_REGEX =
-  /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|v\/|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+  /^(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|v\/|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
 
 export function isYoutubeUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false
   return YOUTUBE_REGEX.test(url.trim())
+}
+
+/** A playlist or stream (HLS, DASH) address: the video dialog takes it, never the file downloader. */
+const STREAM_PATH = /\.(m3u8|mpd)$/i
+
+export function isStreamUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url.trim())
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      STREAM_PATH.test(parsed.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
+/** The first video link in a piece of copied text: a YouTube video, or a playlist or stream. */
+export function videoLinkIn(text: string): string | null {
+  if (!text || text.length > 4096) return null
+  const words = text.trim().split(/[\s<>"']+/)
+  return words.find((word) => isYoutubeUrl(word) || isStreamUrl(word)) ?? null
 }
 
 export function extractYoutubeId(url: string): string | null {
@@ -203,6 +227,49 @@ export const DEFAULT_YOUTUBE_OPTIONS: YoutubeOptions = {
   cookiesBrowser: '',
   matchFilter: '',
   noOverwrites: false
+}
+
+const preset = (quality: YoutubeQuality, resolution: string): YoutubeFormatOption => ({
+  formatId: formatForQuality(quality),
+  ext: quality === 'audio' ? 'm4a' : 'mp4',
+  resolution,
+  hasVideo: quality !== 'audio',
+  hasAudio: true,
+  qualityLabel: /^\d+$/.test(quality) ? `${quality}p` : undefined
+})
+
+/** The qualities to choose from before the video has been fetched. */
+export const PRESET_FORMATS: YoutubeFormatOption[] = [
+  preset('best', 'Best'),
+  preset('2160', '4K (2160p)'),
+  preset('1440', '2K (1440p)'),
+  preset('1080', 'Full HD (1080p)'),
+  preset('720', 'HD (720p)'),
+  preset('480', 'SD (480p)'),
+  preset('360', 'Low (360p)'),
+  preset('audio', 'Audio only (Best Quality)')
+]
+
+/** The format of a fetched video that is closest to the wanted one, never above its height. */
+export function closestFormat(
+  formats: YoutubeFormatOption[],
+  wanted: YoutubeFormatOption
+): YoutubeFormatOption | null {
+  const exact = formats.find((format) => format.formatId === wanted.formatId)
+  if (exact) return exact
+  if (!wanted.hasVideo) return formats.find((format) => !format.hasVideo) ?? formats[0] ?? null
+  const height = (format: YoutubeFormatOption): number => parseInt(format.qualityLabel ?? '', 10)
+  const videos = formats.filter((format) => format.hasVideo)
+  const limit = height(wanted)
+  if (!Number.isFinite(limit)) return videos[0] ?? formats[0] ?? null
+  const fits = videos
+    .filter((format) => height(format) <= limit)
+    .sort((a, b) => height(b) - height(a))
+  if (fits[0]) return fits[0]
+  const sized = videos
+    .filter((format) => Number.isFinite(height(format)))
+    .sort((a, b) => height(a) - height(b))
+  return sized[0] ?? videos[0] ?? formats[0] ?? null
 }
 
 /** The yt-dlp format selector for a quality. Video is merged into one MP4 (needs ffmpeg). */

@@ -4,27 +4,19 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  dialog,
-  ipcMain,
-  Notification,
-  shell,
-  type BrowserWindow,
-  type IpcMainInvokeEvent
-} from 'electron'
+import { dialog, shell, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
-import type { IpcContract } from '../../shared/ipc-contract'
 import type { ResolvedPrefs } from '../../shared/types'
 import { isYoutubeUrl, type YoutubeJob } from '../../shared/youtube'
-import { uiUpdateDelay } from '../../shared/uiThrottle'
+import { sanitizeExtras } from '../../shared/requestHeaders'
 import { loadSettings, prefsOf } from '../settings'
-import { testKnobs } from '../testKnobs'
 import { getYoutubeStatus, proxyArg, youtubeDataDir } from '../youtube/binary'
 import { loadYoutubeOptions, saveYoutubeOptions } from '../youtube/options'
 import { savedCookiesPath, sanitizeCookies, signInArgs, writeCookiesFile } from '../youtube/cookies'
 import { installedBrowsers } from '../youtube/browsers'
 import { YoutubeJobManager, type CookieFile } from '../youtube/jobs'
-import { probeYoutube } from '../youtube/probe'
+import { probeYoutube, type ProbeExtras } from '../youtube/probe'
+import { createJobThrottler, handle, sendToWindow, showAppNotification } from './ipcHelpers'
 
 const OFFER_TTL_MS = 30 * 60 * 1000
 
@@ -40,72 +32,34 @@ const MAX_BATCH = 200
 // Best video and audio, merged; the same default a single download uses when no quality is picked.
 const BATCH_FORMAT = 'bv*+ba/b'
 
-function handle<K extends keyof IpcContract>(
-  channel: K,
-  listener: (
-    event: IpcMainInvokeEvent,
-    ...args: IpcContract[K]['args']
-  ) => IpcContract[K]['result'] | Promise<IpcContract[K]['result']>
-): void {
-  ipcMain.handle(
-    IpcChannels[channel],
-    listener as (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  )
-}
-
 async function currentPrefs(): Promise<ResolvedPrefs> {
   return prefsOf(await loadSettings())
+}
+
+/** The page a browser offer came from, as a download's request extras. */
+function pageExtras(offer: { referer?: string; userAgent?: string }): {
+  referer?: string
+  userAgent?: string
+} {
+  return { referer: offer.referer, userAgent: offer.userAgent }
 }
 
 export async function registerYoutubeHandlers(
   getWindow: () => BrowserWindow | null
 ): Promise<YoutubeHandlers> {
-  const send = (channel: string, ...args: unknown[]): void => {
-    const window = getWindow()
-    if (window && !window.isDestroyed()) window.webContents.send(channel, ...args)
-  }
-
-  const pending = new Map<string, { job: YoutubeJob; timer?: NodeJS.Timeout; last: number }>()
-
-  const push = (job: YoutubeJob): void => {
-    reportYoutube(job)
-    const entry = pending.get(job.id) ?? { job, last: 0 }
-    entry.job = job
-    pending.set(job.id, entry)
-    if (entry.timer) return
-
-    const window = getWindow()
-    const delay = window
-      ? uiUpdateDelay({
-          visible: window.isVisible(),
-          minimized: window.isMinimized(),
-          focused: window.isFocused()
-        })
-      : 2000
-
-    const wait = Math.max(0, entry.last + delay - Date.now())
-    entry.timer = setTimeout(() => {
-      entry.timer = undefined
-      entry.last = Date.now()
-      send(IpcChannels.youtubeJobUpdated, entry.job)
-    }, wait)
-  }
-
-  const flush = (job: YoutubeJob): void => {
-    reportYoutube(job)
-    const entry = pending.get(job.id)
-    if (entry?.timer) clearTimeout(entry.timer)
-    pending.set(job.id, { job, last: Date.now() })
-    send(IpcChannels.youtubeJobUpdated, job)
-  }
+  const throttler = createJobThrottler<YoutubeJob>({
+    getWindow,
+    channel: IpcChannels.youtubeJobUpdated,
+    onReport: reportYoutube
+  })
 
   const prefs = currentPrefs
   const jobs = new YoutubeJobManager({
     getPrefs: prefs,
     getOptions: loadYoutubeOptions,
-    onChange: push,
+    onChange: throttler.push,
     onFinished: (job) => {
-      flush(job)
+      throttler.flush(job)
       void notifyFinished(job, getWindow)
     }
   })
@@ -113,11 +67,21 @@ export async function registerYoutubeHandlers(
 
   handle('youtubeStatus', async () => getYoutubeStatus())
 
-  handle('youtubeProbe', async (_event, url) => {
+  handle('youtubeProbe', async (_event, url, offerId) => {
     const currentPreferences = await prefs()
     const proxy = proxyArg(currentPreferences)
+    // A browser offer probes with the cookies and page it came with (they stay with the offer).
+    const offer = offerId ? offers.get(offerId) : undefined
+    const extras: ProbeExtras | undefined = offer
+      ? {
+          cookieFile: offer.cookies?.file,
+          referer: offer.referer,
+          userAgent: offer.userAgent,
+          title: offer.title
+        }
+      : undefined
     // Signed in the way the person set up in Options, so a sign-in wall can be got past.
-    return probeYoutube(url, proxy, signInArgs(await loadYoutubeOptions()))
+    return probeYoutube(url, proxy, signInArgs(await loadYoutubeOptions()), extras)
   })
 
   handle('youtubeBrowsers', async () => installedBrowsers())
@@ -143,7 +107,7 @@ export async function registerYoutubeHandlers(
       const created = await jobs.startPlaylist(request, offer?.cookies)
       return created[0]
     }
-    return jobs.startJob(request, offer?.cookies)
+    return jobs.startJob(request, offer?.cookies, offer ? pageExtras(offer) : undefined)
   })
   handle('youtubeCancelOffer', async (_event, id) => discardOffer(id))
   handle('youtubeGetOptions', async () => loadYoutubeOptions())
@@ -170,7 +134,14 @@ export async function registerYoutubeHandlers(
   // Videos the browser sent that wait for the person to confirm in the add dialog.
   const offers = new Map<
     string,
-    { url: string; title: string; cookies?: CookieFile; timer: NodeJS.Timeout }
+    {
+      url: string
+      title: string
+      cookies?: CookieFile
+      referer?: string
+      userAgent?: string
+      timer: NodeJS.Timeout
+    }
   >()
   const discardOffer = async (id: string): Promise<void> => {
     const offer = offers.get(id)
@@ -188,7 +159,16 @@ export async function registerYoutubeHandlers(
     const url = typeof body.url === 'string' ? body.url.trim() : ''
     if (!/^https?:\/\/\S+$/i.test(url) || url.length > 8192) return false
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 300) : ''
-    const mode = typeof body.cookieMode === 'string' ? body.cookieMode : 'none'
+    const youtube = isYoutubeUrl(url)
+    let mode = typeof body.cookieMode === 'string' ? body.cookieMode : 'none'
+    // Only YouTube's sign-in is kept in Lightning. Any other site gets a temporary file, so the
+    // saved YouTube cookies.txt is never written over by a page of another site.
+    if (!youtube && mode === 'save') mode = 'send'
+    // The page the video is on: its address and user agent go with the video, for this download only.
+    const pageExtras = sanitizeExtras({
+      referer: typeof body.referer === 'string' ? body.referer : body.pageUrl,
+      userAgent: body.userAgent
+    })
 
     let cookies: CookieFile | undefined
     if (mode === 'send' || mode === 'save') {
@@ -209,14 +189,22 @@ export async function registerYoutubeHandlers(
 
     const id = randomUUID()
     const timer = setTimeout(() => discardOffer(id), OFFER_TTL_MS)
-    offers.set(id, { url, title: title || url, cookies, timer })
+    offers.set(id, {
+      url,
+      title: title || url,
+      cookies,
+      referer: pageExtras.referer,
+      userAgent: pageExtras.userAgent,
+      timer
+    })
 
     const window = getWindow()
     if (window && !window.isDestroyed()) {
       if (window.isMinimized()) window.restore()
       window.show()
       window.focus()
-      window.webContents.send(
+      sendToWindow(
+        window,
         IpcChannels.appCommand,
         'youtube-offer',
         JSON.stringify({ id, url, title: title || url })
@@ -253,9 +241,10 @@ export async function registerYoutubeHandlers(
 
   return {
     async dispose() {
-      for (const entry of pending.values()) {
-        if (entry.timer) clearTimeout(entry.timer)
-      }
+      throttler.dispose()
+      for (const offer of offers.values()) clearTimeout(offer.timer)
+      offers.clear()
+      await jobs.dispose()
     },
     fromBrowser,
     fromBrowserBatch
@@ -267,30 +256,11 @@ async function notifyFinished(
   getWindow: () => BrowserWindow | null
 ): Promise<void> {
   if (job.status !== 'completed' && job.status !== 'error') return
-  const settings = prefsOf(await loadSettings())
-  const allowed = job.status === 'completed' ? settings.notifyCompleted : settings.notifyFailed
-  if (!allowed || testKnobs.userDataDir || !Notification.isSupported()) return
-  if (settings.notifyWhenInactive && getWindow()?.isFocused()) return
-
   const title =
     job.status === 'completed' ? t('YouTube download finished') : t('YouTube download failed')
   const body =
     job.status === 'completed'
       ? job.title || t('1 video downloaded')
       : job.error || t('The download could not be completed.')
-
-  try {
-    const notification = new Notification({ title, body, silent: true })
-    notification.on('click', () => {
-      const window = getWindow()
-      if (window && !window.isDestroyed()) {
-        if (window.isMinimized()) window.restore()
-        window.show()
-        window.focus()
-      }
-    })
-    notification.show()
-  } catch {
-    // ignore
-  }
+  await showAppNotification({ getWindow, kind: job.status, title, body })
 }

@@ -37,6 +37,8 @@ import {
 import { TorrentFileList } from './TorrentFiles'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { describeDuplicate } from '../utils/duplicateText'
+import { isStreamUrl, isYoutubeUrl } from '@shared/youtube'
+import { useYoutubeStore } from '../store/useYoutubeStore'
 
 type ProbeState =
   | { status: 'idle' }
@@ -45,6 +47,13 @@ type ProbeState =
   | { status: 'error'; message: string }
 
 const PROBE_DEBOUNCE_MS = 600
+
+/** Opens the video dialog on the YouTube screen with a video page or stream, and closes this dialog. */
+function openVideoFromLink(link: string): void {
+  useAppStore.getState().closeNewDownload()
+  useAppStore.getState().setView({ name: 'youtube' })
+  void useYoutubeStore.getState().openVideoDialog(link)
+}
 
 type OnComplete = 'nothing' | 'open' | 'folder'
 const whenDone = (): [OnComplete, string][] => [
@@ -58,6 +67,28 @@ type StreamsChoice = 'auto' | number
 const STREAMS_CHOICES: StreamsChoice[] = ['auto', 4, 8, 16, 32]
 
 const labelClass = 'w-16 shrink-0 text-[12.5px] text-[var(--text-secondary)]'
+
+function findSubnetConflict(
+  selectedInterfaceIds: readonly string[],
+  interfaces: ReturnType<typeof useAppStore.getState>['interfaces'],
+  networkVisual: ReturnType<typeof useNetworkVisuals>
+): { subnet: string; names: string[] } | null {
+  if (selectedInterfaceIds.length <= 1) return null
+  const subnets = new Map<string, string[]>()
+  for (const id of selectedInterfaceIds) {
+    const iface = interfaces.find((i) => i.id === id)
+    const subnet = iface?.addresses.find((address) => address.family === 4)?.subnet
+    if (subnet && iface) {
+      const names = subnets.get(subnet) ?? []
+      names.push(networkVisual(iface.id, iface.kind, iface.displayName).name)
+      subnets.set(subnet, names)
+    }
+  }
+  for (const [subnet, names] of subnets.entries()) {
+    if (names.length > 1) return { subnet, names }
+  }
+  return null
+}
 
 /** New download: a link, then only what differs from one download to the next — its name (or a
  * torrent's files), where it goes, over which networks, and how many streams each runs. Everything set once for every
@@ -170,6 +201,11 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     setFileNameOverride(null)
     setSkippedFiles([])
     const timer = setTimeout(async () => {
+      // A YouTube link, or a playlist or stream (.m3u8, .mpd), is a video: the video dialog takes it, never the downloader.
+      if (isStreamUrl(trimmed) || isYoutubeUrl(trimmed)) {
+        if (!stale) openVideoFromLink(trimmed)
+        return
+      }
       try {
         const result = await window.lightning.probeUrl(trimmed, extras)
         if (stale) return
@@ -227,10 +263,19 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   const duplicate =
     duplicates && ready && duplicates.of === ready ? (duplicates.matches[0] ?? null) : null
 
-  const detectedIds = interfaces.map((iface) => iface.id)
-  const defaultIds = defaultNetworkIds(interfaces, networkPreferences, false)
-  const enabledIds = detectedIds.filter((id) => overrides[id] ?? defaultIds.includes(id))
-  const selectedInterfaceIds = isSingleStreamOnly ? enabledIds.slice(0, 1) : enabledIds
+  const detectedIds = useMemo(() => interfaces.map((iface) => iface.id), [interfaces])
+  const defaultIds = useMemo(
+    () => defaultNetworkIds(interfaces, networkPreferences, false),
+    [interfaces, networkPreferences]
+  )
+  const enabledIds = useMemo(
+    () => detectedIds.filter((id) => overrides[id] ?? defaultIds.includes(id)),
+    [detectedIds, overrides, defaultIds]
+  )
+  const selectedInterfaceIds = useMemo(
+    () => (isSingleStreamOnly ? enabledIds.slice(0, 1) : enabledIds),
+    [isSingleStreamOnly, enabledIds]
+  )
 
   // The VPN layer rides along when it is on; a VPN alone still lets a download start.
   const startIds = withVpnLayer(selectedInterfaceIds, allInterfaces, useVpn)
@@ -249,25 +294,10 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
         : t('Download')
 
   // Two networks on one subnet: the OS sends both down one route, so there's nothing to combine.
-  let subnetConflict: { subnet: string; names: string[] } | null = null
-  if (selectedInterfaceIds.length > 1) {
-    const subnets = new Map<string, string[]>()
-    for (const id of selectedInterfaceIds) {
-      const iface = interfaces.find((i) => i.id === id)
-      const subnet = iface?.addresses.find((address) => address.family === 4)?.subnet
-      if (subnet && iface) {
-        const names = subnets.get(subnet) ?? []
-        names.push(networkVisual(iface.id, iface.kind, iface.displayName).name)
-        subnets.set(subnet, names)
-      }
-    }
-    for (const [subnet, names] of subnets.entries()) {
-      if (names.length > 1) {
-        subnetConflict = { subnet, names }
-        break
-      }
-    }
-  }
+  const subnetConflict = useMemo(
+    () => findSubnetConflict(selectedInterfaceIds, interfaces, networkVisual),
+    [selectedInterfaceIds, interfaces, networkVisual]
+  )
 
   const handleToggleInterface = (id: string): void => {
     if (isSingleStreamOnly) {
@@ -321,6 +351,7 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
           : {
               ...common,
               kind: 'http',
+              requestedUrl: probe.result.requestedUrl,
               streamsPerNetwork: streamsChoice === 'auto' ? undefined : streamsChoice
             }
       )
@@ -425,6 +456,23 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
             )}
           </div>
         )}
+
+        {ready &&
+          ready.kind === 'http' &&
+          /^text\/html\b/i.test(ready.contentType ?? '') &&
+          !isYoutubeUrl(url.trim()) && (
+            <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+              {t('This is a web page.')}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => openVideoFromLink(ready.finalUrl)}
+              >
+                {t('Look for a video on this page')}
+              </Button>
+            </div>
+          )}
 
         {ready && (
           <div className="flex items-center gap-3">

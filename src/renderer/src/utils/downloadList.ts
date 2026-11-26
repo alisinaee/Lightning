@@ -1,7 +1,7 @@
 import type { DownloadState, FinishedDownload, GroupInfo, PendingGroupItem } from '@shared/types'
 import type { DownloadFilter, SortKey } from '../store/useAppStore'
 import { connectionsOf, sourceOf, wantedBytes } from './format'
-import { kindOfDownload, type FileKind } from './fileKind'
+import { kindOfDownload, type FileKind } from '@shared/fileKind'
 import { isFinished, STATUS_ORDER, statusKeyOf, type Item, type StatusKey } from './status'
 
 /** A download group, with its files (finished ones too) to show when it is opened. */
@@ -291,19 +291,4 @@ export function queuePositions(downloads: DownloadState[]): Map<string, number> 
     .filter((download) => download.status === 'queued')
     .sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0))
   return new Map(queued.map((download, index) => [download.id, index + 1]))
-}
-
-/** "2 downloading · 1 queued", or "all done". */
-export function summaryOf(downloads: DownloadState[]): string {
-  const count = (status: DownloadState['status']): number =>
-    downloads.filter((download) => download.status === status).length
-  const parts = [
-    [count('downloading'), 'downloading'],
-    [count('queued'), 'queued'],
-    [count('paused'), 'paused'],
-    [count('error'), 'need attention']
-  ]
-    .filter(([n]) => (n as number) > 0)
-    .map(([n, label]) => `${n} ${label}`)
-  return parts.length > 0 ? parts.join(' · ') : 'all done'
 }

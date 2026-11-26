@@ -52,5 +52,3 @@ export function isChecksum(value: unknown): value is Checksum {
     HEX_LENGTH[digest.length] === algo
   )
 }
-
-export const checksumLabel = (checksum: Checksum): string => checksum.algo.toUpperCase()

@@ -1,4 +1,5 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const writeChains = new Map<string, Promise<unknown>>()
@@ -46,9 +47,38 @@ export function updateJson(path: string, update: (current: unknown) => unknown):
     .then(async () => {
       const value = update(await readJsonNow(path))
       const temporaryPath = `${path}.${process.pid}.tmp`
+      // The first save may be what makes its folder.
+      await mkdir(dirname(path), { recursive: true })
       await writeFile(temporaryPath, JSON.stringify(value, null, 2), 'utf-8')
       await renameWithRetry(temporaryPath, path)
     })
   writeChains.set(path, next)
   return next
+}
+
+/** Deletes `<name>.<pid>.tmp` files left in `dir` by a Lightning that was killed mid-save. Only
+ * ones whose process is gone, so a second instance's save in flight is left alone. */
+export async function removeStaleTemps(dir: string): Promise<void> {
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const match = /\.(\d+)\.tmp$/.exec(name)
+    if (!match) continue
+    const pid = Number(match[1])
+    if (pid === process.pid || isRunning(pid)) continue
+    await unlink(join(dir, name)).catch(() => {})
+  }
+}
+
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
 }

@@ -35,6 +35,18 @@ test.describe('sign-in, cookies and headers @smoke', () => {
     expect(origin.log.every((entry) => entry.status !== 401)).toBe(true)
   })
 
+  test('a hotlink-protected file comes whole from a bare link, as if from its own site', async ({
+    lightning,
+    serve
+  }) => {
+    const origin = await serve({ size: SIZE })
+    const own = `${new URL(origin.url()).origin}/`
+    origin.setRule(({ headers }) => (headers.referer === own ? 'ok' : { status: 403 }))
+    await lightning.start(origin.url(), origin.sha256, { connections: 2 })
+    await lightning.waitForStatus('completed')
+    expect(origin.log.every((entry) => entry.status !== 403)).toBe(true)
+  })
+
   test('without them the probe is refused', async ({ lightning, serve }) => {
     const origin = await serve({ size: SIZE })
     origin.setRule(gate)

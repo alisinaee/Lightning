@@ -45,6 +45,8 @@ declare module 'webtorrent' {
     announce?: string[]
     /** Where it keeps the seeded files; webtorrent's default is a shared /tmp/webtorrent. */
     path?: string
+    /** Builds the torrent's storage, as AddOptions.store does. */
+    store?: Store
   }
 
   /** One peer connection (bittorrent-protocol). Emits 'piece' (index, offset, buffer) for each

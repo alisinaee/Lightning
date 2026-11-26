@@ -150,7 +150,7 @@ async function requestFollowingRedirects(
   networks?: ProbeNetworks
 ): Promise<{ current: URL; response: ProbeResponse | null; sent: Record<string, string> }> {
   let current = new URL(rawUrl)
-  let sent = buildHeaders(extras)
+  let sent = buildHeaders(extras, {}, rawUrl)
   let response: ProbeResponse | null = null
   const deadline = Date.now() + stallTimeoutMs()
 

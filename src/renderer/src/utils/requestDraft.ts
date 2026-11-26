@@ -25,9 +25,6 @@ export const EMPTY_DRAFT: RequestDraft = {
   checksum: ''
 }
 
-export const draftIsEmpty = (draft: RequestDraft): boolean =>
-  Object.values(draft).every((value) => value.trim() === '')
-
 /** What the typed fields ask the requests to carry. Sign-in details written into `link`
  * (user:pass@host) are used unless the fields give others. */
 export function extrasFromDraft(draft: RequestDraft, link = ''): RequestExtras {

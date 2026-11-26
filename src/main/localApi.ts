@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { RequestExtras } from '../shared/types'
 import { sanitizeExtras } from '../shared/requestHeaders'
 import { redactUrl } from '../shared/urlTools'
-import { isYoutubeUrl } from '../shared/youtube'
+import { isStreamUrl, isYoutubeUrl } from '../shared/youtube'
 import { log } from './logger'
 
 let bundledExtensionVersion: Promise<string | null> | null = null
@@ -131,6 +131,15 @@ export class LocalApi {
     res.writeHead(status, headers).end(JSON.stringify(body))
   }
 
+  /** One budget for the calls that open a link (add and video): a runaway page cannot flood the app. */
+  private allowCall(): boolean {
+    const now = Date.now()
+    this.addTimes = this.addTimes.filter((time) => now - time < WINDOW_MS)
+    if (this.addTimes.length >= ADDS_PER_WINDOW) return false
+    this.addTimes.push(now)
+    return true
+  }
+
   private async authorized(req: IncomingMessage): Promise<boolean> {
     const header = req.headers.authorization ?? ''
     const given = /^Bearer (.+)$/.exec(header)?.[1]
@@ -152,6 +161,19 @@ export class LocalApi {
       req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
       req.on('error', () => resolve(null))
     })
+  }
+
+  private async readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | null> {
+    const text = await this.readBody(req)
+    if (text === null) return null
+    try {
+      const parsed: unknown = JSON.parse(text)
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null
+    } catch {
+      return null
+    }
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -203,20 +225,9 @@ export class LocalApi {
       return this.send(res, 200, this.deps.features(), origin)
 
     if (req.method === 'POST' && path === '/v1/add') {
-      const now = Date.now()
-      this.addTimes = this.addTimes.filter((time) => now - time < WINDOW_MS)
-      if (this.addTimes.length >= ADDS_PER_WINDOW) return this.send(res, 429, {}, origin)
-      this.addTimes.push(now)
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
 
-      const text = await this.readBody(req)
-      let body: Record<string, unknown> | null = null
-      try {
-        const parsed: unknown = text === null ? null : JSON.parse(text)
-        body =
-          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
-      } catch {
-        body = null
-      }
+      const body = await this.readJsonBody(req)
       const features = this.deps.features()
       // A link from the browser's own downloads, or from the right-click menu.
       const allowed = body?.source === 'download' ? features.capture : features.menuDownload
@@ -225,27 +236,21 @@ export class LocalApi {
       if (!body || !/^(https?:\/\/[^\s]+|magnet:\?[^\s]+)$/i.test(url) || url.length > 8192) {
         return this.send(res, 400, { error: 'url' }, origin)
       }
-      // One browser action for every link: a YouTube page goes to the YouTube downloader by itself,
-      // anything else lands in the Add dialog for the person to start.
-      if (isYoutubeUrl(url) && (await this.deps.onVideo({ ...body, url }))) {
-        log.info('action', 'youtube page from the browser', { url: redactUrl(url) })
+      // One browser action for every link: a YouTube page, or a playlist or stream (.m3u8, .mpd), goes
+      // to the video downloader by itself; anything else lands in the Add dialog for the person to start.
+      if ((isYoutubeUrl(url) || isStreamUrl(url)) && (await this.deps.onVideo({ ...body, url }))) {
+        log.info('action', 'video link from the browser', { url: redactUrl(url) })
         return this.send(res, 200, { ok: true, route: 'youtube' }, origin)
       }
       log.info('action', 'link from the browser', { url: redactUrl(url) })
       this.deps.onAdd(url, sanitizeExtras(body))
       return this.send(res, 200, { ok: true }, origin)
     }
+    // A video on any page (the extension's "Find video" and the right-click menu): the video dialog.
     if (req.method === 'POST' && path === '/v1/video') {
       if (!this.deps.features().menuDownload) return this.send(res, 403, { error: 'off' }, origin)
-      const text = await this.readBody(req)
-      let body: Record<string, unknown> | null = null
-      try {
-        const parsed: unknown = text === null ? null : JSON.parse(text)
-        body =
-          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
-      } catch {
-        body = null
-      }
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
+      const body = await this.readJsonBody(req)
       if (!body) return this.send(res, 400, { error: 'video' }, origin)
       if (!(await this.deps.onVideo(body))) return this.send(res, 400, { error: 'video' }, origin)
       log.info('action', 'video page from the browser', { url: redactUrl(String(body.url ?? '')) })
@@ -253,15 +258,7 @@ export class LocalApi {
     }
     if (req.method === 'POST' && path === '/v1/youtube-batch') {
       if (!this.deps.features().menuDownload) return this.send(res, 403, { error: 'off' }, origin)
-      const text = await this.readBody(req)
-      let body: Record<string, unknown> | null = null
-      try {
-        const parsed: unknown = text === null ? null : JSON.parse(text)
-        body =
-          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
-      } catch {
-        body = null
-      }
+      const body = await this.readJsonBody(req)
       if (!body || !Array.isArray(body.videos)) {
         return this.send(res, 400, { error: 'videos' }, origin)
       }
@@ -286,15 +283,7 @@ export class LocalApi {
     }
     if (req.method === 'POST' && path === '/v1/links') {
       if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)
-      const text = await this.readBody(req)
-      let body: Record<string, unknown> | null = null
-      try {
-        const parsed: unknown = text === null ? null : JSON.parse(text)
-        body =
-          typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
-      } catch {
-        body = null
-      }
+      const body = await this.readJsonBody(req)
       const urls = Array.isArray(body?.links)
         ? body.links.filter(
             (entry): entry is string => typeof entry === 'string' && entry.length <= 8192

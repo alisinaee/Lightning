@@ -10,6 +10,7 @@ export default {
   '1 video downloaded': 'Скачано 1 видео',
   'The download could not be completed.': 'Не удалось завершить загрузку.',
   'Add YouTube video': 'Добавить видео YouTube',
+  'Add video': 'Добавить видео',
   'Sent from your browser. Check the quality, then download.':
     'Отправлено из браузера. Проверьте качество и скачайте.',
   'Paste a link, check the video, then choose a quality.':
@@ -23,6 +24,10 @@ export default {
   Quality: 'Качество',
   'Download {quality}': 'Скачать {quality}',
   'Fetch queue': 'Очередь получения',
+  'Paste a link and choose a quality. Lightning does the rest.':
+    'Вставьте ссылку и выберите качество. Остальное сделает Lightning.',
+  'Use another link': 'Другая ссылка',
+  'Check the quality, then download.': 'Проверьте качество и скачайте.',
   'Fetching {url}': 'Получение {url}',
   'Choose quality': 'Выбрать качество',
   Dismiss: 'Закрыть',
@@ -202,8 +207,10 @@ export default {
   'This video is private, so it cannot be downloaded.': 'Это видео приватное, его нельзя скачать.',
   'This video is unavailable. It may have been removed.':
     'Это видео недоступно. Возможно, его удалили.',
-  "This link isn't a YouTube video link that Lightning can download.":
-    'Эта ссылка не ведёт на видео YouTube, которое Lightning может скачать.',
+  'No downloadable video was found on this page.':
+    'На этой странице не найдено видео, которое можно скачать.',
+  'This is a web page.': 'Это веб-страница.',
+  'Look for a video on this page': 'Найти видео на этой странице',
   'The YouTube downloader (yt-dlp) is missing. Reinstall Lightning or update yt-dlp.':
     'Загрузчик YouTube (yt-dlp) не найден. Переустановите Lightning или обновите yt-dlp.',
   "Lightning couldn't reach YouTube. Check your internet connection or VPN.":

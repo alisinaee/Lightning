@@ -13,6 +13,7 @@
   const t = (key, vars) => I18N.t(lang, key, vars)
   const picked = new Map() // url -> element
   let hovered = null
+  const PRESSES = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'dblclick', 'click']
 
   const STYLE = document.createElement('style')
   STYLE.textContent = `
@@ -79,12 +80,25 @@
     .then((v) => relang(v.lang))
     .catch(() => {})
 
-  /** The address a clicked element stands for: a link, or the file behind a video or audio. */
-  function addressOf(element) {
-    const target = element.closest('a[href], video, audio')
-    if (!target) return null
+  /** The link or media an event is about. A page often lays something over its links (a badge, a
+   * preview, a transparent cover) or keeps them in a shadow tree, so everything under the pointer counts. */
+  function targetOf(event) {
+    const SELECTOR = 'a[href], area[href], video, audio'
+    for (const node of event.composedPath()) {
+      if (node instanceof Element && node.matches(SELECTOR) && addressOf(node)) return node
+    }
+    if (event.type.startsWith('key')) return null
+    for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
+      const found = element.closest(SELECTOR)
+      if (found && addressOf(found)) return found
+    }
+    return null
+  }
+
+  /** The address an element stands for: a link, or the file behind a video or audio. */
+  function addressOf(target) {
     let value = null
-    if (target.tagName === 'A') value = target.getAttribute('href')
+    if (target.matches('a, area')) value = target.getAttribute('href')
     else
       value =
         target.currentSrc ||
@@ -105,21 +119,29 @@
 
   function onOver(event) {
     if (ownBar(event)) return
-    const target = event.target
-    if (!(target instanceof Element) || !addressOf(target)) return
+    const target = targetOf(event)
     if (hovered && hovered !== target) hovered.classList.remove('lightning-pick-hover')
+    if (!target) {
+      hovered = null
+      return
+    }
     hovered = target
     target.classList.add('lightning-pick-hover')
   }
 
-  function onClick(event) {
-    if (ownBar(event)) return
-    const target = event.target
-    const url = target instanceof Element ? addressOf(target) : null
-    if (!url) return
-    // Picking, not following: the page's own link must not open.
+  /** Picking, not following: the press, the click and the double-click never reach the page. */
+  function onPress(event) {
+    if (event.button !== 0 || ownBar(event)) return
+    const target = targetOf(event)
+    if (!target) return
     event.preventDefault()
-    event.stopPropagation()
+    event.stopImmediatePropagation()
+    if (event.type === 'click') pick(target)
+  }
+
+  function pick(target) {
+    const url = addressOf(target)
+    if (!url) return
     if (picked.has(url)) {
       picked.get(url).classList.remove('lightning-pick-on')
       picked.delete(url)
@@ -131,13 +153,22 @@
   }
 
   function onKey(event) {
-    if (event.key === 'Escape') stop()
+    if (event.key === 'Escape') {
+      event.stopImmediatePropagation()
+      stop()
+    } else if (event.key === 'Enter' && !ownBar(event)) {
+      const target = targetOf(event)
+      if (!target) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      pick(target)
+    }
   }
 
   function stop() {
-    document.removeEventListener('mouseover', onOver, true)
-    document.removeEventListener('click', onClick, true)
-    document.removeEventListener('keydown', onKey, true)
+    window.removeEventListener('mouseover', onOver, true)
+    for (const type of PRESSES) window.removeEventListener(type, onPress, true)
+    window.removeEventListener('keydown', onKey, true)
     for (const element of picked.values()) element.classList.remove('lightning-pick-on')
     if (hovered) hovered.classList.remove('lightning-pick-hover')
     picked.clear()
@@ -176,9 +207,9 @@
     refresh(null)
   })
 
-  document.addEventListener('mouseover', onOver, true)
-  document.addEventListener('click', onClick, true)
-  document.addEventListener('keydown', onKey, true)
+  window.addEventListener('mouseover', onOver, true)
+  for (const type of PRESSES) window.addEventListener(type, onPress, true)
+  window.addEventListener('keydown', onKey, true)
   relabel()
   refresh(null)
 })()

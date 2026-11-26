@@ -65,6 +65,12 @@ export const percentOf = (download: DownloadState): number =>
     ? Math.min(100, Math.floor((download.bytesDownloaded / download.totalBytes) * 100))
     : 0
 
+/** The order running downloads are listed in status menus: fastest first, matching Networks.
+ * Returns a new array without mutating the input. */
+export function rankRunning(running: readonly DownloadState[]): DownloadState[] {
+  return [...running].sort((a, b) => b.speedBytesPerSec - a.speedBytesPerSec)
+}
+
 /** What is moving on each network, from the downloads there are now: its speed, its open
  * connections (streams, or a torrent's peers) and how many downloads use it. */
 export interface NetworkActivity {
@@ -217,7 +223,7 @@ export function buildTrayModel(
 
   if (prefs.trayDownloads && running.length > 0) {
     if (lines.length > 0) lines.push({ kind: 'separator' })
-    const ranked = [...running].sort((a, b) => b.speedBytesPerSec - a.speedBytesPerSec)
+    const ranked = rankRunning(running)
     for (const download of ranked.slice(0, prefs.trayRows)) {
       const left = download.timeLeftSeconds ? ` · ${formatTime(download.timeLeftSeconds)}` : ''
       lines.push({

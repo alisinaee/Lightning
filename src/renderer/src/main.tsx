@@ -23,6 +23,7 @@ import { useLanguage } from '@shared/i18n/react'
 import { applyGlass, applyLanguage } from './utils/syncSettings'
 import './utils/errorLog'
 import './utils/clickGuard'
+import './utils/pressGuard'
 
 // macOS windows are frosted glass: the surfaces turn translucent (see main.css).
 if (window.lightning.platform === 'darwin') {

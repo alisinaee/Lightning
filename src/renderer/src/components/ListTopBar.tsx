@@ -101,6 +101,27 @@ export function NewMenu({
   items: { label: string; icon: ComponentType<{ className?: string }>; run: () => void }[]
   disabled?: boolean
 }): React.JSX.Element {
+  // One choice needs no menu: the button does it.
+  if (items.length === 1) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              size="icon"
+              aria-label={label}
+              disabled={disabled}
+              onClick={items[0].run}
+            />
+          }
+        >
+          <Plus />
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    )
+  }
   return (
     <DropdownMenu>
       <Tooltip>

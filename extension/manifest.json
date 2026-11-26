@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lightning",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "Send downloads to the Lightning desktop app, which fetches them over every network at once.",
   "icons": { "16": "icons/icon.png", "48": "icons/icon.png", "128": "icons/icon.png" },
   "action": {
@@ -11,7 +11,7 @@
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["i18n.js", "background.js"]
+    "scripts": ["i18n.js", "media.js", "background.js"]
   },
   "content_scripts": [
     {
@@ -25,7 +25,15 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["downloads", "cookies", "contextMenus", "storage", "notifications", "scripting"],
+  "permissions": [
+    "downloads",
+    "cookies",
+    "contextMenus",
+    "storage",
+    "notifications",
+    "scripting",
+    "webRequest"
+  ],
   "host_permissions": ["http://*/*", "https://*/*"],
   "browser_specific_settings": {
     "gecko": { "id": "lightning-extension@lightning.app", "strict_min_version": "121.0" }

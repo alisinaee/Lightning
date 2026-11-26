@@ -66,14 +66,12 @@ export const GroupFileRow = memo(
     selected: boolean
     /** The search found this file. */
     hit?: boolean
-    selecting?: boolean
     /** The list's row actions, shared with the rows of the list. */
     handlers: RowHandlers
     onSelect: (id: string, on: boolean) => void
     onOpen: (id: string) => void
     onError: (message: string) => void
     getVisual: ResolveNetworkVisual
-    visualsKey?: string
   }): React.JSX.Element {
     const columns = useColumns()
     const options = useNetworkOptions()
@@ -379,7 +377,6 @@ export const GroupFileRow = memo(
     a.selected === b.selected &&
     a.hit === b.hit &&
     a.group === b.group &&
-    a.visualsKey === b.visualsKey &&
     a.handlers === b.handlers &&
     a.onSelect === b.onSelect &&
     a.onOpen === b.onOpen &&

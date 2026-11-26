@@ -1,6 +1,6 @@
 import { CLIPBOARD_OFFER_MS } from '@shared/clipboardLinks'
 import { connectionsOnly, isVpn } from '@shared/networks'
-import type { FileKind } from '../utils/fileKind'
+import type { FileKind } from '@shared/fileKind'
 import { applyDownloadUpdate } from '@shared/downloadUpdate'
 import type { TgMediaKind } from '@shared/telegram'
 import type {
@@ -162,7 +162,6 @@ interface AppStore {
   hideSidebar: () => void
   /** Whether each file's website is shown under its name (Settings → Interface). */
   showSourceHost: boolean
-  setShowSourceHost: (on: boolean) => void
   /** Whether rows show a progress line along their bottom (Settings → Interface). */
   progressLine: boolean
   /** The status bar's items and menu (Settings → Status bar). */
@@ -192,7 +191,6 @@ interface AppStore {
   /** Sort, column widths and hidden columns of the downloads table; remembered. */
   tableLayout: TableLayout
   sortBy: (key: SortKey) => void
-  setColumnWidth: (id: ColumnId, width: number) => void
   /** Several columns at once, e.g. two that trade width across a divider. */
   setColumnWidths: (widths: Partial<Record<ColumnId, number>>) => void
   setWrapNames: (on: boolean) => void
@@ -331,11 +329,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   hideSidebar: () => get().setSidebarHidden(true),
   showSourceHost: window.lightning.initialState.prefs.showSourceHost,
   progressLine: window.lightning.initialState.prefs.progressLine,
-  setShowSourceHost: (showSourceHost) => {
-    const prefsSnapshot = { ...get().prefsSnapshot, showSourceHost }
-    set({ showSourceHost, prefsSnapshot })
-    persist({ prefs: prefsSnapshot })
-  },
   statusBar: window.lightning.initialState.prefs.statusBar,
   setStatusBar: (statusBar) => set({ statusBar }),
 
@@ -363,14 +356,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
         key,
         dir: sort.key === key && sort.dir === 'asc' ? ('desc' as const) : ('asc' as const)
       }
-    }
-    set({ tableLayout })
-    saveTable(tableLayout)
-  },
-  setColumnWidth: (id, width) => {
-    const tableLayout = {
-      ...get().tableLayout,
-      widths: { ...get().tableLayout.widths, [id]: Math.round(width) }
     }
     set({ tableLayout })
     saveTable(tableLayout)

@@ -97,6 +97,8 @@ test('missing finished files can leave the list but are excluded from file remov
   const origin = await serve({ size: BLOCK })
   await lightning.start(origin.url(), origin.sha256)
   const complete = await lightning.waitForStatus('completed')
+  // With auto sync on the row would leave the list by itself: this one stays to be removed by hand.
+  await lightning.api.updateSettings({ prefs: { autoSyncFiles: false } })
   // Rename instead of delete so automatic fixture integrity checks can still inspect the bytes.
   const { rename } = await import('node:fs/promises')
   await rename(complete.destinationPath, `${complete.destinationPath}.moved`)

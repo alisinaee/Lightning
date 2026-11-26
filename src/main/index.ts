@@ -1,4 +1,5 @@
 import { t } from '../shared/i18n'
+import { removeStaleTemps } from './jsonFile'
 import { registerGlassWindow } from './glass'
 import { externalStates } from './externalActivity'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -29,6 +30,7 @@ import { acceptedLink, linkFromArgs, offerLink } from './openLinks'
 import { loadThemeSource, migrateLegacyNetworkPreferences, migrateVpnDefault } from './settings'
 import { log, logFilePath } from './logger'
 import { testKnobs } from './testKnobs'
+import { syncFinished } from './fileSync'
 import { migrateLegacyUserData } from './legacyData'
 import { appVariant } from './variant'
 import { refreshInstalledExtension } from './integration'
@@ -47,6 +49,14 @@ if (testKnobs.userDataDir) app.setPath('userData', testKnobs.userDataDir)
 
 // One Lightning at a time (per userData folder, so parallel e2e runs each have their own): a second
 // launch — a magnet link clicked, a .torrent opened — hands its link to the first and exits.
+// An e2e run stays in the background: no window is shown and nothing takes the focus.
+if (testKnobs.hideWindow) {
+  if (process.platform === 'darwin') app.setActivationPolicy('prohibited')
+  app.focus = () => {}
+  for (const method of ['show', 'focus', 'moveTop'] as const) {
+    BrowserWindow.prototype[method] = () => {}
+  }
+}
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
 process.on('uncaughtException', (error) => log.error('process', 'uncaughtException', error))
@@ -105,6 +115,9 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
 function createWindow(): void {
   const saved = testKnobs.hideWindow ? null : loadWindowState()
   mainWindow = new BrowserWindow({
+    // The click that brings the window forward also presses the button under it (macOS otherwise
+    // spends it on the window alone, so every action after using another app took two clicks).
+    acceptFirstMouse: true,
     width: 760,
     height: 640,
     ...(saved ? saved.bounds : {}),
@@ -201,6 +214,8 @@ function createWindow(): void {
   mainWindow.on('page-title-updated', (event) => event.preventDefault())
   // Back from the Dock, the main window would cover an open Settings window.
   mainWindow.on('restore', raiseSettingsWindow)
+  // Finished files are checked again when the window comes to the front (see fileSync.ts).
+  mainWindow.on('focus', () => void syncFinished())
   log.info('window', 'created')
   mainWindow.webContents.on('did-finish-load', () => log.info('window', 'page loaded'))
   mainWindow.on('closed', () => {
@@ -281,6 +296,8 @@ app.whenReady().then(async () => {
       packaged: app.isPackaged
     }
   )
+
+  void removeStaleTemps(app.getPath('userData'))
 
   // The extension set up in Documents gets this version's files (the browser reloads it).
   void refreshInstalledExtension().catch((error) =>

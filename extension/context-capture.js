@@ -51,7 +51,32 @@
     return []
   }
 
+  /** On YouTube, the video right-clicked: the hover preview's or the card's link, else the page's own. */
+  function videoNear(element) {
+    if (!element) return null
+    // The player itself; the preview over a card and the mini player show another page's video.
+    if (
+      element.closest('#movie_player, ytd-player, ytd-shorts') &&
+      !element.closest('ytd-video-preview, ytd-miniplayer')
+    )
+      return location.href
+    let node = element
+    for (let depth = 0; node && depth < 12 && node !== document.body; depth += 1) {
+      const link = node.matches?.('a[href]')
+        ? node
+        : node.querySelector?.('a[href*="/watch?v="], a[href*="/shorts/"]')
+      const href = link?.getAttribute('href') || ''
+      if (/\/watch\?|\/shorts\//.test(href)) return new URL(href, document.baseURI).href
+      node = node.parentElement
+    }
+    return null
+  }
+
   api.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message?.type === 'video-near') {
+      respond({ url: videoNear(lastTarget) })
+      return false
+    }
     if (message?.type === 'links-near') {
       respond({ links: linksNear(lastTarget) })
       return false

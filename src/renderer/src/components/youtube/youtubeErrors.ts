@@ -53,8 +53,9 @@ const RULES: { match: RegExp; summary: () => string }[] = [
     summary: () => t('This video is unavailable. It may have been removed.')
   },
   {
-    match: /unsupported url/i,
-    summary: () => t("This link isn't a YouTube video link that Lightning can download.")
+    // yt-dlp has no site for the address: whatever it is, there is no video Lightning can take.
+    match: /unsupported url|No downloadable video was found/i,
+    summary: () => t('No downloadable video was found on this page.')
   },
   {
     match: /no such file|not found|ENOENT/i,

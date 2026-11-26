@@ -307,5 +307,10 @@ export default {
   'Slow mode on': 'حالت کند روشن',
   'Enter a number above 0 in the highlighted field, or choose No limit.':
     'در فیلد مشخص‌شده عددی بزرگ‌تر از ۰ وارد کنید یا «بدون محدودیت» را انتخاب کنید.',
-  Save: 'ذخیره'
+  Save: 'ذخیره',
+  'That link is to a different file: its bytes don’t match what’s downloaded.':
+    'این لینک برای فایل دیگری است: بایت‌های آن با آنچه دانلود شده یکی نیست.',
+  'Couldn’t check that link against what’s downloaded. Try again.':
+    'این لینک با آنچه دانلود شده مقایسه نشد. دوباره امتحان کنید.',
+  'The download changed while its new link was checked.': 'دانلود هنگام بررسی لینک جدید تغییر کرد.'
 } satisfies Dict

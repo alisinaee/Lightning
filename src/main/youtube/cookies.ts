@@ -89,19 +89,28 @@ export async function writeCookiesFile(file: string, cookies: BrowserCookie[]): 
   await chmod(file, 0o600)
 }
 
-/** The yt-dlp arguments that sign it in, from what the person chose in the options: a cookies.txt
- * file, the cookies Lightning keeps, or a browser to read them from. Empty: not signed in. */
-export function signInArgs(options: YoutubeOptions): string[] {
+/** The cookies file the options point to, if it exists. */
+export function optionCookies(
+  options: YoutubeOptions
+): { file: string; temporary: boolean } | undefined {
   if (
     options.cookieMode === 'manual' &&
     options.manualCookiesFile &&
     existsSync(options.manualCookiesFile)
   ) {
-    return ['--cookies', options.manualCookiesFile]
+    return { file: options.manualCookiesFile, temporary: false }
   }
   if (options.cookieMode === 'saved' && existsSync(savedCookiesPath())) {
-    return ['--cookies', savedCookiesPath()]
+    return { file: savedCookiesPath(), temporary: false }
   }
+  return undefined
+}
+
+/** The yt-dlp arguments that sign it in, from what the person chose in the options: a cookies.txt
+ * file, the cookies Lightning keeps, or a browser to read them from. Empty: not signed in. */
+export function signInArgs(options: YoutubeOptions): string[] {
+  const cookies = optionCookies(options)
+  if (cookies) return ['--cookies', cookies.file]
   if (options.cookiesBrowser) return ['--cookies-from-browser', options.cookiesBrowser]
   return []
 }

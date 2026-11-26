@@ -237,7 +237,7 @@ export function sanitizePrefs(parsed: unknown): AppPrefs {
     'telegramTakeout',
     'telegramUseProxy',
     'askWhenFinished',
-    'removeMissingFiles',
+    'autoSyncFiles',
     'warnDuplicates',
     'browserIntegration',
     'browserCapture',
@@ -291,20 +291,60 @@ export function prefsOf(settings: AppSettings): ResolvedPrefs {
   }
 }
 
+let cached: { path: string; settings: AppSettings } | null = null
+let inFlightLoad: { id: number; path: string; promise: Promise<AppSettings> } | null = null
+let loadSeq = 0
+let activeSaves = 0
+
 export async function loadSettings(): Promise<AppSettings> {
   // Reading can fall back to defaults; only a save must not act on a failed read.
   try {
-    return sanitizeSettings(await readJson(settingsPath()))
+    const file = settingsPath()
+    if (cached?.path === file && activeSaves === 0) return cached.settings
+    if (inFlightLoad?.path === file) return inFlightLoad.promise
+
+    const id = ++loadSeq
+    const promise = (async () => {
+      try {
+        const loaded = sanitizeSettings(await readJson(file))
+        if (activeSaves === 0 && settingsPath() === file) {
+          cached = { path: file, settings: loaded }
+        }
+        return loaded
+      } catch {
+        return {}
+      } finally {
+        if (inFlightLoad?.id === id) inFlightLoad = null
+      }
+    })()
+    inFlightLoad = { id, path: file, promise }
+    return await promise
   } catch {
     return {}
   }
 }
 
 /** Merges `patch` over what's saved. */
-export function saveSettings(patch: unknown): Promise<void> {
-  return updateJson(settingsPath(), (current) =>
-    sanitizeSettings({ ...sanitizeSettings(current), ...(isRecord(patch) ? patch : {}) })
-  )
+export async function saveSettings(patch: unknown): Promise<void> {
+  const file = settingsPath()
+  activeSaves++
+  cached = null
+  inFlightLoad = null
+  let saved: AppSettings | undefined
+  try {
+    await updateJson(file, (current) => {
+      saved = sanitizeSettings({
+        ...sanitizeSettings(current),
+        ...(isRecord(patch) ? patch : {})
+      })
+      return saved
+    })
+    if (activeSaves === 1 && saved !== undefined && settingsPath() === file) {
+      cached = { path: file, settings: saved }
+    }
+  } finally {
+    activeSaves--
+  }
 }
 
 /** Run once at start, before anything reads the settings (see vpnMigration). */
@@ -325,7 +365,10 @@ export async function migrateLegacyNetworkPreferences(): Promise<void> {
   const legacyPath = join(app.getPath('userData'), 'network-preferences.json')
   const legacy = await readJson(legacyPath)
   if (legacy !== undefined) {
-    await updateJson(settingsPath(), (current) => {
+    const file = settingsPath()
+    cached = null
+    inFlightLoad = null
+    await updateJson(file, (current) => {
       const settings = sanitizeSettings(current)
       return settings.networkPreferences
         ? settings

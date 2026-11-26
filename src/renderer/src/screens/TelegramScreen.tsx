@@ -13,6 +13,7 @@ import { NetworksMenu } from '../components/NetworksMenu'
 import { VpnControl } from '../components/VpnControl'
 import { NewMenu, PauseAllButton, SearchField, SettingsButton } from '../components/ListTopBar'
 import { useLimitsDialog } from '../hooks/useLimitsDialog'
+import { useSelectionShortcuts } from '../hooks/useSelectionShortcuts'
 import { TelegramJobGroup } from '../components/telegram/TelegramJobGroup'
 import { columnsFor, jobTitle, columnsContext } from '../components/telegram/telegramRowInfo'
 import type { SettingsPage } from '../components/SettingsDialog'
@@ -144,25 +145,14 @@ export function TelegramScreen({
     setSelected(next)
   }
 
+  const entryJobIds = useMemo(() => entries.map((entry) => entry.job.id), [entries])
   // Keyboard, as on Downloads: Esc lets go of the selection, ⌘/Ctrl+A takes everything listed.
   // Not while typing in a box or a dialog is open, so those keep their own keys.
-  useEffect(() => {
-    const mod = window.lightning.platform === 'darwin' ? 'metaKey' : 'ctrlKey'
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const target = event.target
-      const typing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
-      if (typing || document.querySelector('[role="dialog"]')) return
-      if (event.key === 'Escape') setSelected(new Set())
-      else if (event[mod] && event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        setSelected(new Set(entries.map((entry) => entry.job.id)))
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [entries, setSelected])
+  useSelectionShortcuts({
+    ids: entryJobIds,
+    selectedCount: chosen.length,
+    setSelected
+  })
 
   const ready = status?.binary && status.loggedIn
   const accountLabel = status?.loggedIn ? (status.account ?? t('Signed in')) : t('Sign in')

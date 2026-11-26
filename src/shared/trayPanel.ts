@@ -1,6 +1,6 @@
 import type { DownloadState, NetworkPreferences, StatusBarPrefs, TrayButton } from './types'
 import type { Lang } from './i18n'
-import { percentOf, summarizeActivity, type NetworkActivity } from './trayModel'
+import { percentOf, rankRunning, summarizeActivity, type NetworkActivity } from './trayModel'
 
 /** Everything the panel under the menu-bar icon draws, as one snapshot the main process sends it
  * about once a second. Colours are the panel's own business (it knows the theme): it is given
@@ -59,7 +59,7 @@ export function buildPanelState(input: {
   language: Lang
 }): PanelState {
   const activity = summarizeActivity(input.downloads, input.names)
-  const ranked = [...activity.running].sort((a, b) => b.speedBytesPerSec - a.speedBytesPerSec)
+  const ranked = rankRunning(activity.running)
   const listed = ranked.slice(0, input.prefs.trayRows)
   return {
     version: input.version,

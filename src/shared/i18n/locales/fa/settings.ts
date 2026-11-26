@@ -186,8 +186,9 @@ export default {
     'دکمه‌های سریع در پنل: دانلود جدید، توقف همه و بقیه',
   'Recent links': 'پیوند‌های اخیر',
   Remove: 'حذف',
-  'Remove a finished download from the list when its file is deleted or moved':
-    'وقتی فایل یک دانلود تمام‌شده حذف یا جابه‌جا شد، آن را از فهرست حذف کن',
+  'Auto sync': 'همگام‌سازی خودکار',
+  'Removes a finished download from the list when its file is moved or deleted.':
+    'وقتی فایل یک دانلود تمام‌شده جابه‌جا یا حذف شود، آن را از فهرست برمی‌دارد.',
   'Remove this window': 'حذف این بازه',
   'Remove {name} from history': 'حذف {name} از تاریخچه',
   'Remove “{name}” from the history? The file stays where it is.':

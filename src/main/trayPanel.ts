@@ -71,6 +71,7 @@ export function createTrayPanel(deps: {
 
   function make(): BrowserWindow {
     const window = new BrowserWindow({
+      acceptFirstMouse: true,
       width: WIDTH,
       height: 420,
       show: false,

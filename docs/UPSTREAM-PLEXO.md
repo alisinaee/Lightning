@@ -84,7 +84,13 @@ the commits that were skipped on purpose with the reason.
 
 ## Status
 
-- Last upstream commit reviewed: `2e44a2f` (Plexo `main`, 2026-11-06)
+- Last upstream commit reviewed: `ec6dc5d` (Plexo `main`, 2026-11-18)
+- Ported by hand on 2026-11-23 (all conflicted): `88470e9` (no split of a part waiting on its
+  writer), `b485bb3` (fresh signed link), `0e5d922` (torrent names Windows can't take).
+  Already ours: `933d46f` (Basic auth in a link). Not needed: `fe243f8` (we have no such menu guard).
+- Skipped on 2026-11-23: `219755f` (proxy passwords sealed; conflicts in six files, needs the user's
+  decision), `3bac4da` (Linux tethering, conflicts in five files), `ec6dc5d`, `379d950`, `86daa81`,
+  `ebb970d`, `2a02965` (Telegram and Usenet code we do not have), and the features, tests and docs.
 - Ported from Plexo in the last sync (all clean, all verified with the e2e specs above):
   `fd22a88`, `3eba463`, `481e529`, `022ef29`, `3f4c908`, `6c72334`, `899d99b`, `da179d6`
   (landed as `033536f`, `f509663`, `35da209`, `464066e`, `d743b11`, `19dccbf`, `1a1fa86`, `c32c8b7`)

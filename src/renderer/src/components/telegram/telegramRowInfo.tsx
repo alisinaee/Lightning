@@ -12,7 +12,7 @@ import { createContext, useContext } from 'react'
 import { useTelegramStore } from '../../store/useTelegramStore'
 import type { RowAction } from '../downloads/rowMenu'
 import { formatPercent } from '../../utils/format'
-import type { FileKind } from '../../utils/fileKind'
+import type { FileKind } from '@shared/fileKind'
 import type { RowInfo } from '../../utils/status'
 
 /** The media groups in the order the side panel lists them. */

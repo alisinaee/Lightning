@@ -1,9 +1,11 @@
 // Lightning's browser extension: hands downloads to the desktop app over 127.0.0.1.
 // The same file runs as a service worker (Chromium) and a background script (Firefox).
 const api = typeof browser !== 'undefined' ? browser : chrome
-// Texts (Firefox loads i18n.js from the manifest's scripts list; a Chromium service worker imports it).
-if (typeof importScripts === 'function') importScripts('i18n.js')
+// Texts and the video finder (Firefox loads them from the manifest's scripts list; a Chromium service
+// worker imports them).
+if (typeof importScripts === 'function') importScripts('i18n.js', 'media.js')
 const I18N = self.LightningI18n
+const MEDIA = self.LightningMedia
 
 const PORTS = [17891, 17892, 17893, 17894, 17895, 17896, 17897, 17898, 17899, 17900]
 const DEFAULTS = { enabled: true, key: '', minSizeMB: 0, excluded: '', videoCookies: 'save' }
@@ -64,6 +66,21 @@ async function repair(oldKey) {
   return true
 }
 
+/** Lightning carries a newer extension than the one running: loads the files on disk again, once per
+ * version (a copy that was not refreshed on disk stays as it is). */
+async function reloadIfNewer(version) {
+  const parts = (value) => value.split('.').map(Number)
+  if (typeof version !== 'string' || !/^\d+(\.\d+)*$/.test(version)) return
+  const [theirs, ours] = [parts(version), parts(api.runtime.getManifest().version)]
+  const at = theirs.findIndex((part, index) => part !== (ours[index] ?? 0))
+  if (at < 0 || theirs[at] < (ours[at] ?? 0)) return
+  const { reloadedFor } = await api.storage.local.get({ reloadedFor: '' })
+  if (reloadedFor === version) return
+  await api.storage.local.set({ reloadedFor: version })
+  // After what is being sent has gone out.
+  setTimeout(() => api.runtime.reload(), 5000)
+}
+
 /** Finds the port Lightning answers on; null when the app is not running. */
 async function findPort(force = false) {
   if (cachedPort && !force) return cachedPort
@@ -77,6 +94,7 @@ async function findPort(force = false) {
         if (info.app === 'Lightning') {
           cachedPort = port
           lastPing = info
+          reloadIfNewer(info.extensionVersion)
           return port
         }
       }
@@ -121,7 +139,8 @@ const MENU_TITLES = {
   'lightning-youtube': 'm_youtube',
   'lightning-select': 'm_select',
   'lightning-near': 'm_near',
-  'lightning-clipboard': 'm_clip'
+  'lightning-clipboard': 'm_clip',
+  'lightning-video': 'm_video'
 }
 
 /** Shows or hides the right-click items to match Settings. */
@@ -135,6 +154,7 @@ async function refreshMenus() {
   update('lightning-select', on.menuScan)
   update('lightning-near', on.menuScan)
   update('lightning-clipboard', on.menuScan)
+  update('lightning-video', on.menuDownload)
   return on
 }
 refreshMenus()
@@ -151,20 +171,28 @@ function launchApp() {
   launching = (async () => {
     const running = await findPort(true)
     if (running) return running
+    // The browser asks (once) whether to open Lightning. That prompt belongs to this tab, so the tab
+    // is active while it is up and is closed only after the app answers, never before.
+    let tab
     try {
-      const tab = await api.tabs.create({ url: APP_LINK, active: false })
-      // The browser's hand-off page is not needed once the app has taken the link.
-      setTimeout(() => api.tabs.remove(tab.id).catch(() => {}), 3000)
+      tab = await api.tabs.create({ url: APP_LINK, active: true })
     } catch {
       // The browser refused the link (no app registered for it): nothing more to try.
       return null
+    }
+    const closeTab = () => {
+      if (tab?.id != null) api.tabs.remove(tab.id).catch(() => {})
     }
     const until = Date.now() + APP_WAIT_MS
     while (Date.now() < until) {
       await new Promise((done) => setTimeout(done, 500))
       const port = await findPort(true)
-      if (port) return port
+      if (port) {
+        closeTab()
+        return port
+      }
     }
+    closeTab()
     return null
   })().finally(() => {
     launching = null
@@ -172,27 +200,41 @@ function launchApp() {
   return launching
 }
 
-/** Sends a link to Lightning. Resolves 'ok', or why not: 'down' (app not running and could not be
- * started), 'key' (not paired or the key is old), 'error'. */
-async function sendToLightning(payload) {
+/** Posts to one of the app's routes, starting the app when it is closed. A stale port (the app was
+ * restarted) or an old key is put right and tried once more. `result` is 'ok', or why not: 'down' (app
+ * not running and could not be started), 'key' (not paired), 'off' (off in Settings), 'nothing' (no
+ * links on the clipboard), 'error'. `body` is the app's answer. */
+async function callApp(path, payload, retried = false) {
   const { key } = await settings()
   const port = (await findPort()) || (await launchApp())
-  if (!port) return 'down'
+  if (!port) return { result: 'down' }
+  let response
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/add`, {
+    response = await fetch(`http://127.0.0.1:${port}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(payload)
     })
-    if (response.status === 401) {
-      await repair(key)
-      return 'key'
-    }
-    return response.ok ? 'ok' : 'error'
   } catch {
     cachedPort = null
-    return 'down'
+    return retried ? { result: 'down' } : callApp(path, payload, true)
   }
+  if (response.status === 401) {
+    if (!retried && (await repair(key))) return callApp(path, payload, true)
+    return { result: 'key' }
+  }
+  if (response.status === 403) return { result: 'off' }
+  if (!response.ok) return { result: 'error', status: response.status }
+  return { result: 'ok', body: await response.json().catch(() => ({})) }
+}
+
+async function postToApp(path, payload) {
+  return (await callApp(path, payload)).result
+}
+
+/** Sends a link to Lightning. Resolves 'ok', or why not (see postToApp). */
+function sendToLightning(payload) {
+  return postToApp('/v1/add', payload)
 }
 
 /** Whether the key is right, without sending a link: 'ok', 'key', 'down' or 'error'. */
@@ -247,27 +289,45 @@ function isYoutubeHost(url) {
   }
 }
 
-/** The cookies a YouTube page needs, as the Video cookies setting in the popup allows them. */
-async function youtubeCookies(url) {
-  // Downloads from the browser always keep the sign-in in Lightning, so pasted links work too.
-  // An older 'send' setting counts as 'save'.
+/** How a video's cookies are sent, as the Video cookies setting in the popup allows: 'save' (YouTube
+ * only, kept in Lightning), 'send' (this download only; every other site), 'saved' or 'none'. */
+async function videoCookieMode(url) {
+  // An older 'send' setting counts as 'save' for YouTube.
   const { videoCookies } = await settings()
-  const mode = videoCookies === 'none' || videoCookies === 'saved' ? videoCookies : 'save'
-  if (mode !== 'save') return { cookieMode: mode }
-  try {
-    const cookies = (await api.cookies.getAll({ url })).map((cookie) => ({
-      domain: cookie.domain,
-      path: cookie.path,
-      secure: cookie.secure,
-      httpOnly: cookie.httpOnly,
-      expirationDate: cookie.expirationDate,
-      name: cookie.name,
-      value: cookie.value
-    }))
-    return { cookieMode: mode, cookies }
-  } catch {
-    return { cookieMode: mode, cookies: [] }
+  if (videoCookies === 'none' || videoCookies === 'saved') return videoCookies
+  return isYoutubeHost(url) ? 'save' : 'send'
+}
+
+/** The cookies the browser holds for these addresses, merged, in the shape the app reads. */
+async function cookiesFor(urls) {
+  const seen = new Map()
+  for (const url of urls) {
+    try {
+      for (const cookie of await api.cookies.getAll({ url })) {
+        const key = `${cookie.domain}|${cookie.path}|${cookie.name}`
+        if (seen.has(key)) continue
+        seen.set(key, {
+          domain: cookie.domain,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          expirationDate: cookie.expirationDate,
+          name: cookie.name,
+          value: cookie.value
+        })
+      }
+    } catch {
+      // No cookies for this address.
+    }
   }
+  return [...seen.values()]
+}
+
+/** The cookie fields a video link carries: the mode, and the cookies when they are sent. */
+async function youtubeCookies(url) {
+  const mode = await videoCookieMode(url)
+  if (mode !== 'save' && mode !== 'send') return { cookieMode: mode }
+  return { cookieMode: mode, cookies: await cookiesFor([url]) }
 }
 
 /** Hands one link over, with the page it came from and the cookies the browser holds for it. */
@@ -277,7 +337,7 @@ async function handOver(url, referrer, extra = {}) {
     referer: referrer || undefined,
     cookie: (await cookieHeader(url)) || undefined,
     userAgent: navigator.userAgent,
-    ...(isYoutubeHost(url) ? await youtubeCookies(url) : {}),
+    ...(isYoutubeHost(url) || MEDIA.isStreamLink(url) ? await youtubeCookies(url) : {}),
     ...extra
   }
   return sendToLightning(payload)
@@ -321,6 +381,8 @@ api.downloads.onCreated.addListener(async (item) => {
 // Right-click menu, five items (Scan was merged into Select; see the select mode in page-select.js).
 api.runtime.onInstalled.addListener(async () => {
   await langReady
+  // Items of an earlier version are replaced: one that is left would keep its old places.
+  await new Promise((done) => api.contextMenus.removeAll(() => done()))
   // A link, video, audio or image: the app takes it (a YouTube link goes to the YouTube downloader).
   api.contextMenus.create({
     id: 'lightning-download',
@@ -356,6 +418,25 @@ api.runtime.onInstalled.addListener(async () => {
     title: tr(MENU_TITLES['lightning-clipboard']),
     contexts: ['page', 'frame', 'editable']
   })
+  // The video on any web page: the app looks for it there, with this page's cookies.
+  api.contextMenus.create({
+    id: 'lightning-video',
+    title: tr(MENU_TITLES['lightning-video']),
+    contexts: ['page', 'frame'],
+    documentUrlPatterns: ['http://*/*', 'https://*/*']
+  })
+})
+
+// Pages already open get the page scripts too: theirs stopped answering when the extension was loaded.
+api.runtime.onInstalled.addListener(async () => {
+  const tabs = await api.tabs.query({ url: ['http://*/*', 'https://*/*'] }).catch(() => [])
+  for (const tab of tabs) {
+    if (!tab.id || tab.discarded) continue
+    const files = /^https:\/\/www\.youtube\.com\//i.test(tab.url || '')
+      ? ['context-capture.js', 'i18n.js', 'youtube-select.js']
+      : ['context-capture.js']
+    api.scripting.executeScript({ target: { tabId: tab.id }, files }).catch(() => {})
+  }
 })
 
 /** The links inside what the person has selected on the page (several files selected in a
@@ -391,29 +472,52 @@ async function selectedLinks(tab, frameId) {
 
 /** Sends the links of a page to Lightning's several-links dialog. */
 async function sendLinksToLightning(links, pageUrl) {
-  const { key } = await settings()
-  const port = await findPort()
-  if (!port) return 'down'
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/links`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        links,
-        referer: pageUrl,
-        cookie: (pageUrl && (await cookieHeader(pageUrl))) || undefined,
-        userAgent: navigator.userAgent
-      })
-    })
-    if (response.status === 401) {
-      await repair(key)
-      return 'key'
+  return postToApp('/v1/links', {
+    links,
+    referer: pageUrl,
+    cookie: (pageUrl && (await cookieHeader(pageUrl))) || undefined,
+    userAgent: navigator.userAgent
+  })
+}
+
+/** The YouTube video an address stands for, as a plain watch or Shorts page; null when it is none. */
+function youtubeVideo(value) {
+  const embedded = /^https:\/\/www\.youtube-nocookie\.com\/embed\//i.test(value || '')
+  if (!embedded && !isYoutubeHost(value)) return null
+  const url = new URL(value)
+  const [, kind, part] = url.pathname.split('/')
+  const id =
+    url.hostname.toLowerCase() === 'youtu.be'
+      ? kind
+      : kind === 'watch'
+        ? url.searchParams.get('v')
+        : ['shorts', 'embed', 'live'].includes(kind)
+          ? part
+          : null
+  if (!id || !/^[\w-]{6,}$/.test(id)) return null
+  return kind === 'shorts'
+    ? `https://www.youtube.com/shorts/${id}`
+    : `https://www.youtube.com/watch?v=${id}`
+}
+
+/** The YouTube video right-clicked: the player's own (theater and full screen too), an embedded one,
+ * or the preview that plays over a card in a list. */
+async function clickedYoutubeVideo(info, tab) {
+  const frame = youtubeVideo(info.frameUrl) || youtubeVideo(info.pageUrl) || youtubeVideo(tab?.url)
+  if (tab?.id && isYoutubeHost(tab.url || info.pageUrl)) {
+    try {
+      const reply = await api.tabs.sendMessage(
+        tab.id,
+        { type: 'video-near' },
+        { frameId: info.frameId ?? 0 }
+      )
+      const near = youtubeVideo(reply?.url)
+      if (near) return near
+    } catch {
+      // The page was open before the extension: its address is all there is.
     }
-    return response.ok ? 'ok' : 'error'
-  } catch {
-    cachedPort = null
-    return 'down'
   }
+  return frame
 }
 
 api.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -443,13 +547,36 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     await linksNearClick(tab, info.frameId)
     return
   }
+  if (info.menuItemId === 'lightning-video') {
+    if (!on.menuDownload) return
+    const page = info.pageUrl || tab?.url
+    if (!isHttpAddress(page)) return
+    const result = await sendVideoPage(page, tab?.title, page)
+    if (result !== 'ok') notify(problem(result))
+    return
+  }
   if (info.menuItemId === 'lightning-youtube') {
     if (!on.menuDownload || !info.pageUrl) return
-    const result = await handOver(info.pageUrl, tab?.url)
+    // The video alone, without the list or mix it plays from.
+    const result = await handOver(youtubeVideo(info.pageUrl) || info.pageUrl, tab?.url)
     if (result !== 'ok') notify(problem(result))
     return
   }
   if (!on.menuDownload) return
+  // A <video> whose source is a blob (a player's own stream) cannot be downloaded itself: the page is sent.
+  if (info.mediaType === 'video' && !isHttpAddress(info.srcUrl)) {
+    const youtube = await clickedYoutubeVideo(info, tab)
+    if (youtube) {
+      const result = await handOver(youtube, youtube)
+      if (result !== 'ok') notify(problem(result))
+      return
+    }
+    const page = info.pageUrl || tab?.url
+    if (!isHttpAddress(page)) return
+    const result = await sendVideoPage(page, tab?.title, page)
+    if (result !== 'ok') notify(problem(result))
+    return
+  }
   // A link, video or image under the mouse. On a bare page only a YouTube page is taken: the app then
   // sends it to the YouTube downloader; other pages say what to right-click.
   const isAddress = (value) => !!value && /^(https?:|magnet:)/i.test(value)
@@ -473,26 +600,8 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
 
 /** Asks the app to take the links on the clipboard: one goes to the Add dialog, several to the list. */
 async function sendClipboard() {
-  const { key } = await settings()
-  const port = await findPort()
-  if (!port) return 'down'
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/clipboard`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: '{}'
-    })
-    if (response.status === 401) {
-      await repair(key)
-      return 'key'
-    }
-    if (response.status === 403) return 'off'
-    if (response.status === 400) return 'nothing'
-    return response.ok ? 'ok' : 'error'
-  } catch {
-    cachedPort = null
-    return 'down'
-  }
+  const { result, status } = await callApp('/v1/clipboard', {})
+  return status === 400 ? 'nothing' : result
 }
 
 /** Downloads the links of the group the person right-clicked (a "copy links" button's list). */
@@ -521,10 +630,15 @@ async function linksNearClick(tab, frameId) {
   if (result !== 'ok') notify(problem(result))
 }
 
-/** Turns select mode on in the page (any site). The page script is injected only when asked. */
+/** Turns select mode on in the page: YouTube's own on YouTube, links on any other site. The page script
+ * is injected only when asked. */
 async function startSelect(tab, frameId) {
   if (!tab?.id) return
   try {
+    if (!frameId && /^https:\/\/(www|m)\.youtube\.com\//i.test(tab.url || '')) {
+      await startYoutubeSelect(tab.id)
+      return
+    }
     await api.scripting.executeScript({
       target: frameId ? { tabId: tab.id, frameIds: [frameId] } : { tabId: tab.id },
       files: ['i18n.js', 'page-select.js']
@@ -534,33 +648,167 @@ async function startSelect(tab, frameId) {
   }
 }
 
+async function startYoutubeSelect(tabId) {
+  const message = { type: 'youtube-select', on: true }
+  try {
+    await api.tabs.sendMessage(tabId, message, { frameId: 0 })
+  } catch {
+    // The page was open before the extension: put the script in, then switch the mode on.
+    await api.scripting.executeScript({
+      target: { tabId },
+      files: ['i18n.js', 'youtube-select.js']
+    })
+    await api.tabs.sendMessage(tabId, message, { frameId: 0 })
+  }
+}
+
 /** Sends the videos the select mode picked to Lightning's YouTube downloader, as one batch. */
 async function sendYoutubeBatch(videos) {
-  const { key } = await settings()
-  const port = await findPort()
-  if (!port) return { result: 'down' }
+  const { result, body } = await callApp('/v1/youtube-batch', { videos: videos.slice(0, 200) })
+  return result === 'ok' ? { result, started: body.started ?? videos.length } : { result }
+}
+
+/** Whether an address is a web address (http or https). */
+function isHttpAddress(value) {
+  return !!value && /^https?:\/\//i.test(value)
+}
+
+// ---- Videos on a page. What the page's responses carried, kept per tab until the page changes.
+// Session storage where the browser has it (Chromium, Firefox 115+); memory otherwise.
+let memoryVideos = {}
+let videoWrites = Promise.resolve()
+const sessionStore = () => api.storage?.session ?? null
+
+async function readVideos() {
+  const store = sessionStore()
+  if (!store) return memoryVideos
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/youtube-batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ videos: videos.slice(0, 200) })
-    })
-    if (response.status === 401) {
-      await repair(key)
-      return { result: 'key' }
-    }
-    if (response.status === 403) return { result: 'off' }
-    if (!response.ok) return { result: 'error' }
-    const body = await response.json().catch(() => ({}))
-    return { result: 'ok', started: body.started ?? videos.length }
+    const { videos } = await store.get({ videos: {} })
+    return videos && typeof videos === 'object' ? videos : {}
   } catch {
-    cachedPort = null
-    return { result: 'down' }
+    return memoryVideos
   }
+}
+
+/** Changes the video lists one write at a time, so two responses cannot overwrite each other. */
+function changeVideos(change) {
+  videoWrites = videoWrites
+    .then(async () => {
+      const videos = await readVideos()
+      change(videos)
+      memoryVideos = videos
+      const store = sessionStore()
+      if (store) await store.set({ videos }).catch(() => {})
+    })
+    .catch(() => {})
+  return videoWrites
+}
+
+function showBadge(tabId, count) {
+  try {
+    const action = api.action || api.browserAction
+    const pending = action?.setBadgeText({ tabId, text: count > 0 ? String(count) : '' })
+    if (pending?.catch) pending.catch(() => {})
+  } catch {
+    // This browser shows no badge for the tab.
+  }
+}
+
+function forgetVideos(tabId) {
+  return changeVideos((videos) => {
+    delete videos[String(tabId)]
+  }).then(() => showBadge(tabId, 0))
+}
+
+const MEDIA_URLS = ['http://*/*', 'https://*/*']
+const headerOf = (headers, name) =>
+  (headers || []).find((header) => header.name.toLowerCase() === name)?.value
+
+if (api.webRequest?.onResponseStarted) {
+  // A video is noticed as its response starts; the body is never read.
+  api.webRequest.onResponseStarted.addListener(
+    (details) => {
+      if (details.tabId < 0) return
+      const found = MEDIA.classify({
+        url: details.url,
+        tabId: details.tabId,
+        statusCode: details.statusCode,
+        contentType: headerOf(details.responseHeaders, 'content-type'),
+        contentLength: headerOf(details.responseHeaders, 'content-length'),
+        contentRange: headerOf(details.responseHeaders, 'content-range')
+      })
+      if (!found) return
+      const key = String(details.tabId)
+      changeVideos((videos) => {
+        videos[key] = MEDIA.addEntry(videos[key] || [], found)
+      }).then(() =>
+        readVideos().then((videos) => showBadge(details.tabId, (videos[key] || []).length))
+      )
+    },
+    { urls: MEDIA_URLS, types: ['media', 'xmlhttprequest', 'other'] },
+    ['responseHeaders']
+  )
+  // A new page in the tab: the videos of the old one are forgotten.
+  api.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      if (details.tabId >= 0) forgetVideos(details.tabId)
+    },
+    { urls: MEDIA_URLS, types: ['main_frame'] }
+  )
+}
+api.tabs.onRemoved.addListener((tabId) => {
+  forgetVideos(tabId)
+})
+
+/** The cookies of a video and of the page it is on, merged, for the app's video dialog. */
+async function sendVideoPage(url, title, pageUrl) {
+  const mode = await videoCookieMode(url)
+  const cookies =
+    mode === 'save' || mode === 'send'
+      ? await cookiesFor([...new Set([url, pageUrl].filter(Boolean))])
+      : []
+  return postToApp('/v1/video', {
+    url,
+    title: title || undefined,
+    pageUrl: pageUrl || undefined,
+    referer: pageUrl || undefined,
+    userAgent: navigator.userAgent,
+    cookieMode: mode,
+    cookies
+  })
+}
+
+/** One video of the popup's list: a file goes to the downloader, a stream to the video dialog. */
+async function sendVideoEntry(entry, pageUrl, title) {
+  if (!entry || !isHttpAddress(entry.url)) return 'error'
+  if (entry.stream) return sendVideoPage(entry.url, title, pageUrl)
+  return handOver(entry.url, pageUrl)
 }
 
 // The popup asks for the app's state.
 api.runtime.onMessage.addListener((message, _sender, respond) => {
+  // The videos the page's responses carried (for the popup's list).
+  if (message?.type === 'videos') {
+    readVideos().then((videos) =>
+      respond({ videos: MEDIA.sortEntries(videos[String(message.tabId)] || []) })
+    )
+    return true
+  }
+  if (message?.type === 'video-send') {
+    sendVideoEntry(message.entry, message.pageUrl, message.title).then((result) =>
+      respond({ result, message: result === 'ok' ? tr('v_sent') : problem(result) })
+    )
+    return true
+  }
+  // The popup's "Find video on this page": the page itself goes to the video dialog.
+  if (message?.type === 'video-find') {
+    const page = isHttpAddress(message.pageUrl) ? message.pageUrl : ''
+    if (!page) return false
+    sendVideoPage(page, message.title, page).then((result) =>
+      respond({ result, message: result === 'ok' ? tr('v_sent') : problem(result) })
+    )
+    return true
+  }
   if (message?.type === 'youtube-batch') {
     sendYoutubeBatch(Array.isArray(message.videos) ? message.videos : []).then((outcome) =>
       respond({ ...outcome, message: problem(outcome.result) })
@@ -591,9 +839,19 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
     settings().then(async ({ key }) => respond({ changed: await repair(key) }))
     return true
   }
+  // The popup's "Select videos" on YouTube.
+  if (message?.type === 'youtube-select-tab') {
+    startYoutubeSelect(message.tabId)
+      .catch(() => notify(tr('n_cantselect')))
+      .then(() => respond({ ok: true }))
+    return true
+  }
   // The popup's "Scan this page".
   if (message?.type === 'scan-page') {
-    startSelect({ id: message.tabId }).then(() => respond({ ok: true }))
+    api.tabs
+      .get(message.tabId)
+      .then((tab) => startSelect(tab))
+      .then(() => respond({ ok: true }))
     return true
   }
   if (message?.type === 'test') {

@@ -14,7 +14,8 @@ const t = (key, vars) => I18N.t(lang, key, vars)
 function applyLang() {
   document.documentElement.lang = lang
   document.documentElement.dir = I18N.dir(lang)
-  for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n)
+  for (const node of document.querySelectorAll('[data-i18n]'))
+    node.textContent = t(node.dataset.i18n)
   for (const node of document.querySelectorAll('[data-i18n-ph]'))
     node.placeholder = t(node.dataset.i18nPh)
   renderStatus()
@@ -31,7 +32,8 @@ function renderStatus() {
   }
   const [title, hint] = titles[state]
   $('st-title').textContent = t(title)
-  $('st-hint').textContent = state === 'ok' ? (version ? t('ok_h', { v: version }) : '') : hint ? t(hint) : ''
+  $('st-hint').textContent =
+    state === 'ok' ? (version ? t('ok_h', { v: version }) : '') : hint ? t(hint) : ''
   $('st-hint').hidden = !$('st-hint').textContent
   $('retry').hidden = state !== 'down'
   $('repair').hidden = state !== 'badkey'
@@ -39,7 +41,68 @@ function renderStatus() {
   $('scan').disabled = state !== 'ok' || !activeTab || !/^https?:/i.test(activeTab.url || '')
   $('yt').hidden = !(activeTab && isYoutube(activeTab.url))
   $('yt').disabled = state !== 'ok'
+  // "Find video on this page" works on any web page, whatever the app's state (it starts the app).
+  $('find').hidden = !isWebPage(activeTab?.url)
   $('ver').textContent = `v${api.runtime.getManifest().version}`
+}
+
+function isWebPage(url) {
+  return /^https?:\/\//i.test(url || '')
+}
+
+/** The videos the page's responses carried, each with its Download button. */
+async function renderVideos() {
+  if (!activeTab || !isWebPage(activeTab.url)) {
+    $('videos-card').hidden = true
+    return
+  }
+  const { videos = [] } =
+    (await api.runtime.sendMessage({ type: 'videos', tabId: activeTab.id })) || {}
+  const list = $('video-list')
+  list.textContent = ''
+  for (const entry of videos) {
+    const row = document.createElement('li')
+    row.className = 'video-row'
+    const text = document.createElement('span')
+    text.className = 'video-text'
+    const name = document.createElement('span')
+    name.className = 'video-name'
+    name.textContent = entry.name
+    const meta = document.createElement('span')
+    meta.className = 'video-meta'
+    meta.textContent = entry.size ? `${entry.format} · ${formatSize(entry.size)}` : entry.format
+    text.append(name, meta)
+    const button = document.createElement('button')
+    button.className = 'btn'
+    button.textContent = t('v_download')
+    button.addEventListener('click', () => sendVideo(entry))
+    row.append(text, button)
+    list.append(row)
+  }
+  $('videos-none').hidden = videos.length > 0
+  $('videos-card').hidden = false
+}
+
+function formatSize(bytes) {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
+/** Shows what the background said about a send (its message is already in the user's language). */
+function showVideoMessage(message) {
+  $('video-msg').textContent = message || ''
+  $('video-msg').hidden = !message
+}
+
+async function sendVideo(entry) {
+  const reply = await api.runtime.sendMessage({
+    type: 'video-send',
+    entry,
+    pageUrl: activeTab?.url,
+    title: activeTab?.title
+  })
+  showVideoMessage(reply?.message)
 }
 
 function isYoutube(url) {
@@ -90,7 +153,9 @@ async function save(fields) {
   setTimeout(() => ($('saved').hidden = true), 1500)
 }
 
-$('enabled').addEventListener('change', () => api.storage.local.set({ enabled: $('enabled').checked }))
+$('enabled').addEventListener('change', () =>
+  api.storage.local.set({ enabled: $('enabled').checked })
+)
 
 $('save').addEventListener('click', () =>
   save({
@@ -126,17 +191,18 @@ $('scan').addEventListener('click', async () => {
 
 $('yt').addEventListener('click', async () => {
   if (!activeTab) return
-  try {
-    await api.tabs.sendMessage(activeTab.id, { type: 'youtube-select' })
-  } catch {
-    // The page was open before the extension: put the script in, then switch the mode on.
-    await api.scripting.executeScript({
-      target: { tabId: activeTab.id },
-      files: ['i18n.js', 'youtube-select.js']
-    })
-    await api.tabs.sendMessage(activeTab.id, { type: 'youtube-select' })
-  }
+  await api.runtime.sendMessage({ type: 'youtube-select-tab', tabId: activeTab.id })
   window.close()
+})
+
+$('find').addEventListener('click', async () => {
+  if (!activeTab || !isWebPage(activeTab.url)) return
+  const reply = await api.runtime.sendMessage({
+    type: 'video-find',
+    pageUrl: activeTab.url,
+    title: activeTab.title
+  })
+  showVideoMessage(reply?.message)
 })
 
 async function start() {
@@ -148,5 +214,6 @@ async function start() {
   }
   await load()
   await refresh()
+  await renderVideos()
 }
 start()

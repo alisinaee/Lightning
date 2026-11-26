@@ -14,7 +14,7 @@ import {
   cellClass
 } from '../downloads/cells'
 import { FormatBadge } from '../downloads/FileKindIcon'
-import { onControl, REVEAL_LABEL, ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
+import { onControl, revealLabel, ROW_CLASS, stateEdge } from '../downloads/rowHelpers'
 import { RowActionsMenu, RowContextMenu, type RowAction } from '../downloads/rowMenu'
 import { RowProgressLine } from '../downloads/RowProgressLine'
 import { fileKindOfMedia, itemInfo, jobActions, useTelegramColumns } from './telegramRowInfo'
@@ -50,7 +50,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
       },
       {
         id: 'reveal',
-        label: REVEAL_LABEL,
+        label: revealLabel(),
         icon: FolderOpen,
         run: () => void window.lightning.tdlRevealItem(job.id, item.key)
       }

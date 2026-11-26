@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createServer, type IncomingMessage } from 'node:http'
 import { connect as netConnect, type AddressInfo } from 'node:net'
 import type { NetworkInterfaceInfo, ProxyConfig } from '../src/shared/types'
+import { buildHeaders, splitUrlCredentials } from '../src/shared/requestHeaders'
 import { StreamConnection } from '../src/main/network/routes'
 
 const iface: NetworkInterfaceInfo = {
@@ -129,6 +130,28 @@ test('a request abandoned while still connecting gives up the connection with it
   ).rejects.toMatchObject({ name: 'AbortError' })
   expect(Date.now() - started).toBeLessThan(1000)
   connection.close()
+})
+
+test('a link that includes a username and password sends basic authorization @smoke', async () => {
+  let authorization: string | undefined
+  const server = createServer((req, res) => {
+    authorization = req.headers.authorization
+    res.end('ok')
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const connection = new StreamConnection(() => loopback, { timeoutMs: 2000 })
+  try {
+    const port = (server.address() as AddressInfo).port
+    const { url, auth } = splitUrlCredentials(`http://user:p%40ss@127.0.0.1:${port}/file.zip`)
+    const link = new URL(url)
+    expect(await body((await connection.request(link, buildHeaders({ auth }, {}, url))).res)).toBe(
+      'ok'
+    )
+    expect(authorization).toBe(`Basic ${Buffer.from('user:p@ss').toString('base64')}`)
+  } finally {
+    connection.close()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
 })
 
 test('a network that comes back with a new address is reached at that one @smoke', async () => {

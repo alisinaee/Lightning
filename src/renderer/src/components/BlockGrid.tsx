@@ -2,7 +2,7 @@ import { t, tn } from '@shared/i18n/react'
 import type { DownloadUnitState, TorrentPieceStatus } from '@shared/types'
 import { cn } from 'cn'
 import { ArrowDown, ArrowUp } from '@phosphor-icons/react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { NetworkVisual } from '../theme'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { formatBytes, type NetworkGroup } from '../utils/format'
@@ -201,14 +201,28 @@ export function BlockGrid({
     observerRef.current = observer
   }, [])
 
-  if (blocks && blocks.length > 1) {
-    const visualByInterfaceId = new Map<string, NetworkVisual>()
+  const visualByInterfaceId = useMemo(() => {
+    const map = new Map<string, NetworkVisual>()
     groups.forEach((g, idx) => {
       if (visuals[idx]) {
-        visualByInterfaceId.set(g.id, visuals[idx])
+        map.set(g.id, visuals[idx])
       }
     })
+    return map
+  }, [groups, visuals])
 
+  const activeRows = useMemo(() => {
+    if (!blocks || blocks.length <= 1 || cols <= 0) return []
+    const rows: number[] = []
+    for (let index = 0; index < blocks.length; index++) {
+      if (blocks[index].status === 'downloading') {
+        rows.push(Math.floor(index / cols))
+      }
+    }
+    return rows
+  }, [blocks, cols])
+
+  if (blocks && blocks.length > 1) {
     const orderedInterfaceIds = groups.map((g) => g.id)
     const chunkBytes =
       blocks[0].rangeEnd !== null ? blocks[0].rangeEnd - blocks[0].rangeStart + 1 : 0
@@ -235,9 +249,6 @@ export function BlockGrid({
     // points the way to the nearest of it, and goes there.
     const firstInView = Math.round(scrollTop / rowStride)
     const lastInView = firstInView + visibleRows - 1
-    const activeRows = blocks.flatMap((block, index) =>
-      block.status === 'downloading' ? [Math.floor(index / cols)] : []
-    )
     const nearestActive =
       rows <= MAX_VISIBLE_ROWS || activeRows.some((row) => row >= firstInView && row <= lastInView)
         ? null

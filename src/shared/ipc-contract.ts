@@ -221,7 +221,7 @@ export interface IpcContract {
 
   /** YouTube downloads (main/youtube) */
   youtubeStatus: { args: []; result: YoutubeStatus }
-  youtubeProbe: { args: [url: string]; result: YoutubeVideoMeta }
+  youtubeProbe: { args: [url: string, offerId?: string]; result: YoutubeVideoMeta }
   youtubeStart: { args: [request: StartYoutubeRequest]; result: YoutubeJob }
   youtubeListJobs: { args: []; result: YoutubeJob[] }
   youtubePauseJob: { args: [id: string]; result: void }

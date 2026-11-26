@@ -3,6 +3,7 @@ import { formatNumber, t, tn } from '@shared/i18n/react'
 import { ThroughVpn } from '../components/ThroughVpn'
 import { HeroBand } from '../components/HeroBand'
 import { DetailHeader } from '../components/DetailHeader'
+import { revealLabel } from '../components/downloads/rowHelpers'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { Button } from '../components/ui/button'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
@@ -70,7 +71,7 @@ export function CompleteScreen({
     <div className="flex h-full flex-col bg-background">
       <DetailHeader download={download}>
         <Button type="button" onClick={handleReveal} disabled={missing}>
-          {window.lightning.platform === 'darwin' ? t('Show in Finder') : t('Show in folder')}
+          {revealLabel()}
         </Button>
       </DetailHeader>
       <div role="status" className="sr-only">
