@@ -1,14 +1,12 @@
 import { t } from '../shared/i18n'
-import { app, dialog, shell, type BrowserWindow } from 'electron'
+import { app, dialog, type BrowserWindow } from 'electron'
+import { guidePermission } from './permissions'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDefaultDownloadsDir } from './download/paths'
 import { loadSettings } from './settings'
 import { readJson, updateJson } from './jsonFile'
 import { log } from './logger'
-
-const PRIVACY_FILES_AND_FOLDERS =
-  'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders'
 
 /**
  * On macOS, a folder Lightning saves to can be blocked by the system's privacy protection. Listing
@@ -51,5 +49,5 @@ export async function askForFolderAccess(window: BrowserWindow | null): Promise<
   const { response } = await (window && !window.isDestroyed()
     ? dialog.showMessageBox(window, options)
     : dialog.showMessageBox(options))
-  if (response === 0) await shell.openExternal(PRIVACY_FILES_AND_FOLDERS)
+  if (response === 0) await guidePermission('folder')
 }

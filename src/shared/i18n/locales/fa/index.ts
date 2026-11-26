@@ -8,6 +8,7 @@ import telegram from './telegram'
 import youtube from './youtube'
 import tray from './tray'
 import misc from './misc'
+import permissions from './permissions'
 
 export default mergeDicts('fa', {
   common,
@@ -18,5 +19,6 @@ export default mergeDicts('fa', {
   telegram,
   youtube,
   tray,
-  misc
+  misc,
+  permissions
 })

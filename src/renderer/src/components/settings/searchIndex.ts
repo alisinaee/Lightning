@@ -12,6 +12,17 @@ export interface SettingEntry {
 }
 
 export const SETTINGS_INDEX: SettingEntry[] = [
+  // Permissions
+  {
+    page: 'Permissions',
+    label: 'Full Disk Access',
+    keywords: ['permission', 'privacy', 'safari', 'allow', 'access']
+  },
+  {
+    page: 'Permissions',
+    label: 'Download folder',
+    keywords: ['permission', 'privacy', 'files and folders', 'allow']
+  },
   // General
   {
     page: 'General',

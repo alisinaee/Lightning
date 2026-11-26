@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { dialog, shell, type BrowserWindow } from 'electron'
+import { dialog, type BrowserWindow } from 'electron'
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { ResolvedPrefs } from '../../shared/types'
 import { isYoutubeUrl, type YoutubeJob } from '../../shared/youtube'
@@ -16,6 +16,7 @@ import { savedCookiesPath, sanitizeCookies, signInArgs, writeCookiesFile } from 
 import { installedBrowsers } from '../youtube/browsers'
 import { YoutubeJobManager, type CookieFile } from '../youtube/jobs'
 import { probeYoutube, type ProbeExtras } from '../youtube/probe'
+import { guidePermission, permissionStatus } from '../permissions'
 import { createJobThrottler, handle, sendToWindow, showAppNotification } from './ipcHelpers'
 
 const OFFER_TTL_MS = 30 * 60 * 1000
@@ -86,13 +87,9 @@ export async function registerYoutubeHandlers(
 
   handle('youtubeBrowsers', async () => installedBrowsers())
 
-  handle('openFullDiskAccess', async () => {
-    if (process.platform === 'darwin') {
-      await shell.openExternal(
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
-      )
-    }
-  })
+  handle('openFullDiskAccess', () => guidePermission('fullDisk'))
+  handle('permissionStatus', () => permissionStatus())
+  handle('guidePermission', (_event, kind) => guidePermission(kind))
 
   handle('youtubeStart', async (_event, request) => {
     const offer = request.offerId ? offers.get(request.offerId) : undefined

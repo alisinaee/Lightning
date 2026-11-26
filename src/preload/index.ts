@@ -105,6 +105,9 @@ const lightningApi = {
   youtubeChooseCookies: (): Promise<string | null> => invoke('youtubeChooseCookies'),
   youtubeBrowsers: () => invoke('youtubeBrowsers'),
   openFullDiskAccess: (): Promise<void> => invoke('openFullDiskAccess'),
+  permissionStatus: () => invoke('permissionStatus'),
+  guidePermission: (kind: IpcContract['guidePermission']['args'][0]): Promise<void> =>
+    invoke('guidePermission', kind),
   youtubeCancelOffer: (id: string): Promise<void> => invoke('youtubeCancelOffer', id),
   getDns: () => invoke('getDns'),
   testDns: (url: string, currentDnsId: string | null, extras?: RequestExtras) =>

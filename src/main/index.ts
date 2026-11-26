@@ -1,5 +1,6 @@
 import { t } from '../shared/i18n'
 import { removeStaleTemps } from './jsonFile'
+import { registerGrantPanel } from './permissions'
 import { registerGlassWindow } from './glass'
 import { externalStates } from './externalActivity'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -298,6 +299,7 @@ app.whenReady().then(async () => {
   )
 
   void removeStaleTemps(app.getPath('userData'))
+  registerGrantPanel()
 
   // The extension set up in Documents gets this version's files (the browser reloads it).
   void refreshInstalledExtension().catch((error) =>

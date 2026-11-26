@@ -1,3 +1,4 @@
+import type { PermissionKind, PermissionStatus } from './permissions'
 import type { DuplicateMatch, DuplicateOptions } from './duplicates'
 import type { DnsTestResult } from './dnsRecommend'
 import type { TdlChat, TdlItem, TdlJob, TdlLoginMode, TdlRangeType, TdlStatus } from './telegram'
@@ -239,5 +240,9 @@ export interface IpcContract {
   youtubeBrowsers: { args: []; result: Exclude<YoutubeOptions['cookiesBrowser'], ''>[] }
   /** macOS: opens System Settings at Full Disk Access (Safari's cookies need it). */
   openFullDiskAccess: { args: []; result: void }
+  /** The macOS privacy permissions Lightning holds. */
+  permissionStatus: { args: []; result: PermissionStatus }
+  /** Opens System Settings at a permission, with the drag panel over it. */
+  guidePermission: { args: [kind: PermissionKind]; result: void }
   youtubeCancelOffer: { args: [id: string]; result: void }
 }

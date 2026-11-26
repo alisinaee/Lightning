@@ -19,10 +19,11 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        // The main window's preload, and the panel under the menu-bar icon's own.
+        // The main window's preload, the menu-bar panel's, and the permission panel's.
         input: {
           index: resolve('src/preload/index.ts'),
-          tray: resolve('src/preload/tray.ts')
+          tray: resolve('src/preload/tray.ts'),
+          grant: resolve('src/preload/grant.ts')
         }
       }
     }
@@ -39,7 +40,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
-          tray: resolve('src/renderer/tray.html')
+          tray: resolve('src/renderer/tray.html'),
+          grant: resolve('src/renderer/grant.html')
         }
       }
     }

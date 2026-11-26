@@ -21,6 +21,7 @@ import {
   MagnifyingGlass,
   PaintBrush,
   Rows,
+  ShieldCheck,
   SlidersHorizontal,
   WifiHigh,
   X,
@@ -36,6 +37,7 @@ import { NetworkSettings } from './settings/NetworkSettings'
 import { NumberField, Row } from './settings/SettingsControls'
 import { StatusBarSettings } from './settings/StatusBarSettings'
 import { TelegramSettings } from './settings/TelegramSettings'
+import { PermissionsSettings } from './settings/PermissionsSettings'
 import { searchSettings, type SettingEntry } from './settings/searchIndex'
 
 const PAGES = [
@@ -45,6 +47,7 @@ const PAGES = [
   'Appearance',
   'Network',
   'Notifications',
+  'Permissions',
   'Power',
   'Schedule',
   'Browser',
@@ -62,6 +65,7 @@ const NAV: Record<(typeof PAGES)[number], { color: string; icon: React.ReactNode
   Appearance: { color: '#af52de', icon: <PaintBrush /> },
   Network: { color: '#007aff', icon: <WifiHigh /> },
   Notifications: { color: '#ff3b30', icon: <Bell /> },
+  Permissions: { color: '#0a84ff', icon: <ShieldCheck /> },
   Power: { color: '#ff9500', icon: <Lightning /> },
   Schedule: { color: '#ff2d55', icon: <CalendarBlank /> },
   Browser: { color: '#32ade6', icon: <Globe /> },
@@ -271,7 +275,9 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
               ))
             ))}
           {query.trim() === '' &&
-            PAGES.map((entry) => (
+            PAGES.filter(
+              (entry) => entry !== 'Permissions' || window.lightning.platform === 'darwin'
+            ).map((entry) => (
               <button
                 key={entry}
                 type="button"
@@ -432,6 +438,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
             <AppearanceSettings prefs={prefs} save={save} theme={theme} setTheme={setTheme} />
           )}
           {page === 'Network' && <NetworkSettings prefs={prefs} save={save} />}
+          {page === 'Permissions' && <PermissionsSettings />}
           {page === 'Notifications' && (
             <>
               <Row
