@@ -110,6 +110,14 @@ function send(): void {
 /** Opens System Settings at `kind`'s list, with the drag panel over it until it is allowed. */
 export async function guidePermission(kind: PermissionKind): Promise<void> {
   if (process.platform !== 'darwin') return
+  // The panel goes on the screen the person is working on: the window they asked from, else the
+  // pointer's. Read now, before System Settings takes the focus.
+  const from = BrowserWindow.getFocusedWindow()
+  const area = (
+    from && !from.isDestroyed()
+      ? screen.getDisplayMatching(from.getBounds())
+      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  ).workArea
   await shell.openExternal(PANE[kind])
   log.info('app', `guiding the ${kind} permission`)
   const bundle = appBundle()
@@ -124,7 +132,7 @@ export async function guidePermission(kind: PermissionKind): Promise<void> {
     appName: app.getName(),
     language: getLanguage()
   }
-  showPanel()
+  showPanel(area)
   if (poll) clearInterval(poll)
   poll = setInterval(() => {
     void granted(kind).then((ok) => {
@@ -137,13 +145,12 @@ export async function guidePermission(kind: PermissionKind): Promise<void> {
   }, POLL_MS)
 }
 
-function showPanel(): void {
+function showPanel(area: Electron.Rectangle): void {
   if (panel && !panel.isDestroyed()) {
     send()
     panel.showInactive()
     return
   }
-  const area = screen.getPrimaryDisplay().workArea
   const window = (panel = new BrowserWindow({
     x: Math.round(area.x + area.width / 2 - WIDTH / 2),
     y: Math.round(area.y + area.height - HEIGHT - BOTTOM_GAP),
@@ -164,8 +171,6 @@ function showPanel(): void {
     hasShadow: true,
     transparent: true,
     backgroundColor: '#00000000',
-    vibrancy: 'hud',
-    visualEffectState: 'active',
     roundedCorners: true,
     webPreferences: {
       preload: join(__dirname, '../preload/grant.js'),
@@ -178,7 +183,11 @@ function showPanel(): void {
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   window.webContents.on('will-navigate', (event) => event.preventDefault())
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  window.once('ready-to-show', () => window.showInactive())
+  // A window that can't take the focus may never get ready-to-show while hidden: shown once its
+  // page has loaded instead.
+  window.webContents.once('did-finish-load', () => {
+    if (!window.isDestroyed()) window.showInactive()
+  })
   window.on('closed', () => {
     if (panel === window) {
       panel = null

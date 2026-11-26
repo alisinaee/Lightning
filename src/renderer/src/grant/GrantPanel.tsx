@@ -41,7 +41,7 @@ export function GrantPanel(): React.JSX.Element | null {
   return (
     <div
       dir={isRtl(language) ? 'rtl' : 'ltr'}
-      className="relative flex h-screen items-center gap-4 px-5 text-foreground"
+      className="relative flex h-screen items-center gap-4 overflow-hidden rounded-[18px] bg-popover px-5 text-popover-foreground ring-1 ring-foreground/10"
     >
       <button
         type="button"
