@@ -28,18 +28,29 @@ const POLL_MS = 1200
 /** How long "Allowed" stays up before the panel closes. */
 const DONE_MS = 1600
 
-/** Full Disk Access: reading the privacy database itself is allowed only with it. */
-async function hasFullDiskAccess(): Promise<boolean> {
-  try {
-    const file = await open(
-      join(homedir(), 'Library/Application Support/com.apple.TCC/TCC.db'),
-      'r'
-    )
-    await file.close()
-    return true
-  } catch {
-    return false
+/** Files only Full Disk Access can read. The first one that exists answers: opened, it is on;
+ * refused, it is off. (The per-user privacy database is missing on some Macs, so the system one
+ * comes first.) */
+const FULL_DISK_PROBES = [
+  '/Library/Application Support/com.apple.TCC/TCC.db',
+  join(homedir(), 'Library/Application Support/com.apple.TCC/TCC.db'),
+  join(homedir(), 'Library/Safari/Bookmarks.plist'),
+  join(homedir(), 'Library/Safari')
+]
+
+/** Full Disk Access: true or false, or null when none of the probes exists to tell. */
+async function hasFullDiskAccess(): Promise<boolean | null> {
+  for (const path of FULL_DISK_PROBES) {
+    try {
+      if (path.endsWith('Safari')) await readdir(path)
+      else await (await open(path, 'r')).close()
+      return true
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return false
+    }
   }
+  return null
 }
 
 async function hasFolderAccess(): Promise<boolean> {
