@@ -4,7 +4,7 @@ import { registerGrantPanel } from './permissions'
 import { registerGlassWindow } from './glass'
 import { externalStates } from './externalActivity'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, nativeTheme, session, shell } from 'electron'
 import { installAppMenu, installTray } from './appMenu'
 import { createTrayPanel } from './trayPanel'
 import {
@@ -18,7 +18,8 @@ import {
 import { loadSettings } from './settings'
 import { askForFolderAccess } from './folderAccess'
 import { loadWindowState, trackWindowState } from './windowState'
-import { join } from 'path'
+import { spawn } from 'node:child_process'
+import { basename, join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon-dark.png?asset'
 import dockIcon from '../../resources/icon-mac.png?asset'
@@ -378,6 +379,29 @@ app.whenReady().then(async () => {
   })
 })
 
+/** Ends this process for sure once it has said it is quitting. Node's last cleanup can wait
+ * forever on a handle that never closes, leaving a Lightning with no window that macOS brings
+ * forward instead of opening a new one. Everything is saved by now, so a hard stop loses nothing;
+ * the check of the process name keeps it from touching anything else. */
+function exitForSure(): void {
+  app.releaseSingleInstanceLock()
+  // What the pages keep (local storage, cookies) is written out now, so the stop below can't
+  // cut it short.
+  session.defaultSession.flushStorageData()
+  if (process.platform !== 'win32') {
+    const name = basename(process.execPath).replace(/'/g, '')
+    spawn(
+      '/bin/sh',
+      [
+        '-c',
+        `sleep 0.8; ps -p ${process.pid} -o comm= | grep -q '${name}' && kill -9 ${process.pid}`
+      ],
+      { detached: true, stdio: 'ignore' }
+    ).unref()
+  }
+  app.exit(0)
+}
+
 app.on('before-quit', (event) => {
   quitting = true
   if (quitAfterSuspending || !downloadManager) return
@@ -386,10 +410,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
 
   // Guarantee the process exits even if suspending hangs
-  const forceQuitTimeout = setTimeout(() => {
-    app.releaseSingleInstanceLock()
-    app.exit(0)
-  }, 3000)
+  const forceQuitTimeout = setTimeout(exitForSure, 3000)
 
   void Promise.all([downloadManager.suspendAll(), telegram?.dispose(), youtube?.dispose()]).finally(
     () => {
@@ -399,8 +420,7 @@ app.on('before-quit', (event) => {
       // Everything is saved: a Lightning opened while this one is still closing down (Quit, then
       // the Dock at once, or macOS's Quit & Reopen) may start, instead of finding the lock held
       // and leaving without a window.
-      app.releaseSingleInstanceLock()
-      app.exit(0)
+      exitForSure()
     }
   )
 })
