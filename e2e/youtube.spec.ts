@@ -31,7 +31,7 @@ test.describe('YouTube screen UI & yt-dlp', () => {
       return await window.lightning.youtubeStatus()
     })
     expect(status.binary).toBe(true)
-    expect(status.version).toBe('2026.10.26')
+    expect(status.version).toBe('2026.11.23')
     expect(status.ffmpeg).toBe(true)
 
     const youtubeBtn = page.getByRole('tab', { name: /^YouTube/ })
@@ -40,7 +40,7 @@ test.describe('YouTube screen UI & yt-dlp', () => {
 
     // The screen's heading is for screen readers; the sidebar and the top bar carry the name.
     await expect(page.getByRole('heading', { name: 'YouTube' })).toBeAttached()
-    await expect(page.getByText(/yt-dlp 2026\.10\.26/)).toBeVisible()
+    await expect(page.getByText(/yt-dlp 2026\.11\.23/)).toBeVisible()
 
     // Adding a video opens the dialog with the link box.
     await page.getByRole('button', { name: 'Add video' }).first().click()

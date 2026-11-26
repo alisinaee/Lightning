@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const YT_DLP_VERSION = '2026.10.26'
+export const YT_DLP_VERSION = '2026.11.23'
 const BASE = `https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}`
 const ASSETS = {
   'darwin-arm64': 'yt-dlp_macos',
