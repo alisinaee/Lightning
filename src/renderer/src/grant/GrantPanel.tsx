@@ -3,6 +3,7 @@ import { isLang } from '@shared/i18n'
 import { isRtl, setLanguage, t, useLanguage } from '@shared/i18n/react'
 import { ArrowSquareOut, CheckCircle, CircleNotch, HandGrabbing, X } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
+import appIcon from '../../../../resources/icon-mac.png'
 
 /** The panel that floats over System Settings while Lightning asks for a permission. Full Disk
  * Access takes the app dropped onto its list, so the icon here can be dragged there. */
@@ -67,16 +68,12 @@ export function GrantPanel(): React.JSX.Element | null {
               : 'bg-foreground/5'
         }`}
       >
-        {state.icon ? (
-          <img
-            src={state.icon}
-            alt=""
-            draggable={false}
-            className={`size-16 transition-transform ${state.draggable && !allowed ? 'group-hover:scale-105' : ''}`}
-          />
-        ) : (
-          <div className="size-16 rounded-2xl bg-primary/40" />
-        )}
+        <img
+          src={appIcon}
+          alt=""
+          draggable={false}
+          className={`size-16 transition-transform ${state.draggable && !allowed ? 'group-hover:scale-105' : ''}`}
+        />
         {allowed ? (
           <CheckCircle
             size={26}

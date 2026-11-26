@@ -17,7 +17,5 @@ export interface GrantPanelState {
   /** Whether the app can be dragged into the list (Full Disk Access takes a dropped app). */
   draggable: boolean
   appName: string
-  /** The app's icon as a data URL, or '' when there is none to show. */
-  icon: string
   language: string
 }

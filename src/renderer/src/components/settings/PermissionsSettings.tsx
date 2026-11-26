@@ -41,7 +41,6 @@ export function PermissionsSettings(): React.JSX.Element {
   return (
     <>
       <div>
-        <div className="text-[15px] font-semibold">{t('Permissions')}</div>
         <div className="ios-note">
           {t(
             'What macOS lets Lightning do. Allow opens System Settings with a small guide; for Full Disk Access, drag the Lightning icon from the guide into the list.'
@@ -58,7 +57,9 @@ export function PermissionsSettings(): React.JSX.Element {
                 <span className="ios-hint">{t(hint)}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                {value === true ? (
+                {status === null ? (
+                  <span className="text-[12px] text-muted-foreground">{t('Checking…')}</span>
+                ) : value === true ? (
                   <span className="flex items-center gap-1 text-[12px] font-medium text-emerald-500">
                     <CheckCircle size={15} weight="fill" />
                     {t('Allowed')}

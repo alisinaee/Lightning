@@ -7,6 +7,7 @@ import { getLanguage } from '../shared/i18n'
 import type { GrantPanelState, PermissionKind, PermissionStatus } from '../shared/permissions'
 import { getDefaultDownloadsDir } from './download/paths'
 import { log } from './logger'
+import dragIcon from '../../resources/icon-drag.png?asset'
 import { loadSettings } from './settings'
 
 // macOS privacy permissions, and the small panel that floats over System Settings so the person
@@ -55,7 +56,15 @@ async function hasFolderAccess(): Promise<boolean> {
 /** What Lightning holds now. Off macOS there is nothing to ask for. */
 export async function permissionStatus(): Promise<PermissionStatus> {
   if (process.platform !== 'darwin') return { fullDisk: true, folder: true, notifications: null }
-  const [fullDisk, folder] = await Promise.all([hasFullDiskAccess(), hasFolderAccess()])
+  // A folder check can wait on a macOS prompt the person has not answered: past a moment it
+  // reads as unknown, so the other rows still show.
+  const [fullDisk, folder] = await Promise.all([
+    hasFullDiskAccess(),
+    Promise.race([
+      hasFolderAccess(),
+      new Promise<null>((resolve) => setTimeout(resolve, 1500, null))
+    ])
+  ])
   // macOS reports notification permission to no one outside the app's own notification center.
   return { fullDisk, folder, notifications: null }
 }
@@ -64,6 +73,12 @@ async function granted(kind: PermissionKind): Promise<boolean | null> {
   if (kind === 'fullDisk') return hasFullDiskAccess()
   if (kind === 'folder') return hasFolderAccess()
   return null
+}
+
+/** Lightning's icon, small, for the drag. (A 1024 px icon decoded here takes Electron 44 down,
+ * as app.getFileIcon does; the panel shows its own copy.) */
+function iconImage(): Electron.NativeImage {
+  return nativeImage.createFromPath(dragIcon)
 }
 
 /** The app bundle System Settings must list: Lightning.app, or Electron.app in a dev run. */
@@ -107,12 +122,6 @@ export async function guidePermission(kind: PermissionKind): Promise<void> {
     // Only Full Disk Access takes an app dropped on it; Files and Folders lists it by itself.
     draggable: kind === 'fullDisk' && bundle !== null,
     appName: app.getName(),
-    icon: bundle
-      ? await app.getFileIcon(bundle, { size: 'large' }).then(
-          (image) => image.toDataURL(),
-          () => ''
-        )
-      : '',
     language: getLanguage()
   }
   showPanel()
@@ -142,8 +151,8 @@ function showPanel(): void {
     height: HEIGHT,
     show: false,
     frame: false,
-    // A panel that never takes the focus: System Settings stays in front and keeps it.
-    type: 'panel',
+    // Never takes the focus: System Settings stays in front and keeps it. (Not type: 'panel',
+    // which crashes Electron 44 on macOS when the window is made.)
     focusable: false,
     acceptFirstMouse: true,
     resizable: false,
@@ -194,14 +203,11 @@ export function registerGrantPanel(): void {
     if (!panel || event.sender !== panel.webContents) return
     const bundle = appBundle()
     if (!bundle) return
-    // The app's Finder icon goes with the drag, as it would from Finder.
-    void app
-      .getFileIcon(bundle, { size: 'large' })
-      .catch(() => nativeImage.createEmpty())
-      .then((icon) => {
-        if (!panel || panel.isDestroyed()) return
-        panel.webContents.startDrag({ file: bundle, icon: icon.resize({ width: 64, height: 64 }) })
-      })
+    // The app's icon goes with the drag, as it would from Finder.
+    panel.webContents.startDrag({
+      file: bundle,
+      icon: iconImage().resize({ width: 64, height: 64 })
+    })
   })
   ipcMain.on('grant:close', (event) => {
     if (panel && event.sender === panel.webContents) closePanel()
