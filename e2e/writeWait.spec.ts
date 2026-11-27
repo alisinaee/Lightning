@@ -27,8 +27,9 @@ test('a disk-held range is not fetched again while other streams finish @smoke',
     for (const name of ['_write', '_writev'] as const) {
       const original = prototype[name]
       prototype[name] = function (...args) {
-        const hold = first
-        first = false
+        // Only a download's writer has a start: the log's append stream doesn't count.
+        const hold = first && typeof this.start === 'number'
+        if (hold) first = false
         if (hold) seen.heldWriterStart = this.start
         const callback = args.pop() as (error?: Error | null) => void
         original.call(this, ...args, (error?: Error | null) => {
