@@ -74,6 +74,9 @@ const listedItems = (entry: ListEntry, only: Map<string, Set<string>> | null): I
 const platformTrash = (): string =>
   window.lightning.platform === 'win32' ? t('Recycle Bin') : t('Trash')
 
+/** How long a bulk pause, resume or remove may keep the toolbar's buttons off. */
+const BULK_LOCK_MAX_MS = 3000
+
 const isUnfinished = (item: Item): boolean => !isFinished(item) && item.status !== 'completed'
 const isTrashable = (item: Item): boolean =>
   !isUnfinished(item) &&
@@ -223,33 +226,37 @@ export function DownloadsScreen({
     if (busy) return
     setBusy(true)
     setActionError(null)
-    try {
-      for (const item of targets) {
-        if (action === 'pause') await window.lightning.pauseDownload(item.id)
-        else if (action === 'resume') await window.lightning.resumeDownload(item.id)
-        else {
-          await window.lightning.removeDownload(item.id, { trashFile: action === 'trash' })
-          useAppStore.setState((store) => {
-            const { [item.id]: removed, ...rest } = store.downloads
-            void removed
-            return {
-              downloads: rest,
-              history: store.history.filter((entry) => entry.id !== item.id)
-            }
-          })
-          setSelected((previous) => {
-            const next = new Set(previous)
-            next.delete(item.id)
-            return next
-          })
-        }
-      }
-    } catch (error) {
-      setActionError(describeError(error))
-    } finally {
-      setBusy(false)
-      setConfirmation(null)
+    // The confirmation closes and removed rows leave at once. Waiting on the main process first
+    // kept a modal dialog over the whole window until the slowest download had wound down (a
+    // pause waits for every stream to close): with dozens picked, the app looked frozen.
+    setConfirmation(null)
+    const ids = targets.map((item) => item.id)
+    if (action === 'remove' || action === 'trash') {
+      const gone = new Set(ids)
+      useAppStore.setState((store) => ({
+        downloads: Object.fromEntries(
+          Object.entries(store.downloads).filter(([id]) => !gone.has(id))
+        ),
+        history: store.history.filter((entry) => !gone.has(entry.id))
+      }))
+      setSelected((previous) => new Set([...previous].filter((id) => !gone.has(id))))
     }
+    // Sent in order, waited on together: one slow download no longer holds up the rest.
+    const calls = ids.map((id) =>
+      action === 'pause'
+        ? window.lightning.pauseDownload(id)
+        : action === 'resume'
+          ? window.lightning.resumeDownload(id)
+          : window.lightning.removeDownload(id, { trashFile: action === 'trash' })
+    )
+    // The toolbar is free again after a short while even if a call is still going.
+    const released = new Promise<void>((resolve) => setTimeout(resolve, BULK_LOCK_MAX_MS))
+    const settled = Promise.allSettled(calls).then((results) => {
+      const failed = results.find((result) => result.status === 'rejected')
+      if (failed) setActionError(describeError(failed.reason))
+    })
+    await Promise.race([settled, released])
+    setBusy(false)
   }
   // Rows get these as one object that never changes, so a progress push re-renders only its row.
   const actionRef = useRef(runAction)

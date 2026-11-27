@@ -205,6 +205,20 @@ function createWindow(): void {
           : null
     if (kind) log[kind]('renderer', message, `${sourceId}:${lineNumber}`)
   })
+  // A window that stops answering: macOS shows the spinning wheel, and the log says when.
+  let unresponsiveAt = 0
+  mainWindow.on('unresponsive', () => {
+    unresponsiveAt = Date.now()
+    log.warn('window', 'not responding')
+  })
+  mainWindow.on('responsive', () => {
+    if (!unresponsiveAt) return
+    log.warn(
+      'window',
+      `responding again after ${Math.round((Date.now() - unresponsiveAt) / 1000)} s`
+    )
+    unresponsiveAt = 0
+  })
   mainWindow.webContents.on('render-process-gone', (_event, details) =>
     log.error('renderer', 'render-process-gone', details)
   )
@@ -281,8 +295,25 @@ function createWindow(): void {
   }
 }
 
+/** Logs when the main process was held up long enough to feel: its thread also takes the
+ * window's clicks and keys, so a stall here freezes the window. A sleeping computer isn't one. */
+function watchMainThreadStalls(): void {
+  const everyMs = 1000
+  const stallMs = 2000
+  let last = Date.now()
+  setInterval(() => {
+    const now = Date.now()
+    const late = now - last - everyMs
+    last = now
+    if (late >= stallMs && late < 60_000) {
+      log.warn('app', `main process was blocked for ${(late / 1000).toFixed(1)} s`)
+    }
+  }, everyMs).unref()
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.lightning.app')
+  watchMainThreadStalls()
   // Packaged, the Dock uses the app bundle's icon, the same one the pinned Dock icon uses, so the
   // running app and its launcher icon are one. A runtime setIcon would replace it with a copy that
   // stays stale after an update. Only a dev run (no bundle icon) sets the image.

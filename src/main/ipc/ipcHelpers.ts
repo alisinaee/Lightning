@@ -2,6 +2,7 @@ import { ipcMain, Notification, type BrowserWindow, type IpcMainInvokeEvent } fr
 import { IpcChannels } from '../../shared/ipc-channels'
 import type { IpcContract } from '../../shared/ipc-contract'
 import { UI_UPDATE_HIDDEN_MS, uiUpdateDelay } from '../../shared/uiThrottle'
+import { log } from '../logger'
 import { loadSettings, prefsOf } from '../settings'
 import { testKnobs } from '../testKnobs'
 
@@ -15,11 +16,26 @@ export function handle<K extends keyof IpcContract>(
     ...args: IpcContract[K]['args']
   ) => IpcContract[K]['result'] | Promise<IpcContract[K]['result']>
 ): void {
-  ipcMain.handle(
-    IpcChannels[channel],
-    listener as (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  )
+  const run = listener as (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
+  ipcMain.handle(IpcChannels[channel], async (event, ...args) => {
+    // A window waiting on an answer that doesn't come looks frozen: the log says which call.
+    const startedAt = Date.now()
+    const stuck = setTimeout(
+      () => log.warn('ipc', `${channel} still has no answer after ${SLOW_IPC_MS / 1000} s`),
+      SLOW_IPC_MS
+    )
+    try {
+      return await run(event, ...args)
+    } finally {
+      clearTimeout(stuck)
+      const took = Date.now() - startedAt
+      if (took >= SLOW_IPC_MS)
+        log.warn('ipc', `${channel} answered after ${Math.round(took / 1000)} s`)
+    }
+  })
 }
+
+const SLOW_IPC_MS = 10_000
 
 /** Sends an IPC push event to `window` if it still exists and is not destroyed. */
 export function sendToWindow(
