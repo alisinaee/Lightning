@@ -112,6 +112,8 @@ function MultiLinkForm({ onDone }: { onDone: () => void }): React.JSX.Element {
 
   // A link on the clipboard is most likely what this is for.
   useEffect(() => {
+    // Clipboard switched off (status bar or Settings): Lightning doesn't read it at all.
+    if (!useAppStore.getState().prefsSnapshot.clipboardTrack) return
     void window.lightning
       .readClipboardText()
       .then((clip) => {

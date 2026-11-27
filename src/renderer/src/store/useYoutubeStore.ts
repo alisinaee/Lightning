@@ -13,6 +13,7 @@ import {
   type YoutubeVideoMeta
 } from '@shared/youtube'
 import { create } from 'zustand'
+import { useAppStore } from './useAppStore'
 
 export type YoutubeJobFilter = 'all' | 'active' | 'finished' | 'failed'
 
@@ -186,7 +187,10 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
 
   setInputUrl: (inputUrl) => set({ inputUrl }),
   openAdd: async () => {
-    const text = await window.lightning.readClipboardText().catch(() => '')
+    // Clipboard switched off (status bar or Settings): Lightning doesn't read it at all.
+    const text = useAppStore.getState().prefsSnapshot.clipboardTrack
+      ? await window.lightning.readClipboardText().catch(() => '')
+      : ''
     const link = videoLinkIn(text)
     const known = link
       ? Object.values(get().jobs).some((job) => sameVideo(job.url, link)) // added before: not again

@@ -1,5 +1,23 @@
 import { expect, test } from './fixtures'
 
+/** Clipboard tracking on, so a dialog reads the clipboard as it opens. Every kind the background
+ * watcher offers stays off: the test window isn't focused, and the watcher would offer the link too. */
+async function trackClipboard(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(async () => {
+    const prefs = window.lightning.readInitialState().prefs
+    await window.lightning.updateSettings({
+      prefs: {
+        ...prefs,
+        clipboardTrack: true,
+        watchClipboard: false,
+        clipboardYoutube: false,
+        telegramWatchClipboard: false
+      }
+    })
+  })
+  await expect(page.getByRole('switch', { name: 'Track the clipboard' })).toBeChecked()
+}
+
 test('adding a video with its link copied goes straight to the confirmation', async ({
   lightning
 }) => {
@@ -27,6 +45,7 @@ test('adding a video with its link copied goes straight to the confirmation', as
     )
   }, null)
 
+  await trackClipboard(page)
   await copied('Look: https://www.youtube.com/watch?v=dQw4w9WgXcQ')
   await page.getByRole('button', { name: 'New download' }).click()
   const dialog = page.getByRole('dialog', { name: /^Add (YouTube )?video/ })
@@ -45,6 +64,7 @@ test('adding a video with its link copied goes straight to the confirmation', as
 
 test('Download does not wait for the fetch', async ({ lightning }) => {
   const page = lightning.page
+  await trackClipboard(page)
   await lightning.evaluateMain((electron) => {
     electron.clipboard.readText = (() => 'https://youtu.be/dQw4w9WgXcQ') as never
     const { ipcMain, BrowserWindow } = electron
@@ -94,4 +114,18 @@ test('Download does not wait for the fetch', async ({ lightning }) => {
   // It starts by itself, at the chosen quality.
   await expect(page.getByText('Slow video f720').first()).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText(/^Fetching/)).toBeHidden()
+})
+
+test('with the clipboard switched off, a dialog opens empty', async ({ lightning }) => {
+  const page = lightning.page
+  const toggle = page.getByRole('switch', { name: 'Track the clipboard' })
+  if (await toggle.isChecked()) await toggle.click()
+  await expect(toggle).not.toBeChecked()
+  await lightning.evaluateMain((electron) => {
+    electron.clipboard.readText = (() => 'https://example.com/file.zip') as never
+  }, null)
+  const link = await lightning.newDownload()
+  // Answered after the dialog would have read it, so a read would have landed by now.
+  await page.evaluate(() => window.lightning.readClipboardText())
+  await expect(link).toHaveValue('')
 })

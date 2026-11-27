@@ -169,7 +169,9 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
   // Opened with nothing in it: a link on the clipboard is most likely what it's for, as download
   // managers have long assumed. Anything else on the clipboard is left alone.
   useEffect(() => {
-    if (useAppStore.getState().draftUrl) return
+    const { draftUrl, prefsSnapshot } = useAppStore.getState()
+    // Clipboard switched off (status bar or Settings): Lightning doesn't read it at all.
+    if (draftUrl || !prefsSnapshot.clipboardTrack) return
     void window.lightning
       .readClipboardText()
       .then((text) => {

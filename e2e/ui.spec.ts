@@ -359,6 +359,20 @@ test('a link just started is not offered again from the clipboard', async ({
   const origin = await serve({ size: BLOCK })
   await stubNativeUi(lightning, dirs.dest)
   const page = lightning.page
+  // Tracking on, so the dialog reads the clipboard; the background watcher's kinds stay off.
+  await page.evaluate(async () => {
+    const prefs = window.lightning.readInitialState().prefs
+    await window.lightning.updateSettings({
+      prefs: {
+        ...prefs,
+        clipboardTrack: true,
+        watchClipboard: false,
+        clipboardYoutube: false,
+        telegramWatchClipboard: false
+      }
+    })
+  })
+  await expect(page.getByRole('switch', { name: 'Track the clipboard' })).toBeChecked()
   // Stubbed rather than written, so the run leaves the real clipboard alone.
   await lightning.evaluateMain((electron, text) => {
     electron.clipboard.readText = (() => text) as never
