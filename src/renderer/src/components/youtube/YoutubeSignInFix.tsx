@@ -196,20 +196,34 @@ export function YoutubeSignInBanner({
 }: {
   onOpenSettings?: (page?: SettingsPage) => void
 }): React.JSX.Element | null {
-  const jobs = useYoutubeStore((store) => store.jobs)
   const retryJob = useYoutubeStore((store) => store.retryJob)
-  const stuck = Object.values(jobs).filter(
-    (job) => job.status === 'error' && needsSignIn(job.error)
+  // The ids of the downloads stuck on a sign-in, joined so the banner re-renders only when they change.
+  const stuckKey = useYoutubeStore((store) =>
+    Object.values(store.jobs)
+      .filter((job) => job.status === 'error' && needsSignIn(job.error))
+      .map((job) => job.id)
+      .join('\n')
+  )
+  const stuckIds = stuckKey === '' ? [] : stuckKey.split('\n')
+  const askingUntil = useYoutubeStore((store) =>
+    Object.values(store.jobs).reduce(
+      (latest, job) =>
+        job.status === 'error' && needsSignIn(job.error)
+          ? Math.max(latest, job.askingBrowserUntil ?? 0)
+          : latest,
+      0
+    )
   )
   // Lightning asked the browser extension for a fresh sign-in: wait for it before the usual fix.
   const [now, setNow] = useState(() => Date.now())
-  const askingUntil = Math.max(0, ...stuck.map((job) => job.askingBrowserUntil ?? 0))
   useEffect(() => {
-    if (askingUntil <= now) return
-    const timer = setTimeout(() => setNow(Date.now()), askingUntil - now + 50)
+    // The delay is measured now, not from the `now` of the last render.
+    const delay = askingUntil - Date.now()
+    if (delay <= 0) return
+    const timer = setTimeout(() => setNow(Date.now()), delay + 50)
     return () => clearTimeout(timer)
-  }, [askingUntil, now])
-  if (stuck.length === 0) return null
+  }, [askingUntil])
+  if (stuckIds.length === 0) return null
   if (askingUntil > now) {
     return (
       <div className="border-b-[0.5px] border-border px-3 pb-3">
@@ -238,7 +252,7 @@ export function YoutubeSignInBanner({
     <div className="border-b-[0.5px] border-border px-3 pb-3">
       <YoutubeSignInFix
         onFixed={async () => {
-          await Promise.all(stuck.map((job) => retryJob(job.id)))
+          await Promise.all(stuckIds.map((id) => retryJob(id)))
         }}
         onOpenSettings={onOpenSettings}
       />

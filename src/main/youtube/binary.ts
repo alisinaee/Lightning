@@ -6,17 +6,31 @@ import { app } from 'electron'
 import type { ResolvedPrefs } from '../../shared/types'
 import type { YoutubeStatus } from '../../shared/youtube'
 
+/** Set once the updated yt-dlp is seen; cleared with the status cache after an update. */
+let updatedYtDlpSeen = false
+
 export function ytDlpExecutable(): string {
   const name = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
   // A newer yt-dlp fetched by the updater (see updater.ts) wins over the one shipped with the app.
   const updated = join(youtubeDataDir(), 'bin', name)
-  if (existsSync(updated)) return updated
+  if (updatedYtDlpSeen || existsSync(updated)) {
+    updatedYtDlpSeen = true
+    return updated
+  }
   return app.isPackaged
     ? join(process.resourcesPath, 'yt-dlp', name)
     : join(app.getAppPath(), 'vendor', 'yt-dlp', `${process.platform}-${process.arch}`, name)
 }
 
+let ffmpegFound: string | undefined
+
 export function ffmpegExecutable(): string | undefined {
+  if (ffmpegFound) return ffmpegFound
+  ffmpegFound = findFfmpeg()
+  return ffmpegFound
+}
+
+function findFfmpeg(): string | undefined {
   // 1. Packaged ffmpeg
   if (app.isPackaged) {
     const packaged = join(
@@ -70,7 +84,7 @@ export function ytDlpEnv(): NodeJS.ProcessEnv {
   }
   const ffmpeg = ffmpegExecutable()
   if (ffmpeg) {
-    env.PATH = `${join(ffmpeg, '..')}:${process.env.PATH ?? ''}`
+    env.PATH = `${join(ffmpeg, '..')}${delimiter}${process.env.PATH ?? ''}`
   }
   return env
 }
@@ -81,13 +95,17 @@ export function ytDlpEnv(): NodeJS.ProcessEnv {
 // minimal PATH, so common install locations are checked explicitly.
 const NODE_CANDIDATES = ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']
 
+let nodeFound: string | undefined
+
 export function nodeRuntimePath(): string | undefined {
+  if (nodeFound) return nodeFound
   const pathDirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
   const candidates = [
     ...pathDirs.map((dir) => join(dir, process.platform === 'win32' ? 'node.exe' : 'node')),
     ...NODE_CANDIDATES
   ]
-  return candidates.find((candidate) => existsSync(candidate))
+  nodeFound = candidates.find((candidate) => existsSync(candidate))
+  return nodeFound
 }
 
 export function spawnYtDlp(args: string[], options: SpawnOptions = {}): ChildProcess {
@@ -187,4 +205,5 @@ export async function getYoutubeStatus(): Promise<YoutubeStatus> {
 /** Forget the cached yt-dlp version so the next status check reads the binary again. */
 export function clearYoutubeStatusCache(): void {
   cachedStatus = undefined
+  updatedYtDlpSeen = false
 }

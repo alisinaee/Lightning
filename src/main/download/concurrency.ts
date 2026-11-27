@@ -65,7 +65,7 @@ export interface NetworkSnapshot {
 }
 
 /** What DiskWatch reads, and since when without a break. */
-export interface DiskSnapshot {
+interface DiskSnapshot {
   reading: DiskReading
   since: number
 }
@@ -87,7 +87,7 @@ export type Action = { kind: 'add' | 'retire'; networkId: string; count: number 
  * - keeping-up: most don't.
  * - unknown: no stream writing, or held while nothing lands: a disk that has stopped altogether
  *   (another program, a drive waking up) is waited out, as fewer streams wouldn't help it. */
-export type DiskReading = 'behind' | 'keeping-up' | 'unknown'
+type DiskReading = 'behind' | 'keeping-up' | 'unknown'
 
 /** Whether the disk is what holds a download back, judged by the clock rather than by how often
  * it is looked at: a look between two others only extends a reading or breaks it. */

@@ -86,7 +86,6 @@ export interface IpcContract {
   clearClipboardHistory: { args: []; result: void }
   /** Opens the entry's link in the Add dialog, as the notification would. */
   downloadClipboardEntry: { args: [id: string]; result: void }
-  openLogs: { args: []; result: void }
   /** The newest `limit` lines of the app log, oldest first. */
   readLog: { args: [limit: number]; result: string[] }
   openLogFolder: { args: []; result: void }

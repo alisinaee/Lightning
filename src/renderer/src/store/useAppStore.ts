@@ -496,9 +496,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   receiveHistory: (history) => {
-    const downloads = { ...get().downloads }
-    for (const entry of history) delete downloads[entry.id]
-    set({ history, downloads })
+    const { downloads, history: current } = get()
+    // An entry that did not change keeps its object, so the rows showing it do not re-render.
+    const before = new Map(current.map((entry) => [entry.id, entry]))
+    let historyChanged = history.length !== current.length
+    const next = history.map((entry) => {
+      const old = before.get(entry.id)
+      if (old && JSON.stringify(old) === JSON.stringify(entry)) return old
+      historyChanged = true
+      return entry
+    })
+    // Finished downloads leave the live map; it is copied only when one of them was in it.
+    const finished = new Set(history.map((entry) => entry.id))
+    const leaving = Object.keys(downloads).some((id) => finished.has(id))
+    if (!historyChanged && !leaving) return
+    set({
+      history: historyChanged ? next : current,
+      ...(leaving
+        ? {
+            downloads: Object.fromEntries(
+              Object.entries(downloads).filter(([id]) => !finished.has(id))
+            )
+          }
+        : {})
+    })
   },
 
   receiveGroups: (groups) => {

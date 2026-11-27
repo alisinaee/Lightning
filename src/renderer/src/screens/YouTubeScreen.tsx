@@ -1,5 +1,5 @@
 import { t } from '@shared/i18n/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, SlidersHorizontal, VideoCamera as Video, X } from '@phosphor-icons/react'
 import { EmptyStatusIcon } from '../components/EmptyIcon'
 import { Badge } from '../components/ui/badge'
@@ -79,6 +79,14 @@ export function YouTubeScreen({
   const { openLimits, limitsDialog } = useLimitsDialog()
   const [matchIndex, setMatchIndex] = useState(0)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = useCallback((groupId: string): void => {
+    setExpandedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     void loadJobs()
@@ -117,7 +125,7 @@ export function YouTubeScreen({
             key={job.id}
             job={job}
             selected={selected.has(job.id)}
-            onSelect={(on) => setJobSelected(job.id, on)}
+            onSelect={setJobSelected}
           />
         )
       })
@@ -135,14 +143,8 @@ export function YouTubeScreen({
               title={title}
               jobs={list}
               expanded={expanded}
-              onToggle={() =>
-                setExpandedGroups((current) => {
-                  const next = new Set(current)
-                  if (next.has(groupId)) next.delete(groupId)
-                  else next.add(groupId)
-                  return next
-                })
-              }
+              id={groupId}
+              onToggle={toggleGroup}
             />
             {expanded &&
               list.map((job) => (
@@ -151,7 +153,7 @@ export function YouTubeScreen({
                   job={job}
                   nested
                   selected={selected.has(job.id)}
-                  onSelect={(on) => setJobSelected(job.id, on)}
+                  onSelect={setJobSelected}
                 />
               ))}
           </div>
@@ -159,7 +161,7 @@ export function YouTubeScreen({
       })
     }
     return items.sort((a, b) => b.at - a.at).map((item) => item.node)
-  }, [visible, expandedGroups, selected])
+  }, [visible, expandedGroups, selected, toggleGroup])
 
   // What the person can see and pick: the top-level videos, and a playlist's videos once its
   // group is open (a closed group's videos are not on screen).

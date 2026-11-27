@@ -63,7 +63,8 @@ import {
   unitsOf,
   webLink
 } from './downloadHelpers'
-import { compareSamples, HttpTransfer, pickedStreams, splittable } from './httpTransfer'
+import { HttpTransfer } from './httpTransfer'
+import { compareSamples, pickedStreams, splittable } from './httpHelpers'
 import {
   isCurrentManifest,
   isNotFound,
@@ -156,6 +157,13 @@ interface TorrentDownloadRuntime extends RuntimeFields, TorrentTransferTarget {
 }
 
 type DownloadRuntime = HttpDownloadRuntime | TorrentDownloadRuntime
+
+/** Logs a background step that failed: nothing waits on it, so nothing else would say so. */
+function logBackgroundFailure(step: string, error: unknown): void {
+  log.error('download', `${step} failed`, {
+    message: error instanceof Error ? error.message : String(error)
+  })
+}
 
 /** How long after a download ends the manager waits to see whether the queue is really empty. */
 const IDLE_CHECK_MS = 3000
@@ -369,11 +377,17 @@ export class DownloadManager {
     const trashFiles = options.trashFiles === true
     const ids = new Set(this.groupDownloads(groupId).map((state) => state.id))
     for (const entry of await listHistory()) if (entry.groupId === groupId) ids.add(entry.id)
-    for (const id of ids) {
-      const runtime = this.runtimes.get(id)
-      const unfinished = !!runtime && runtime.state.status !== 'completed'
-      if (unfinished && options.deletePartial !== true) await this.detach(runtime)
-      else await this.remove(id, trashFiles)
+    // The finished ones leave history together, in one write, once all are removed.
+    const forgetLater: string[] = []
+    try {
+      for (const id of ids) {
+        const runtime = this.runtimes.get(id)
+        const unfinished = !!runtime && runtime.state.status !== 'completed'
+        if (unfinished && options.deletePartial !== true) await this.detach(runtime)
+        else await this.remove(id, trashFiles, false, forgetLater)
+      }
+    } finally {
+      if (forgetLater.length > 0) await removeFromHistory(forgetLater)
     }
   }
 
@@ -598,9 +612,10 @@ export class DownloadManager {
       claimed.add(runtime.file.path)
       return true
     })
+    const keptSet = new Set(kept)
     await Promise.all(
       restored
-        .filter((runtime) => !kept.includes(runtime))
+        .filter((runtime) => !keptSet.has(runtime))
         .map((runtime) => this.removePersistedDownload(runtime, false))
     )
 
@@ -626,6 +641,8 @@ export class DownloadManager {
   /** A finished download leaves the list of running ones for history, with its work units: a
    * download that is done needs none of them. Its saved state goes only once history has it. */
   private async moveToHistory(runtime: DownloadRuntime): Promise<void> {
+    // Removed meanwhile (or replaced): its files are gone or no longer its own to record.
+    if (runtime.removed || this.runtimes.get(runtime.state.id) !== runtime) return
     let entry: FinishedDownload
     if (runtime.kind === 'http') {
       const { blocks: omittedBlocks, streams: omittedStreams, ...state } = runtime.state
@@ -1006,7 +1023,15 @@ export class DownloadManager {
 
   /** Runs the download, and once the run ends makes room for the next one queued. */
   private launch(runtime: DownloadRuntime): void {
-    runtime.runPromise = this.run(runtime).finally(() => this.pump())
+    runtime.runPromise = this.run(runtime)
+      .catch((error: unknown) => {
+        log.error(
+          'download',
+          `run of ${runtime.state.fileName} failed: ${error instanceof Error ? error.message : String(error)}`,
+          { id: runtime.state.id }
+        )
+      })
+      .finally(() => this.pump())
   }
 
   async pause(id: string): Promise<void> {
@@ -1023,6 +1048,7 @@ export class DownloadManager {
 
     runtime.state.status = 'paused'
     runtime.state.pausedAt = Date.now()
+    this.keepAwake()
     log.info('download', `pause ${runtime.state.fileName}`, { id })
     clearSpeeds(runtime.state)
     if (runtime.kind === 'http') {
@@ -1206,7 +1232,9 @@ export class DownloadManager {
     runtime.pausedBySchedule = undefined
     runtime.state.retryAttempt = undefined
     this.clearRetry(runtime)
-    void this.resumeAfterVerifying(runtime, false)
+    this.resumeAfterVerifying(runtime, false).catch((error: unknown) =>
+      logBackgroundFailure(`resuming ${runtime.state.fileName}`, error)
+    )
   }
 
   // A file that changed on the server while this download was paused is caught by the first
@@ -1220,7 +1248,10 @@ export class DownloadManager {
     await runtime.runPromise
     // Just after launch the networks may not have been looked at yet.
     if (this.networks.current === null) await this.networks.refresh()
-    else void this.networks.refresh()
+    else
+      this.networks
+        .refresh()
+        .catch((error: unknown) => logBackgroundFailure('checking the networks', error))
 
     if ((await runtime.file.size().catch(() => -1)) < 0) {
       runtime.state.error =
@@ -1258,6 +1289,7 @@ export class DownloadManager {
     const { networks } = runtime.state
     this.clearRetry(runtime)
     runtime.state.status = 'downloading'
+    this.keepAwake()
     runtime.state.queuedAt = undefined
     runtime.state.error = undefined
     runtime.state.resumable = undefined
@@ -1370,7 +1402,9 @@ export class DownloadManager {
     this.pushUpdate(runtime)
     // Switched back on while the pause is still winding down, it resumes once that is done.
     if (enabled && status === 'paused' && runtime.pausedForNoNetwork) {
-      void this.resumeAfterVerifying(runtime, true)
+      this.resumeAfterVerifying(runtime, true).catch((error: unknown) =>
+        logBackgroundFailure(`resuming ${runtime.state.fileName}`, error)
+      )
     }
   }
 
@@ -1420,9 +1454,13 @@ export class DownloadManager {
   /** Keeps the computer from sleeping while a download runs, which would stop it — as
    * qBittorrent and Transmission offer to. The display can still sleep. */
   private keepAwake(): void {
-    const running = [...this.runtimes.values()].some(
-      (runtime) => runtime.state.status === 'downloading'
-    )
+    let running = false
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.state.status === 'downloading') {
+        running = true
+        break
+      }
+    }
     try {
       if (running && this.prefs.preventSleep && this.awakeBlocker === null) {
         this.awakeBlocker = powerSaveBlocker.start('prevent-app-suspension')
@@ -1560,9 +1598,19 @@ export class DownloadManager {
   /** Removes a download, cancelling one under way. A finished one's file stays where it is,
    * unless `trashFile`: then it goes to the Trash, where the user can still get it back. The
    * path is the download's own, never one the window names. */
-  async remove(id: string, trashFile = false, keepEntry = false): Promise<void> {
+  async remove(
+    id: string,
+    trashFile = false,
+    keepEntry = false,
+    forgetLater?: string[]
+  ): Promise<void> {
     await this.initialization
     let runtime = this.runtimes.get(id)
+    if (runtime?.publishing) {
+      // Its file is being published: let that finish before its partial files are touched.
+      await runtime.runPromise?.catch(() => {})
+      runtime = this.runtimes.get(id)
+    }
     if (runtime?.state.status === 'completed') {
       // Completion is shown before history is saved. Let that move finish before choosing
       // whether to remove a live runtime or a history entry, including for torrent file removal.
@@ -1597,7 +1645,8 @@ export class DownloadManager {
       this.runtimes.delete(id)
       await this.removePersistedDownload(runtime)
       if (runtime.state.status === 'completed') {
-        await removeFromHistory([id])
+        if (forgetLater) forgetLater.push(id)
+        else await removeFromHistory([id])
         this.historyChanged()
       }
       return
@@ -1611,7 +1660,10 @@ export class DownloadManager {
       id
     })
     // Kept as a record whose file is now gone, when asked.
-    if (!keepEntry) await removeFromHistory([id])
+    if (!keepEntry) {
+      if (forgetLater) forgetLater.push(id)
+      else await removeFromHistory([id])
+    }
     this.historyChanged()
   }
 
@@ -1647,12 +1699,29 @@ export class DownloadManager {
     await this.limits.save()
   }
 
+  /** Runs the download (see runSteps). Whatever goes wrong in it, a worker's error included, ends
+   * the download in an error, once its streams have wound down: it never stops silently. */
+  private async run(runtime: DownloadRuntime): Promise<void> {
+    try {
+      await this.runSteps(runtime)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.stop.abort()
+      await Promise.allSettled(runtime.transfer.running())
+      if (runtime.state.status === 'downloading') this.failDownload(runtime, message)
+      else
+        log.error('download', `error after ${runtime.state.fileName} ended: ${message}`, {
+          id: runtime.state.id
+        })
+    }
+  }
+
   /**
    * Runs the download until every block is in, or it is stopped. Each TICK_MS, and whenever a
    * stream ends, it takes stock: speeds, stuck connections, which networks run streams (see
    * reconcile) and how many (see concurrency.ts). With no network to use, it waits for one.
    */
-  private async run(runtime: DownloadRuntime): Promise<void> {
+  private async runSteps(runtime: DownloadRuntime): Promise<void> {
     if (runtime.stop.signal.aborted) runtime.stop = new AbortController()
     runtime.transfer.reset()
     // Speeds are this run's: nothing carries over from the last one.
@@ -1733,6 +1802,7 @@ export class DownloadManager {
       runtime.state.destinationPath = publishedPath
       runtime.state.fileName = basename(publishedPath)
       runtime.state.status = 'completed'
+      this.keepAwake()
       runtime.state.retryAttempt = undefined
       runtime.state.completedAt = Date.now()
       log.info('download', `complete ${runtime.state.fileName}`, { id: runtime.state.id })
@@ -1753,6 +1823,7 @@ export class DownloadManager {
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
+      this.keepAwake()
       log.error('download', `error ${runtime.state.fileName}: ${runtime.state.error}`)
       this.notify(
         'failed',
@@ -1780,7 +1851,9 @@ export class DownloadManager {
     log.info('app', allow ? 'schedule: downloads may run' : 'schedule: downloads held')
     for (const [id, runtime] of this.runtimes) {
       if (!allow && runtime.state.status === 'downloading') {
-        void this.pause(id)
+        this.pause(id).catch((error: unknown) =>
+          logBackgroundFailure('pausing for the schedule', error)
+        )
         // Paused straight away, unless it was already publishing its finished file.
         if (this.statusOf(runtime) === 'paused') runtime.pausedBySchedule = true
       } else if (allow && runtime.pausedBySchedule) {
@@ -1881,7 +1954,9 @@ export class DownloadManager {
     runtime.retryTimer = setTimeout(() => {
       runtime.retryTimer = undefined
       if (runtime.state.status === 'error' && !runtime.cancelPromise && !this.suspending) {
-        void this.resumeAfterVerifying(runtime, false)
+        this.resumeAfterVerifying(runtime, false).catch((error: unknown) =>
+          logBackgroundFailure(`retrying ${runtime.state.fileName}`, error)
+        )
       }
     }, wait)
   }
@@ -1904,6 +1979,7 @@ export class DownloadManager {
     if (runtime.state.status !== 'downloading') return
     runtime.state.status = 'error'
     runtime.state.error = message
+    this.keepAwake()
     log.error('download', `error ${runtime.state.fileName}: ${message}`)
     runtime.state.resumable = !discard
     this.notify(
@@ -2099,7 +2175,6 @@ export class DownloadManager {
 
   private pushUpdate(runtime: DownloadRuntime, persist = true): void {
     this.clearScheduledUpdate(runtime)
-    this.keepAwake()
     // A removed download can still be winding down (workers finishing, cleanup). Its updates
     // would put it back on screen after the renderer has already moved on.
     if (this.runtimes.get(runtime.state.id) !== runtime) return

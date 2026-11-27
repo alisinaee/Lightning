@@ -1,6 +1,6 @@
 import { t } from '@shared/i18n/react'
 import type { DnsConfig, DnsProfile } from '@shared/types'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 
 interface DnsStore {
@@ -25,10 +25,25 @@ export function useDns(): {
   const loaded = useDnsStore((store) => store.loaded)
   const set = useDnsStore((store) => store.set)
   useEffect(() => {
-    void window.lightning.getDns().then(set)
-    return window.lightning.onDnsChanged(set)
+    // Counts the pushes: a reply to the first read that arrives after a push is older, so dropped.
+    let pushes = 0
+    const stop = window.lightning.onDnsChanged((next) => {
+      pushes += 1
+      set(next)
+    })
+    const asked = pushes
+    void window.lightning
+      .getDns()
+      .then((next) => {
+        if (pushes === asked) set(next)
+      })
+      .catch(() => {})
+    return stop
   }, [set])
-  const profiles = [...config.profiles].sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0))
+  const profiles = useMemo(
+    () => [...config.profiles].sort((a, b) => (b.usedAt ?? 0) - (a.usedAt ?? 0)),
+    [config.profiles]
+  )
   return { profiles, defaultId: config.defaultId, loaded }
 }
 

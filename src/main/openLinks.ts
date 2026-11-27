@@ -8,8 +8,8 @@ import type { PendingLink, RequestExtras } from '../shared/types'
 // manager — for the window's link field. They're never started on their own: the user still sees
 // what the link is and presses Start.
 
-/** The latest link handed over and not yet taken by the window. */
-let pending: PendingLink | null = null
+/** The links handed over and not yet taken by the window, oldest first. */
+const pending: PendingLink[] = []
 
 /** A magnet link, or the path of a .torrent file that exists; anything else isn't taken. */
 export function acceptedLink(candidate: string): string | null {
@@ -33,7 +33,8 @@ export function linkFromArgs(argv: readonly string[]): string | null {
 
 /**
  * Hands `link` to the window: it's kept until the window takes it (takePendingLink), so one that
- * arrives before the window is ready isn't lost. The window is brought forward.
+ * arrives before the window is ready isn't lost, and two in a row are both kept. The window is
+ * brought forward.
  */
 export function offerLink(
   link: string,
@@ -41,7 +42,7 @@ export function offerLink(
   extras?: RequestExtras,
   fromClipboard = false
 ): void {
-  pending = { url: link, extras, fromClipboard }
+  pending.push({ url: link, extras, fromClipboard })
   if (!window || window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
   window.show()
@@ -51,11 +52,10 @@ export function offerLink(
   window.webContents.send(IpcChannels.linkReceived)
 }
 
-/** The link handed over, once: whoever takes it puts it in the link field. */
+/** The oldest link handed over, once: whoever takes it puts it in the link field. The window takes
+ * one per link it hears of, so each queued link is taken in turn. */
 export function takePendingLink(): PendingLink | null {
-  const link = pending
-  pending = null
-  return link
+  return pending.shift() ?? null
 }
 
 /** Brings the window forward and opens Add several links with the links that were copied together. */

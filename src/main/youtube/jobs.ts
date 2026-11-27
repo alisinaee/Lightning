@@ -29,6 +29,13 @@ export interface CookieFile {
 
 /** How many playlist videos download at once. */
 const GROUP_SLOTS = 2
+/** Frequent changes to the job list are written at most this often. */
+const PERSIST_MS = 1000
+
+/** A download that could not start: its job already shows the error. */
+const logStartFailure = (err: unknown): void => {
+  log.warn('youtube', 'a download could not start', err)
+}
 
 /** A folder name that is safe on every system. */
 export function safeFolderName(name: string): string {
@@ -105,6 +112,7 @@ export class YoutubeJobManager {
   /** Playlist videos waiting for a free slot, and the ones downloading now. */
   private groupWaiting: string[] = []
   private groupRunning: Set<string> = new Set()
+  private persistTimer?: NodeJS.Timeout
   private disposed = false
 
   constructor(options: YoutubeJobManagerOptions) {
@@ -140,6 +148,7 @@ export class YoutubeJobManager {
   async load(): Promise<void> {
     if (this.loaded) return
     this.loaded = true
+    await this.removeLeftoverCookies()
     try {
       const stored = (await readJson(this.storageFile())) as YoutubeJob[] | undefined
       if (Array.isArray(stored)) {
@@ -166,6 +175,28 @@ export class YoutubeJobManager {
     await mkdir(youtubeDataDir(), { recursive: true })
     const list = Array.from(this.jobs.values())
     await updateJson(this.storageFile(), () => list)
+  }
+
+  /** Writes the list a moment later, so frequent changes share one write. Dispose writes at once. */
+  private schedulePersist(): void {
+    if (this.persistTimer || !this.loaded || this.disposed) return
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined
+      this.persist().catch((err: unknown) =>
+        log.warn('youtube', 'could not save the job list', err)
+      )
+    }, PERSIST_MS)
+  }
+
+  /** Cookie files left by an earlier run: none is in use at startup, so all go. */
+  private async removeLeftoverCookies(): Promise<void> {
+    const dir = youtubeDataDir()
+    const names = await readdir(dir).catch(() => [] as string[])
+    await Promise.all(
+      names
+        .filter((name) => /^cookies-.*\.txt$/.test(name))
+        .map((name) => rm(join(dir, name), { force: true }).catch(() => undefined))
+    )
   }
 
   /** Earlier versions gave different streams the same file name ("index", "1080p"): yt-dlp took the
@@ -274,7 +305,7 @@ export class YoutubeJobManager {
     const shared = cookies ?? optionCookies(options)
     if (shared) args.push('--cookies', shared.file)
     if (options.playlistItems) args.push('--playlist-items', options.playlistItems)
-    args.push(request.url)
+    args.push('--', request.url)
 
     const { code, stdout, stderr } = await runYtDlp(args, 120_000)
     if (code !== 0 || !stdout.trim()) {
@@ -345,7 +376,7 @@ export class YoutubeJobManager {
       const job = id ? this.jobs.get(id) : undefined
       if (!job || job.status !== 'queued') continue
       this.groupRunning.add(job.id)
-      void this.runDownload(job)
+      this.runDownload(job).catch(logStartFailure)
     }
   }
 
@@ -356,7 +387,7 @@ export class YoutubeJobManager {
     if (meta.title) job.title = meta.title
     if (meta.thumbnail) job.thumbnail = meta.thumbnail
     this.options.onChange(job)
-    void this.persist()
+    this.schedulePersist()
   }
 
   listJobs(): YoutubeJob[] {
@@ -395,15 +426,34 @@ export class YoutubeJobManager {
     this.jobs.set(job.id, job)
     if (cookies) this.cookieFiles.set(job.id, cookies)
     if (extras) this.requestExtras.set(job.id, extras)
-    await this.persist()
+    this.schedulePersist()
     this.options.onChange(job)
 
-    this.runDownload(job)
+    this.runDownload(job).catch(logStartFailure)
     return job
   }
 
-  /** `impersonated`: this run is the Chrome retry for a site that refused a plain client. */
+  /** Starts a download. Whatever goes wrong before it runs ends the job as an error, so it never hangs. */
   private async runDownload(job: YoutubeJob, impersonated = false): Promise<void> {
+    try {
+      await this.startRun(job, impersonated)
+    } catch (err: unknown) {
+      this.groupRunning.delete(job.id)
+      job.pid = undefined
+      job.status = 'error'
+      job.error = String((err as Error)?.message || err)
+      this.options.onChange(job)
+      this.options.onFinished(job)
+      await this.dropCookies(job.id).catch(() => undefined)
+      await this.persist().catch((persistErr: unknown) =>
+        log.warn('youtube', 'could not save the job list', persistErr)
+      )
+      this.pump()
+    }
+  }
+
+  /** `impersonated`: this run is the Chrome retry for a site that refused a plain client. */
+  private async startRun(job: YoutubeJob, impersonated: boolean): Promise<void> {
     const prefs = await this.options.getPrefs()
     const proxy = proxyArg(prefs)
 
@@ -417,7 +467,7 @@ export class YoutubeJobManager {
       templateText(job.destDir),
       this.outputFor(job, options, generic, files)
     )
-    await this.persist()
+    this.schedulePersist()
     const progressTemplate =
       '%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s'
 
@@ -536,6 +586,8 @@ export class YoutubeJobManager {
     const run: ActiveRun = { child }
     this.active.set(job.id, run)
     job.pid = child.pid
+    // Whichever of 'close' and 'error' comes first ends this run; the other one does nothing.
+    let settled = false
 
     let lineBuffer = ''
     let lastError = ''
@@ -558,7 +610,9 @@ export class YoutubeJobManager {
     })
 
     child.on('close', async (code) => {
-      this.active.delete(job.id)
+      if (settled) return
+      settled = true
+      if (this.active.get(job.id) === run) this.active.delete(job.id)
       // A site that refused a plain client gets one more run as Chrome, when this yt-dlp can do that.
       if (
         generic &&
@@ -569,7 +623,7 @@ export class YoutubeJobManager {
         looksBlocked(lastError) &&
         (await canImpersonateChrome())
       ) {
-        void this.runDownload(job, true)
+        this.runDownload(job, true).catch(logStartFailure)
         return
       }
       this.groupRunning.delete(job.id)
@@ -599,11 +653,15 @@ export class YoutubeJobManager {
       }
 
       this.options.onChange(job)
-      await this.persist()
+      await this.persist().catch((err: unknown) =>
+        log.warn('youtube', 'could not save the job list', err)
+      )
     })
 
     child.on('error', async (err) => {
-      this.active.delete(job.id)
+      if (settled) return
+      settled = true
+      if (this.active.get(job.id) === run) this.active.delete(job.id)
       this.groupRunning.delete(job.id)
       this.pump()
       await this.dropCookies(job.id)
@@ -612,7 +670,9 @@ export class YoutubeJobManager {
       job.error = err.message
       this.options.onChange(job)
       this.options.onFinished(job)
-      await this.persist()
+      await this.persist().catch((persistErr: unknown) =>
+        log.warn('youtube', 'could not save the job list', persistErr)
+      )
     })
   }
 
@@ -691,8 +751,8 @@ export class YoutubeJobManager {
 
   async resumeJob(id: string): Promise<void> {
     const job = this.jobs.get(id)
-    if (!job || job.status === 'downloading') return
-    this.runDownload(job)
+    if (!job || job.status === 'downloading' || this.active.has(id)) return
+    this.runDownload(job).catch(logStartFailure)
   }
 
   async cancelJob(id: string): Promise<void> {
@@ -712,7 +772,7 @@ export class YoutubeJobManager {
   /** Starts a stopped download again; `cookies` (a file for this download only) signs it in. */
   async retryJob(id: string, cookies?: CookieFile): Promise<void> {
     const job = this.jobs.get(id)
-    if (!job) return
+    if (!job || this.active.has(id)) return
     if (cookies) {
       await this.dropCookies(id)
       this.cookieFiles.set(id, cookies)
@@ -721,7 +781,7 @@ export class YoutubeJobManager {
     job.error = undefined
     job.askingBrowserUntil = undefined
     this.options.onChange(job)
-    this.runDownload(job)
+    this.runDownload(job).catch(logStartFailure)
   }
 
   async removeJob(id: string, deleteFile = false): Promise<void> {
@@ -741,6 +801,14 @@ export class YoutubeJobManager {
   /** Stops active yt-dlp processes on shutdown so jobs resume as paused on next launch. */
   async dispose(): Promise<void> {
     this.disposed = true
+    // The list is written below in full, so a write still waiting is not needed.
+    clearTimeout(this.persistTimer)
+    this.persistTimer = undefined
+    // A temporary cookies file is only used by a download of this run, which ends here.
+    for (const cookies of this.cookieFiles.values()) {
+      if (cookies.temporary) await rm(cookies.file, { force: true }).catch(() => undefined)
+    }
+    this.cookieFiles.clear()
     for (const [id, run] of this.active) {
       run.stopped = 'pause'
       run.child.kill('SIGTERM')

@@ -167,7 +167,8 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
   const setJobFilter = useTelegramStore((store) => store.setJobFilter)
   const kind: TgMediaKind | null = view.name === 'telegram' ? view.kind : null
   const jobList = useMemo(() => Object.values(jobs), [jobs])
-  const kindCounts = useMemo(() => {
+  // Counted in the selector and kept as a string, so the entries only re-render when a count moves.
+  const kindCountsKey = useTelegramStore((store) => {
     const counts: Record<TgMediaKind | 'all', number> = {
       all: 0,
       video: 0,
@@ -176,14 +177,18 @@ function TelegramEntries({ collapsed }: { collapsed: boolean }): React.JSX.Eleme
       document: 0,
       other: 0
     }
-    for (const job of jobList) {
+    for (const job of Object.values(store.jobs)) {
       for (const item of job.items) {
         counts.all++
         counts[item.media]++
       }
     }
-    return counts
-  }, [jobList])
+    return JSON.stringify(counts)
+  })
+  const kindCounts = useMemo(
+    () => JSON.parse(kindCountsKey) as Record<TgMediaKind | 'all', number>,
+    [kindCountsKey]
+  )
   const jobCounts = useMemo(
     () => ({
       active: jobList.filter(isActiveJob).length,
@@ -302,6 +307,28 @@ function YoutubeEntries({ collapsed }: { collapsed: boolean }): React.JSX.Elemen
  * and the open one is the section the screen on show belongs to. Opening a section goes to its
  * screen, so the panel and the screen never disagree and there is no back button to go by.
  */
+type AppState = ReturnType<typeof useAppStore.getState>
+let countsCache: { downloads: unknown; history: unknown; groups: unknown; key: string } | null =
+  null
+/** The list counts as a string, so a progress tick that moves no count re-renders nothing.
+ * Cached on the inputs' identities, so it is computed once per store change. */
+function selectCountsKey(store: AppState): string {
+  const c = countsCache
+  if (
+    c &&
+    c.downloads === store.downloads &&
+    c.history === store.history &&
+    c.groups === store.groups
+  )
+    return c.key
+  const downloads = Object.values(store.downloads).filter(
+    (download) => download.status !== 'cancelled'
+  )
+  const key = JSON.stringify(countEntries(buildEntries(downloads, store.history, store.groups)))
+  countsCache = { downloads: store.downloads, history: store.history, groups: store.groups, key }
+  return key
+}
+
 export function AppSidebar(): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('lightning.sidebar') === 'min'
@@ -317,12 +344,7 @@ export function AppSidebar(): React.JSX.Element {
   const kindFilter = useAppStore((store) => store.kindFilter)
   const setKindFilter = useAppStore((store) => store.setKindFilter)
   const setSelected = useAppStore((store) => store.setSelectedDownloads)
-  const countsKey = useAppStore((store) => {
-    const downloads = Object.values(store.downloads).filter(
-      (download) => download.status !== 'cancelled'
-    )
-    return JSON.stringify(countEntries(buildEntries(downloads, store.history, store.groups)))
-  })
+  const countsKey = useAppStore(selectCountsKey)
   const hasHistory = useAppStore((store) => store.history.length > 0)
   const telegramActive = useTelegramStore(
     (store) => Object.values(store.jobs).filter(isActiveJob).length

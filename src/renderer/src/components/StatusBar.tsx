@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ClipboardText, PencilSimple as Pencil } from '@phosphor-icons/react'
-import { isVpn } from '@shared/networks'
+import { useActivityTotals, useNetworkSpeeds } from '../hooks/useActivity'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { formatBytes, formatSpeed } from '../utils/format'
@@ -20,7 +20,8 @@ const FREE_SPACE_POLL_MS = 30_000
 /** One bar along the bottom: how many downloads, the total speed, each connection's speed when
  * there is room, then slow mode and the free space. */
 export function StatusBar(): React.JSX.Element {
-  const downloads = useAppStore((store) => store.downloads)
+  const { speed, waiting, total } = useActivityTotals()
+  const speeds = useNetworkSpeeds()
   const history = useAppStore((store) => store.history)
   const speedLimit = useAppStore((store) => store.speedLimit)
   const slowMode = useAppStore((store) => store.slowMode)
@@ -48,28 +49,17 @@ export function StatusBar(): React.JSX.Element {
     }
   }, [destinationDir])
 
-  let speed = 0
-  let waiting = 0
-  const perNetwork = new Map<string, number>()
-  for (const download of Object.values(downloads)) {
-    if (download.status === 'downloading') {
-      speed += download.speedBytesPerSec
-      for (const network of download.networks) {
-        if (isVpn(network) || network.speedBytesPerSec <= 0) continue
-        perNetwork.set(network.id, (perNetwork.get(network.id) ?? 0) + network.speedBytesPerSec)
-      }
-    }
-    if (download.status === 'queued') waiting++
-  }
-  const listed = Object.keys(downloads).length + history.length
+  const listed = total + history.length
   const limit = slowMode ? slowModeSpeed : speedLimit
-  const chips = [...perNetwork.entries()].map(([id, bytes]) => {
-    const iface = interfaces.find((entry) => entry.id === id)
-    const visual = iface
-      ? networkVisual(iface.id, iface.kind, iface.displayName)
-      : { name: id, solid: 'var(--text-secondary)' }
-    return { id, bytes, name: visual.name, color: visual.solid }
-  })
+  const chips = Object.entries(speeds)
+    .filter(([, bytes]) => bytes > 0)
+    .map(([id, bytes]) => {
+      const iface = interfaces.find((entry) => entry.id === id)
+      const visual = iface
+        ? networkVisual(iface.id, iface.kind, iface.displayName)
+        : { name: id, solid: 'var(--text-secondary)' }
+      return { id, bytes, name: visual.name, color: visual.solid }
+    })
 
   const summary = (
     <>

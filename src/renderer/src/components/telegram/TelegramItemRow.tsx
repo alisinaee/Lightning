@@ -32,7 +32,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
   item: TdlItem
   nested?: boolean
   selected?: boolean
-  onSelect?: (on: boolean) => void
+  onSelect?: (id: string, on: boolean) => void
 }): React.JSX.Element {
   const columns = useTelegramColumns()
   const info = itemInfo(job, item)
@@ -83,7 +83,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
           data-status={info.status}
           data-selected={selected || undefined}
           onClick={(event) => {
-            if (!onControl(event.target) && onSelect) onSelect(!selected)
+            if (!onControl(event.target) && onSelect) onSelect(job.id, !selected)
           }}
           onDoubleClick={(event) => {
             if (hasFile && !onControl(event.target)) {
@@ -102,7 +102,7 @@ export const TelegramItemRow = memo(function TelegramItemRow({
               <Checkbox
                 aria-label={t('Select {name}', { name: item.fileName })}
                 checked={Boolean(selected)}
-                onCheckedChange={(on) => onSelect?.(on)}
+                onCheckedChange={(on) => onSelect?.(job.id, on)}
               />
             )}
           </div>

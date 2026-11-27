@@ -118,10 +118,6 @@ export class ClipboardWatcher {
     return this.entries
   }
 
-  async ready(): Promise<void> {
-    await this.loaded
-  }
-
   remove(id: string): void {
     this.entries = this.entries.filter((entry) => entry.id !== id)
     this.save()
@@ -295,10 +291,5 @@ export class ClipboardWatcher {
       links.length === 1 ? redactUrl(links[0]) : t('Click to review the links.'),
       () => offerTelegram(links, this.getWindow())
     )
-  }
-
-  stop(): void {
-    this.setEnabled(OFF)
-    this.active?.close()
   }
 }

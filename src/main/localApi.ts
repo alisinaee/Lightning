@@ -93,7 +93,16 @@ export class LocalApi {
 
   constructor(private deps: LocalApiDeps) {}
 
-  async setEnabled(enabled: boolean): Promise<void> {
+  /** Calls to setEnabled run one after another, so overlapping ones can't open two listeners. */
+  private enabling: Promise<void> = Promise.resolve()
+
+  setEnabled(enabled: boolean): Promise<void> {
+    const next = this.enabling.then(() => this.applyEnabled(enabled))
+    this.enabling = next.catch(() => {})
+    return next
+  }
+
+  private async applyEnabled(enabled: boolean): Promise<void> {
     if (enabled === (this.server !== null)) return
     if (!enabled) return this.stop()
     for (const port of API_PORTS) {
@@ -180,7 +189,26 @@ export class LocalApi {
     }
   }
 
+  /** Answers one call; a failure inside it becomes a 500 instead of an unhandled rejection. */
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      await this.route(req, res)
+    } catch (error) {
+      log.error('app', 'browser call failed', { error: String(error) })
+      if (res.headersSent) res.end()
+      else {
+        const origin = req.headers.origin
+        this.send(
+          res,
+          500,
+          { ok: false },
+          origin && EXTENSION_ORIGIN.test(origin) ? origin : undefined
+        )
+      }
+    }
+  }
+
+  private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const origin = req.headers.origin
     // A web page can't be told apart from the user by anything but its Origin, and the page's
     // Host, if a name was made to point here, is not ours.
@@ -279,6 +307,7 @@ export class LocalApi {
     }
     if (req.method === 'POST' && path === '/v1/youtube-batch') {
       if (!this.deps.features().menuDownload) return this.send(res, 403, { error: 'off' }, origin)
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
       const body = await this.readJsonBody(req)
       if (!body || !Array.isArray(body.videos)) {
         return this.send(res, 400, { error: 'videos' }, origin)
@@ -295,6 +324,7 @@ export class LocalApi {
     // The links the person copied: one goes to the Add dialog, several to the several-links dialog.
     if (req.method === 'POST' && path === '/v1/clipboard') {
       if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
       const urls = linksIn(await this.deps.readClipboard())
       if (urls.length === 0) return this.send(res, 400, { error: 'clipboard' }, origin)
       log.info('action', 'copied links from the clipboard', { count: urls.length })
@@ -304,6 +334,7 @@ export class LocalApi {
     }
     if (req.method === 'POST' && path === '/v1/links') {
       if (!this.deps.features().menuScan) return this.send(res, 403, { error: 'off' }, origin)
+      if (!this.allowCall()) return this.send(res, 429, {}, origin)
       const body = await this.readJsonBody(req)
       const urls = Array.isArray(body?.links)
         ? body.links.filter(

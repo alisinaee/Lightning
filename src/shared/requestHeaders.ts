@@ -158,15 +158,6 @@ export function parseNetscapeCookies(text: string, link: string, now = Date.now(
   return pairs.join('; ')
 }
 
-/** A header map made safe to log: every value that could carry a secret is hidden. */
-export function redactHeaders(headers: Record<string, string>): Record<string, string> {
-  const shown: Record<string, string> = {}
-  for (const [name, value] of Object.entries(headers)) {
-    shown[name] = SENSITIVE.has(name.toLowerCase()) ? '…' : value
-  }
-  return shown
-}
-
 const MAX_TEXT = 8192
 
 function text(value: unknown, max = MAX_TEXT): string | undefined {

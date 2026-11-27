@@ -85,7 +85,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
   /** Shown under its playlist's group row, so the name is indented. */
   nested?: boolean
   selected?: boolean
-  onSelect?: (on: boolean) => void
+  onSelect?: (id: string, on: boolean) => void
 }): React.JSX.Element {
   const pauseJob = useYoutubeStore((store) => store.pauseJob)
   const resumeJob = useYoutubeStore((store) => store.resumeJob)
@@ -172,7 +172,7 @@ export const YoutubeJobRow = memo(function YoutubeJobRow({
         <Checkbox
           aria-label={t('Select {title}', { title: job.title })}
           checked={selected}
-          onCheckedChange={(on) => onSelect?.(on)}
+          onCheckedChange={(on) => onSelect?.(job.id, on)}
         />
       </div>
       <div role="cell" className={cn(cellClass, 'gap-2.5', nested ? 'ps-8' : 'ps-0')}>

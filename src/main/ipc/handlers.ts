@@ -50,7 +50,6 @@ import { deviceBindingSupported } from '../network/deviceBinding'
 import { takePendingLink } from '../openLinks'
 import { measureLatencies } from '../network/latency'
 import { NetworkMonitor } from '../network/interfaces'
-import { Lab } from '../debug/lab'
 import { AutoScheduler } from '../groups/autoScheduler'
 import { GroupStore } from '../groups/groupStore'
 import { clearLog, log, logFilePath, readLog } from '../logger'
@@ -84,6 +83,7 @@ async function openNetworkSettings(): Promise<void> {
 }
 
 const DESTINATION_CHECK_MS = 300
+const BEHAVIOR_DEBOUNCE_MS = 250
 
 /** The window is trusted to send the right types, but not to be the only thing that could. */
 function requireAbsolutePath(value: unknown, what: string): string {
@@ -91,6 +91,25 @@ function requireAbsolutePath(value: unknown, what: string): string {
     throw new Error(`${what} must be an absolute path.`)
   }
   return value
+}
+
+/** The window's list of networks: ids only (the checks startDownload makes). */
+function requireNetworkIds(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((id) => typeof id === 'string')) {
+    throw new Error('The networks must be a list of ids.')
+  }
+  return value
+}
+
+/** The window's list of files: each one has a link and networks (the checks startDownload makes). */
+function requireRequests(value: unknown): StartDownloadRequest[] {
+  if (!Array.isArray(value)) throw new Error('The files must be a list.')
+  for (const request of value as unknown[]) {
+    const entry = request as Partial<StartDownloadRequest> | null
+    if (typeof entry?.url !== 'string') throw new Error('Each file needs a link.')
+    requireNetworkIds(entry.interfaceIds)
+  }
+  return value as StartDownloadRequest[]
 }
 
 async function freeSpace(dir: string): Promise<number | null> {
@@ -278,6 +297,24 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   const currentThemeSource = (): ThemeSource =>
     nativeTheme.themeSource === 'dark' ? 'dark' : 'light'
 
+  // A burst of setting changes runs the behavior (login item, menus, ...) once, with the latest
+  // settings, a short moment after the last one.
+  let behaviorTimer: NodeJS.Timeout | null = null
+  let behaviorSettings: AppSettings | null = null
+  const applyBehaviorSoon = (settings: AppSettings): void => {
+    behaviorSettings = settings
+    if (behaviorTimer) clearTimeout(behaviorTimer)
+    behaviorTimer = setTimeout(() => {
+      behaviorTimer = null
+      const latest = behaviorSettings
+      behaviorSettings = null
+      if (!latest) return
+      applyBehavior(latest).catch((error: unknown) =>
+        log.warn('settings', 'behavior could not be applied', { error: String(error) })
+      )
+    }, BEHAVIOR_DEBOUNCE_MS)
+  }
+
   const applySettings = async (patch: AppSettings): Promise<void> => {
     // The one setting main also applies — before saving, so a failed write still switches the
     // window to the theme the toggle now shows.
@@ -295,7 +332,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     if (networks.useVpn && !vpnWasOn) await manager.enableVpn()
     manager.applySettings(saved)
     scheduleController.apply(saved.schedule)
-    await applyBehavior(saved)
+    applyBehaviorSoon(saved)
     sendToWindow(getWindow(), IpcChannels.settingsChanged, {
       downloadsAtOnce: saved.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
       speedLimit: saved.speedLimit,
@@ -462,8 +499,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     )
   )
 
-  handle('openLogs', async () => revealLogFile())
-
   handle('revealDownload', async (_event, id) => manager.reveal(id))
 
   // Only a download Lightning knows can be opened: the window sends an id, never a path to run.
@@ -478,12 +513,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('startDownload', async (_event, request) => {
     requireAbsolutePath(request?.destinationDir, 'The destination folder')
-    if (
-      !Array.isArray(request.interfaceIds) ||
-      !request.interfaceIds.every((id) => typeof id === 'string')
-    ) {
-      throw new Error('The networks must be a list of ids.')
-    }
+    requireNetworkIds(request.interfaceIds)
     log.info('action', 'new download', {
       url: redactUrl(request.url),
       kind: request.kind,
@@ -496,7 +526,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   handle('listHistory', async () => listHistory())
 
-  handle('updateHistory', async (_event, id, fileName) => manager.updateHistory(id, fileName))
+  handle('updateHistory', async (_event, id, fileName) => {
+    if (typeof fileName !== 'string') throw new Error('The file name must be text.')
+    return manager.updateHistory(id, fileName)
+  })
 
   handle('listGroups', async () => {
     await groups.loaded
@@ -577,13 +610,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
       await rmdir(group.destinationDir).catch(() => {})
   }
 
-  handle('createGroup', async (_event, input) => createGroup(input))
+  handle('createGroup', async (_event, input) => {
+    requireAbsolutePath(input?.destinationDir, 'The destination folder')
+    requireNetworkIds(input?.interfaceIds)
+    requireRequests(input?.requests)
+    return createGroup(input)
+  })
   handle('updateGroup', async (_event, id, patch) => updateGroup(id, patch))
   handle('removeGroup', async (_event, id, options) => removeGroup(id, options))
 
-  handle('addGroupItems', async (_event, id, requests) => ({
-    failed: await addToGroup(id, requests)
-  }))
+  handle('addGroupItems', async (_event, id, requests) => {
+    requireRequests(requests)
+    return { failed: await addToGroup(id, requests) }
+  })
 
   handle('setGroupFileChoice', async (_event, id, fileId, networks) =>
     groups.choose(id, fileId, networks)
@@ -654,6 +693,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   })
 
   handle('relinkDownload', async (_event, id, url) => {
+    if (typeof url !== 'string') throw new Error('The link must be text.')
     log.info('action', 'fix link', { id, url: redactUrl(url) })
     return manager.relink(id, url)
   })
@@ -708,39 +748,47 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
 
   // Not in a packaged build: the lab can rewrite settings and the network list.
   if (!app.isPackaged) {
+    // The Test lab's code is loaded only here, so a packaged build never has it at startup.
     // The Test lab (title bar's Debug button) drives the app through the same operations as above.
-    const lab = new Lab({
-      manager,
-      groups,
-      networks,
-      readSettings: loadSettings,
-      resetPlanner: () => autoScheduler.forgetBaselines(),
-      ops: {
-        applySettings,
-        createGroup,
-        updateGroup,
-        removeGroup: (id) => removeGroup(id),
-        addGroupItems: async (id, requests) => ({ failed: await addToGroup(id, requests) }),
-        setGroupFileChoice: async (id, fileId, chosen) => groups.choose(id, fileId, chosen),
-        // What the window's Resume does for a group: its paused files go on, and an auto group's
-        // planner is let loose on the files still waiting.
-        resumeGroup: async (id) => {
-          autoScheduler.activate(id)
-          for (const state of manager.groupDownloads(id)) {
-            if (state.status === 'paused') manager.resume(state.id)
+    void import('../debug/lab')
+      .then(({ Lab }) => {
+        const lab = new Lab({
+          manager,
+          groups,
+          networks,
+          readSettings: loadSettings,
+          resetPlanner: () => autoScheduler.forgetBaselines(),
+          ops: {
+            applySettings,
+            createGroup,
+            updateGroup,
+            removeGroup: (id) => removeGroup(id),
+            addGroupItems: async (id, requests) => ({ failed: await addToGroup(id, requests) }),
+            setGroupFileChoice: async (id, fileId, chosen) => groups.choose(id, fileId, chosen),
+            // What the window's Resume does for a group: its paused files go on, and an auto group's
+            // planner is let loose on the files still waiting.
+            resumeGroup: async (id) => {
+              autoScheduler.activate(id)
+              for (const state of manager.groupDownloads(id)) {
+                if (state.status === 'paused') manager.resume(state.id)
+              }
+            }
+          },
+          push: () => {
+            sendToWindow(getWindow(), IpcChannels.labEvent, {
+              kind: 'state',
+              state: lab.getState()
+            })
           }
-        }
-      },
-      push: () => {
-        sendToWindow(getWindow(), IpcChannels.labEvent, { kind: 'state', state: lab.getState() })
-      }
-    })
-    handle('labList', async () => lab.list())
-    handle('labGetState', async () => lab.getState())
-    handle('labRun', async (_event, planId) => lab.run(planId))
-    handle('labRunAll', async () => lab.runAll())
-    handle('labVerify', async (_event, planId) => lab.verify(planId))
-    handle('labStop', async () => lab.stop())
+        })
+        handle('labList', async () => lab.list())
+        handle('labGetState', async () => lab.getState())
+        handle('labRun', async (_event, planId) => lab.run(planId))
+        handle('labRunAll', async () => lab.runAll())
+        handle('labVerify', async (_event, planId) => lab.verify(planId))
+        handle('labStop', async () => lab.stop())
+      })
+      .catch((error) => log.warn('app', 'test lab not loaded', { error: String(error) }))
   }
 
   return manager

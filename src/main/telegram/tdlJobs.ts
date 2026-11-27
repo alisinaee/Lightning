@@ -48,6 +48,8 @@ interface Runtime {
   logOffset: number
   lastBytes: Map<string, number>
   mode: 'restart' | 'continue'
+  /** Set by the first of the process's 'error' and 'close' events to finish the run. */
+  settled: boolean
 }
 
 export interface TdlJobManagerOptions {
@@ -378,7 +380,8 @@ export class TdlJobManager {
         existing,
         logOffset,
         lastBytes: new Map(),
-        mode
+        mode,
+        settled: false
       }
       runtime.stopped = placeholder.stopped
       if (runtime.stopped) child.kill()
@@ -445,11 +448,22 @@ export class TdlJobManager {
     }
     let changed = false
     const claimed = new Set<string>()
+    // The names that hold each number, once per scan: an item looks only at its own message's names.
+    const byNumber = new Map<string, string[]>()
+    for (const name of names) {
+      for (const number of new Set(name.match(/\d+/g) ?? [])) {
+        const list = byNumber.get(number)
+        if (list) list.push(name)
+        else byNumber.set(number, [name])
+      }
+    }
     for (const item of job.items) {
       if (item.status === 'done' || item.status === 'skipped') continue
       const matcher = itemMatcher(item)
       const chat = item.key.slice(0, item.key.lastIndexOf('/'))
-      const matches = names.filter((name) => matcher.test(name) && !claimed.has(name))
+      const message = messageOf(item.key)
+      const candidates = /^\d+$/.test(message) ? (byNumber.get(message) ?? []) : names
+      const matches = candidates.filter((name) => matcher.test(name) && !claimed.has(name))
       const best = matches.find((name) => name.startsWith(`${chat}_`)) ?? matches[0]
       if (!best) continue
       claimed.add(best)
@@ -489,7 +503,8 @@ export class TdlJobManager {
     code: number | null,
     spawnError?: string
   ): Promise<void> {
-    if (this.running.get(job.id) !== runtime) return
+    if (runtime.settled || this.running.get(job.id) !== runtime) return
+    runtime.settled = true
     clearInterval(runtime.timer)
     await this.scan(job, runtime, false)
     const logErrors = await this.logErrors(runtime)

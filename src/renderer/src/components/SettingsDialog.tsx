@@ -2,7 +2,7 @@ import { toDisplayPath } from '../utils/format'
 import type { AppPrefs, ResolvedPrefs, StatusBarPrefs } from '@shared/types'
 import { BrowserPage } from './BrowserPage'
 import { SchedulePage } from './SchedulePage'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { t } from '@shared/i18n/react'
 import type { LanguageSetting } from '@shared/i18n'
 import { applyGlass } from '../utils/syncSettings'
@@ -144,7 +144,7 @@ export function SettingsView({ initialPage }: { initialPage?: SettingsPage }): R
   const [target, setTarget] = useState<SettingEntry | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const results = searchSettings(query)
+  const results = useMemo(() => searchSettings(query), [query])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {

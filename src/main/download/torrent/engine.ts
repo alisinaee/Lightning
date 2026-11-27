@@ -8,7 +8,14 @@ import { testKnobs } from '../../testKnobs'
 let loaded: Promise<typeof WebTorrent> | null = null
 
 function loadWebTorrent(): Promise<typeof WebTorrent> {
-  loaded ??= import('webtorrent').then((module) => module.default)
+  loaded ??= import('webtorrent').then(
+    (module) => module.default,
+    (error: unknown) => {
+      // Failed to load: the next use tries again rather than awaiting this failure.
+      loaded = null
+      throw error
+    }
+  )
   return loaded
 }
 

@@ -67,7 +67,7 @@ export interface TorrentTransferTarget extends TransferTargetBase {
   uploadMeters: Meters
 }
 
-export type TransferTarget = HttpTransferTarget | TorrentTransferTarget
+type TransferTarget = HttpTransferTarget | TorrentTransferTarget
 
 /** What a transfer asks of the manager. */
 export interface TransferHost {

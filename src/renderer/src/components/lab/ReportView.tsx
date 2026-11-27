@@ -1,5 +1,5 @@
 import { Check as CheckIcon, Copy as CopyIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { ScrollArea } from '../ui/scroll-area'
 
@@ -27,6 +27,8 @@ export function CopyReportButton({
   label?: string
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copyTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(copyTimer.current), [])
   return (
     <Button
       variant="outline"
@@ -36,7 +38,8 @@ export function CopyReportButton({
         if (!report) return
         void copy(report).then((ok) => {
           setCopied(ok)
-          setTimeout(() => setCopied(false), 1500)
+          window.clearTimeout(copyTimer.current)
+          copyTimer.current = window.setTimeout(() => setCopied(false), 1500)
         })
       }}
     >

@@ -173,7 +173,8 @@ export async function updateHistoryEntry(id: string, fileName: string): Promise<
 
 /** Forgets the entries with these ids; none given, every one. The files themselves stay. */
 export function removeFromHistory(ids?: string[]): Promise<void> {
+  const drop = ids ? new Set(ids) : null
   return updateJson(historyPath(), (current) =>
-    ids ? entriesOf(current).filter((entry) => !ids.includes(entry.id)) : []
+    drop ? entriesOf(current).filter((entry) => !drop.has(entry.id)) : []
   )
 }

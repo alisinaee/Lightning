@@ -17,7 +17,7 @@ const NO_ONE_FOUND =
 
 /** How the check of a magnet link is going, while it's still going: `noPeersYet` once its first
  * search came back empty and it's looking a little longer. */
-export interface MagnetCheckStatus {
+interface MagnetCheckStatus {
   /** The link as it was given to probeUrl. */
   link: string
   noPeersYet: boolean
@@ -139,7 +139,11 @@ export async function fetchMagnetMetadata(magnet: string): Promise<Uint8Array> {
   if (current?.infoHash === infoHash) return current.metadata
   current?.cancel()
 
-  probeClient ??= createClient()
+  probeClient ??= createClient().catch((error: unknown) => {
+    // Failed to start: the next lookup tries again rather than awaiting this failure.
+    probeClient = null
+    throw error
+  })
   const client = await probeClient
   const dht = ((client as unknown as { dht?: DhtNode | false | null }).dht ||
     null) as DhtNode | null

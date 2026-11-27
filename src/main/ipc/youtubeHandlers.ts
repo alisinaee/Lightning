@@ -179,6 +179,8 @@ export async function registerYoutubeHandlers(
   handle('guidePermission', (_event, kind) => guidePermission(kind))
 
   handle('youtubeStart', async (_event, request) => {
+    // yt-dlp must never read an address as one of its own options.
+    if (!/^https?:\/\//i.test(request.url)) throw new Error('Only web addresses can be downloaded.')
     const offer = request.offerId ? offers.get(request.offerId) : undefined
     if (request.offerId && offer) {
       // The cookies now belong to this download: keep them out of the offer's cleanup.
@@ -326,7 +328,12 @@ export async function registerYoutubeHandlers(
   return {
     async dispose() {
       throttler.dispose()
-      for (const offer of offers.values()) clearTimeout(offer.timer)
+      for (const offer of offers.values()) {
+        clearTimeout(offer.timer)
+        if (offer.cookies?.temporary) {
+          await rm(offer.cookies.file, { force: true }).catch(() => undefined)
+        }
+      }
       offers.clear()
       await jobs.dispose()
     },

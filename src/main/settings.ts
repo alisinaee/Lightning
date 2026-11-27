@@ -333,10 +333,20 @@ export async function saveSettings(patch: unknown): Promise<void> {
   let saved: AppSettings | undefined
   try {
     await updateJson(file, (current) => {
-      saved = sanitizeSettings({
-        ...sanitizeSettings(current),
+      // Merged against what is on disk right now, so a save of one pref doesn't drop the others.
+      const base = sanitizeSettings(current)
+      const merged: Record<string, unknown> = {
+        ...base,
         ...(isRecord(patch) ? patch : {})
-      })
+      }
+      if (isRecord(patch) && isRecord(patch.prefs)) {
+        const prefs: Record<string, unknown> = { ...(base.prefs ?? {}), ...patch.prefs }
+        if (isRecord(patch.prefs.statusBar)) {
+          prefs.statusBar = { ...(base.prefs?.statusBar ?? {}), ...patch.prefs.statusBar }
+        }
+        merged.prefs = prefs
+      }
+      saved = sanitizeSettings(merged)
       return saved
     })
     if (activeSaves === 1 && saved !== undefined && settingsPath() === file) {

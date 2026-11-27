@@ -78,11 +78,6 @@ export class AutoScheduler {
     this.timer.unref()
   }
 
-  stop(): void {
-    if (this.timer) clearInterval(this.timer)
-    this.timer = null
-  }
-
   /** The group has files to start. */
   activate(groupId: string): void {
     this.active.add(groupId)
@@ -209,6 +204,14 @@ export class AutoScheduler {
     this.ticking = true
     try {
       this.watchNetworks()
+      // Nothing to start or move: skip the copy of every group that a tick would make.
+      const busy =
+        this.active.size > 0 ||
+        this.runs.size > 0 ||
+        this.measuring.size > 0 ||
+        this.starting.size > 0
+      if (!busy && !this.store.hasAutoWork((id) => this.manager.groupDownloads(id).some(isLive)))
+        return
       for (const group of this.store.list()) {
         if (group.mode === 'auto') await this.schedule(group)
       }
@@ -529,7 +532,7 @@ export class AutoScheduler {
         .sort((a, b) => speedOf(b.id) - speedOf(a.id))[0]
       for (const network of first.networks) {
         if (network.enabled && network.id !== best?.id) {
-          void this.manager.setNetworkEnabled(first.id, network.id, false)
+          void this.manager.setNetworkEnabled(first.id, network.id, false).catch(() => {})
         }
       }
       if (best) run.changedAt.set(first.id, Date.now())

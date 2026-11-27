@@ -1,11 +1,10 @@
 import { t } from '@shared/i18n/react'
 import type { DownloadState, FinishedDownload, RequestExtras } from '@shared/types'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { AppSidebar } from './components/AppSidebar'
 import { FirstRunIntro } from './components/FirstRunIntro'
 import { OnboardingTour } from './components/OnboardingTour'
 import { SimBanner } from './components/lab/SimBanner'
-import { TestLab } from './components/lab/TestLab'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { GroupDialog } from './components/GroupDialog'
 import { MultiLinkDialog } from './components/MultiLinkDialog'
@@ -29,12 +28,19 @@ import { CompleteScreen } from './screens/CompleteScreen'
 import { DownloadingScreen } from './screens/DownloadingScreen'
 import { DownloadsScreen } from './screens/DownloadsScreen'
 import { ErrorScreen } from './screens/ErrorScreen'
-import { TelegramScreen } from './screens/TelegramScreen'
-import { YouTubeScreen } from './screens/YouTubeScreen'
 import { useYoutubeStore } from './store/useYoutubeStore'
 import { useTelegramStore } from './store/useTelegramStore'
 import { useLogsStore } from './store/useLogsStore'
 import { useAppStore } from './store/useAppStore'
+
+// Rarely opened: loaded on first use, so the main screen starts without them.
+const TestLab = lazy(() => import('./components/lab/TestLab').then((m) => ({ default: m.TestLab })))
+const TelegramScreen = lazy(() =>
+  import('./screens/TelegramScreen').then((m) => ({ default: m.TelegramScreen }))
+)
+const YouTubeScreen = lazy(() =>
+  import('./screens/YouTubeScreen').then((m) => ({ default: m.YouTubeScreen }))
+)
 
 function assertNever(status: never): never {
   throw new Error(`Unhandled download status: ${String(status)}`)
@@ -76,8 +82,18 @@ function CurrentScreen({
   })
   const viewName = useAppStore((store) => store.view.name)
 
-  if (viewName === 'telegram') return <TelegramScreen onOpenSettings={onOpenSettings} />
-  if (viewName === 'youtube') return <YouTubeScreen onOpenSettings={onOpenSettings} />
+  if (viewName === 'telegram')
+    return (
+      <Suspense fallback={null}>
+        <TelegramScreen onOpenSettings={onOpenSettings} />
+      </Suspense>
+    )
+  if (viewName === 'youtube')
+    return (
+      <Suspense fallback={null}>
+        <YouTubeScreen onOpenSettings={onOpenSettings} />
+      </Suspense>
+    )
 
   const cancelled = shown && !('unitsWritten' in shown) && shown.status === 'cancelled'
   return shown && !cancelled ? (
@@ -255,7 +271,11 @@ function App(): React.JSX.Element {
         <TelegramLoginDialog />
         <UpdateDialog />
         <NetworkBindingDialog />
-        {window.lightning.initialState.labEnabled && <TestLab />}
+        {window.lightning.initialState.labEnabled && (
+          <Suspense fallback={null}>
+            <TestLab />
+          </Suspense>
+        )}
       </div>
     </TooltipProvider>
   )

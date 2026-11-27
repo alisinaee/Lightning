@@ -26,15 +26,17 @@ import { cn } from 'cn'
 /** A playlist's header row, like a Downloads group: its title, its counts and overall progress,
  * with a chevron to show or hide its videos. */
 export const YoutubeGroupRow = memo(function YoutubeGroupRow({
+  id,
   title,
   jobs,
   expanded,
   onToggle
 }: {
+  id: string
   title: string
   jobs: YoutubeJob[]
   expanded: boolean
-  onToggle: () => void
+  onToggle: (id: string) => void
 }): React.JSX.Element {
   const revealJob = useYoutubeStore((store) => store.revealJob)
   const columns = useYoutubeColumns()
@@ -64,7 +66,7 @@ export const YoutubeGroupRow = memo(function YoutubeGroupRow({
               ? t('Hide videos of {title}', { title })
               : t('Show videos of {title}', { title })
           }
-          onClick={onToggle}
+          onClick={() => onToggle(id)}
         >
           <Chevron className={expanded ? '' : 'rtl:-scale-x-100'} />
         </Button>

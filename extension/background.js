@@ -30,8 +30,6 @@ async function loadLang() {
   lang = I18N.pick(saved, uiLanguage())
 }
 const langReady = loadLang()
-// Links the browser is allowed to download itself (the app was not there to take them).
-const letThrough = new Set()
 
 /** The key Lightning wrote beside these files when it set them up ('' when there is none). */
 async function bundledKey() {
@@ -84,7 +82,8 @@ async function reloadIfNewer(version) {
 /** Finds the port Lightning answers on; null when the app is not running. */
 async function findPort(force = false) {
   if (cachedPort && !force) return cachedPort
-  for (const port of cachedPort ? [cachedPort, ...PORTS] : PORTS) {
+  const order = cachedPort ? [cachedPort, ...PORTS.filter((port) => port !== cachedPort)] : PORTS
+  for (const port of order) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/v1/ping`, {
         signal: AbortSignal.timeout(800)
@@ -114,8 +113,20 @@ async function rememberLanguage(code) {
   lang = I18N.pick(next, uiLanguage())
 }
 
+// The features answer is kept for half a minute: the menus and every download ask for it.
+const FEATURES_TTL_MS = 30000
+let featuresCache = null
+let featuresAt = 0
+
 /** Which features Lightning's Settings has on; all on when it cannot be asked (an older Lightning). */
 async function features() {
+  if (featuresCache && Date.now() - featuresAt < FEATURES_TTL_MS) return featuresCache
+  featuresCache = await loadFeatures()
+  featuresAt = Date.now()
+  return featuresCache
+}
+
+async function loadFeatures() {
   const all = { capture: true, menuDownload: true, menuScan: true }
   const { key } = await settings()
   const port = await findPort()
@@ -157,7 +168,6 @@ async function refreshMenus() {
   update('lightning-video', on.menuDownload)
   return on
 }
-refreshMenus()
 
 // Lightning registers the lightning:// scheme: opening it starts the app when it is closed.
 const APP_LINK = 'lightning://open'
@@ -213,7 +223,8 @@ async function callApp(path, payload, retried = false) {
     response = await fetch(`http://127.0.0.1:${port}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000)
     })
   } catch {
     cachedPort = null
@@ -369,6 +380,7 @@ api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REQUESTS_ALARM) checkRequests()
 })
 api.runtime.onStartup.addListener(() => checkRequests())
+api.runtime.onStartup.addListener(() => refreshMenus())
 
 /** Hands one link over, with the page it came from and the cookies the browser holds for it. */
 async function handOver(url, referrer, extra = {}) {
@@ -395,7 +407,6 @@ function excluded(url, list) {
 api.downloads.onCreated.addListener(async (item) => {
   const url = item.finalUrl || item.url
   if (!/^https?:/i.test(url)) return
-  if (letThrough.delete(url) || letThrough.delete(item.url)) return
   const options = await settings()
   if (!options.enabled || !options.key) return
   if (!(await features()).capture) return
@@ -465,6 +476,7 @@ api.runtime.onInstalled.addListener(async () => {
     contexts: ['page', 'frame'],
     documentUrlPatterns: ['http://*/*', 'https://*/*']
   })
+  await refreshMenus()
 })
 
 // Pages already open get the page scripts too: theirs stopped answering when the extension was loaded.
@@ -561,7 +573,8 @@ async function clickedYoutubeVideo(info, tab) {
 }
 
 api.contextMenus.onClicked.addListener(async (info, tab) => {
-  const on = await refreshMenus()
+  await langReady
+  const on = await features()
   if (info.menuItemId === 'lightning-select') {
     if (on.menuScan) await startSelect(tab, info.frameId)
     return
@@ -735,7 +748,8 @@ function changeVideos(change) {
   videoWrites = videoWrites
     .then(async () => {
       const videos = await readVideos()
-      change(videos)
+      // A change that finds nothing to do returns false: nothing is written.
+      if (change(videos) === false) return
       memoryVideos = videos
       const store = sessionStore()
       if (store) await store.set({ videos }).catch(() => {})
@@ -755,9 +769,14 @@ function showBadge(tabId, count) {
 }
 
 function forgetVideos(tabId) {
+  let forgotten = false
   return changeVideos((videos) => {
+    if (!videos[String(tabId)]) return false
     delete videos[String(tabId)]
-  }).then(() => showBadge(tabId, 0))
+    forgotten = true
+  }).then(() => {
+    if (forgotten) showBadge(tabId, 0)
+  })
 }
 
 const MEDIA_URLS = ['http://*/*', 'https://*/*']
@@ -779,11 +798,11 @@ if (api.webRequest?.onResponseStarted) {
       })
       if (!found) return
       const key = String(details.tabId)
+      let count = 0
       changeVideos((videos) => {
         videos[key] = MEDIA.addEntry(videos[key] || [], found)
-      }).then(() =>
-        readVideos().then((videos) => showBadge(details.tabId, (videos[key] || []).length))
-      )
+        count = videos[key].length
+      }).then(() => showBadge(details.tabId, count))
     },
     { urls: MEDIA_URLS, types: ['media', 'xmlhttprequest', 'other'] },
     ['responseHeaders']
@@ -892,6 +911,7 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
       .get(message.tabId)
       .then((tab) => startSelect(tab))
       .then(() => respond({ ok: true }))
+      .catch(() => respond({ ok: false }))
     return true
   }
   if (message?.type === 'test') {

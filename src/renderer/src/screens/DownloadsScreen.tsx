@@ -136,13 +136,15 @@ export function DownloadsScreen({
   const sortedEntries = useMemo(() => sortEntries(filtered.entries, sort), [filtered, sort])
   // Scrolled down, the list keeps its order: rows do not move as downloads change state.
   const shown = useKeptOrder('list', sortedEntries, (entry) => entry.id, listScrolled)
-  const [matchIndex, setMatchIndex] = useState(0)
+  // The position is kept with the search it was made for: a new search starts at the first match,
+  // and a shrinking result set clamps the position without a reset effect.
+  const [nav, setNav] = useState({ search, index: 0 })
   const matchCount = search.trim() === '' ? 0 : filtered.hits.size
+  const matchIndex = (nav.search === search ? nav.index : 0) % Math.max(matchCount, 1)
   const stepMatch = (dir: 1 | -1): void => {
     if (matchCount === 0) return
-    setMatchIndex((index) => (index + dir + matchCount) % matchCount)
+    setNav({ search, index: (matchIndex + dir + matchCount) % matchCount })
   }
-  useEffect(() => setMatchIndex(0), [search])
   // Only a move through the results or a new search scrolls: a progress push does not.
   useEffect(() => {
     const hit = document.querySelectorAll<HTMLElement>('[data-hit="true"]')[matchIndex]

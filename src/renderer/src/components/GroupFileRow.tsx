@@ -12,12 +12,12 @@ import {
   X
 } from '@phosphor-icons/react'
 import { memo } from 'react'
-import { useNetworkOptions } from '../hooks/useNetworkOptions'
+import type { NetworkOption } from '../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../hooks/useNetworkVisuals'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, sourceOf } from '../utils/format'
 import { chooseConnection, networksOf, type GroupFile } from '../utils/groupFiles'
-import { describeItem, statusKeyOf, type RowInfo } from '../utils/status'
+import { describeItem, isFinished, statusKeyOf, type RowInfo } from '../utils/status'
 import { ConnectionPicker } from './ConnectionPicker'
 import {
   AddedCell,
@@ -39,42 +39,42 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-export type GroupFileEntry =
-  | { kind: 'download'; download: DownloadState }
-  | { kind: 'finished'; download: DownloadState | FinishedDownload }
+type GroupFileEntry =
+  | { kind: 'download' | 'finished'; download: DownloadState | FinishedDownload }
   | { kind: 'waiting'; item: PendingGroupItem }
 
-const subject = (entry: GroupFileEntry): object =>
-  entry.kind === 'waiting' ? entry.item : entry.download
+type GroupFileProps = {
+  group: GroupInfo
+  selected: boolean
+  /** The search found this file. */
+  hit?: boolean
+  /** The list's row actions, shared with the rows of the list. */
+  handlers: RowHandlers
+  onSelect: (id: string, on: boolean) => void
+  onOpen: (id: string) => void
+  onError: (message: string) => void
+  getVisual: ResolveNetworkVisual
+  /** The networks detected now, once for the whole group. */
+  options: NetworkOption[]
+} & (
+  | { kind: 'waiting'; item: PendingGroupItem; download?: undefined }
+  | {
+      kind: 'download' | 'finished'
+      download: DownloadState | FinishedDownload
+      item?: undefined
+    }
+)
 
 /** One file in an open group, as a row of the same table: what it is, which connections it is on
  * and why, and its actions. */
 export const GroupFileRow = memo(
-  function GroupFileRow({
-    group,
-    entry,
-    selected,
-    onSelect,
-    onOpen,
-    onError,
-    getVisual,
-    hit,
-    handlers
-  }: {
-    group: GroupInfo
-    entry: GroupFileEntry
-    selected: boolean
-    /** The search found this file. */
-    hit?: boolean
-    /** The list's row actions, shared with the rows of the list. */
-    handlers: RowHandlers
-    onSelect: (id: string, on: boolean) => void
-    onOpen: (id: string) => void
-    onError: (message: string) => void
-    getVisual: ResolveNetworkVisual
-  }): React.JSX.Element {
+  function GroupFileRow(props: GroupFileProps): React.JSX.Element {
+    const { group, selected, onSelect, onOpen, onError, getVisual, hit, handlers, options } = props
+    const entry: GroupFileEntry =
+      props.kind === 'waiting'
+        ? { kind: 'waiting', item: props.item }
+        : { kind: props.kind, download: props.download }
     const columns = useColumns()
-    const options = useNetworkOptions()
     const removeDownload = useAppStore((store) => store.removeDownload)
     const showSourceHost = useAppStore((store) => store.showSourceHost)
     const auto = group.mode === 'auto'
@@ -178,7 +178,7 @@ export const GroupFileRow = memo(
     const file: GroupFile | null =
       entry.kind === 'waiting'
         ? { kind: 'waiting', item: entry.item }
-        : entry.kind === 'download'
+        : entry.kind === 'download' && !isFinished(entry.download)
           ? { kind: 'download', download: entry.download }
           : null
 
@@ -372,11 +372,13 @@ export const GroupFileRow = memo(
     return <RowContextMenu actions={menu} row={row} />
   },
   (a, b) =>
-    a.entry.kind === b.entry.kind &&
-    subject(a.entry) === subject(b.entry) &&
+    a.kind === b.kind &&
+    a.download === b.download &&
+    a.item === b.item &&
     a.selected === b.selected &&
     a.hit === b.hit &&
     a.group === b.group &&
+    a.options === b.options &&
     a.handlers === b.handlers &&
     a.onSelect === b.onSelect &&
     a.onOpen === b.onOpen &&

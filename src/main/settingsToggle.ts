@@ -21,9 +21,6 @@ export async function toggleSetting(key: 'useVpn' | 'slowMode'): Promise<void> {
  * checked again (known buttons, once each, at most six) before it is kept. */
 export async function saveTrayButtons(list: unknown[]): Promise<void> {
   if (!apply) return
-  const saved = await loadSettings()
-  const prefs = saved.prefs ?? {}
-  await apply({
-    prefs: { ...prefs, statusBar: { ...(prefs.statusBar ?? {}), trayButtons: list } }
-  } as AppSettings)
+  // Only the buttons are sent: saveSettings merges them into what is on disk, so nothing is read here.
+  await apply({ prefs: { statusBar: { trayButtons: list } } } as AppSettings)
 }

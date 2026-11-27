@@ -14,7 +14,8 @@ import {
   ArrowClockwise as RotateCw,
   Trash as Trash2
 } from '@phosphor-icons/react'
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import type { NetworkOption } from '../../hooks/useNetworkOptions'
 import type { ResolveNetworkVisual } from '../../hooks/useNetworkVisuals'
 import { useAppStore } from '../../store/useAppStore'
 import { useKeptOrder } from '../../utils/keepOrder'
@@ -55,7 +56,7 @@ import { FileKindIcon } from './FileKindIcon'
 
 /** A group of downloads as one expandable row of the table, its files indented below it and, for
  * an Auto group, the plan as a strip between them. */
-export function GroupTableRow({
+function GroupTableRowView({
   entry,
   selected,
   only,
@@ -84,6 +85,16 @@ export function GroupTableRow({
 }): React.JSX.Element {
   const { group, items } = entry
   const columns = useColumns()
+  const interfaces = useAppStore((store) => store.interfaces)
+  // Named and colored once for the whole group, not once per file.
+  const options = useMemo<NetworkOption[]>(
+    () =>
+      interfaces.map((iface) => {
+        const visual = getVisual(iface.id, iface.kind, iface.displayName)
+        return { id: iface.id, name: visual.name, solid: visual.solid }
+      }),
+    [interfaces, getVisual]
+  )
   const sort = useAppStore((store) => store.tableLayout.sort)
   // The files follow the column the user sorted by, like the rows of the list itself.
   // Whatever is downloading right now comes first; the chosen sort orders the rest.
@@ -124,16 +135,28 @@ export function GroupTableRow({
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const live = items.filter((item): item is DownloadState => !isFinished(item))
-  const running = live.filter((item) => item.status === 'downloading')
-  const pausable = live.filter((item) => item.status === 'downloading' || item.status === 'queued')
-  const paused = live.filter((item) => item.status === 'paused')
+  // One pass over the files: the live ones, the ones each header button acts on, and the count done.
+  const { live, running, pausable, paused, done, failedLive } = useMemo(() => {
+    const live: DownloadState[] = []
+    const running: DownloadState[] = []
+    const pausable: DownloadState[] = []
+    const paused: DownloadState[] = []
+    let done = 0
+    let failedLive = 0
+    for (const item of items) {
+      if (isFinished(item) || item.status === 'completed') done++
+      if (isFinished(item)) continue
+      live.push(item)
+      if (item.status === 'downloading') running.push(item)
+      if (item.status === 'downloading' || item.status === 'queued') pausable.push(item)
+      if (item.status === 'paused') paused.push(item)
+      if (item.status === 'error') failedLive++
+    }
+    return { live, running, pausable, paused, done, failedLive }
+  }, [items])
   const waiting = group.pending.filter((item) => !item.error)
   // Files that failed: those that stopped, and those that couldn't even start.
-  const failedCount =
-    live.filter((item) => item.status === 'error').length +
-    group.pending.filter((item) => item.error).length
-  const done = items.filter((item) => isFinished(item) || item.status === 'completed').length
+  const failedCount = failedLive + group.pending.filter((item) => item.error).length
   const fileCount = items.length + group.pending.length
   const allDone = fileCount > 0 && done === fileCount
   const first = items[0]
@@ -463,14 +486,12 @@ export function GroupTableRow({
               <GroupFileRow
                 key={item.id}
                 group={group}
-                entry={
-                  isFinished(item) || item.status === 'completed'
-                    ? { kind: 'finished', download: item }
-                    : { kind: 'download', download: item }
-                }
+                kind={isFinished(item) || item.status === 'completed' ? 'finished' : 'download'}
+                download={item}
                 selected={selected.has(item.id)}
                 hit={hits?.has(item.id)}
                 getVisual={getVisual}
+                options={options}
                 onSelect={onSelect}
                 onOpen={onOpen}
                 onError={setError}
@@ -483,10 +504,12 @@ export function GroupTableRow({
               <GroupFileRow
                 key={item.id}
                 group={group}
-                entry={{ kind: 'waiting', item }}
+                kind="waiting"
+                item={item}
                 selected={false}
                 hit={hits?.has(item.id)}
                 getVisual={getVisual}
+                options={options}
                 onSelect={onSelect}
                 onOpen={onOpen}
                 onError={setError}
@@ -520,3 +543,8 @@ export function GroupTableRow({
     </div>
   )
 }
+
+/** A group of downloads as one expandable row of the table, its files indented below it and, for
+ * an Auto group, the plan as a strip between them. Memoized: the list's callbacks are stable, so
+ * it only re-renders when its group, its selection or its files change. */
+export const GroupTableRow = memo(GroupTableRowView)

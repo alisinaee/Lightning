@@ -4,11 +4,6 @@ import { ACTIONS_WIDTH, SELECT_WIDTH } from '../downloads/columns'
 import type { YoutubeJob } from '@shared/youtube'
 import type { RowInfo, StatusKey } from '../../utils/status'
 
-/** The list's columns, the same order and rhythm as the Downloads list: name, status, size, speed, time left, added, actions. */
-/** The Downloads list's grid: a select column, the name, then size, status, speed, time left,
- * added, and the actions column. The same widths, so the two lists line up. */
-export const YOUTUBE_COLUMNS = `${SELECT_WIDTH}px minmax(220px,1fr) 124px 112px 96px 92px 112px ${ACTIONS_WIDTH}px`
-
 const STATUS_KEY: Record<YoutubeJob['status'], StatusKey> = {
   queued: 'queued',
   downloading: 'downloading',
@@ -102,7 +97,7 @@ export function describeYoutubeGroup(jobs: YoutubeJob[]): RowInfo {
   }
 }
 
-export interface YoutubeColumns {
+interface YoutubeColumns {
   /** The time-left and added columns drop out of a narrow window, the way they do on Downloads. */
   eta: boolean
   added: boolean

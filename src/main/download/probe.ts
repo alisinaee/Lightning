@@ -29,7 +29,7 @@ type Headers = Record<string, string | string[] | undefined>
 /** The networks a probe may go out on, best first. The download itself is bound to a network, so
  * the probe must be too: through the computer's default route (a VPN, say) a server can answer
  * differently from how it answers the download, and a size seen here would not hold there. */
-export type ProbeNetworks = () => NetworkInterfaceInfo[]
+type ProbeNetworks = () => NetworkInterfaceInfo[]
 
 function headerValue(headers: Headers, name: string): string | undefined {
   const value = headers[name]

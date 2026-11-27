@@ -6,7 +6,7 @@ import { stallTimeoutMs } from '../testKnobs'
 import { headersForRedirect } from '../../shared/requestHeaders'
 import { compareVersion, type FileVersion, type VersionCheck } from './fileVersion'
 
-export interface ChunkDownloadOptions {
+interface ChunkDownloadOptions {
   url: string
   rangeStart: number
   /** null = open-ended range, download to end of file. */

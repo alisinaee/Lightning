@@ -21,7 +21,3 @@ export function nextDataReset(period: DataLimitPeriod, time: number): Date {
   else date.setDate(date.getDate() + (period === 'day' ? 1 : 7 - ((date.getDay() + 6) % 7)))
   return date
 }
-
-export function dataUsageLabel(period: DataLimitPeriod): string {
-  return DATA_LIMIT_PERIODS.find((entry) => entry.value === period)!.usage
-}

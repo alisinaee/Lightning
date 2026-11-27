@@ -36,15 +36,19 @@ export function buildEntries(
   history: FinishedDownload[],
   groups: GroupInfo[]
 ): ListEntry[] {
+  // Each group's files, bucketed once (downloads first, then history, as listed before).
+  const itemsByGroup = new Map<string, Item[]>()
+  const addToGroup = (groupId: string | undefined, item: Item): void => {
+    if (!groupId) return
+    const bucket = itemsByGroup.get(groupId)
+    if (bucket) bucket.push(item)
+    else itemsByGroup.set(groupId, [item])
+  }
+  for (const download of downloads) addToGroup(download.groupId, download as Item)
+  for (const entry of history) addToGroup(entry.groupId, entry as Item)
   // A group with nothing in it any more isn't listed.
   const grouped: GroupEntry[] = groups
-    .map((group) => ({
-      group,
-      items: [
-        ...downloads.filter((download) => download.groupId === group.id),
-        ...history.filter((entry) => entry.groupId === group.id)
-      ] as Item[]
-    }))
+    .map((group) => ({ group, items: itemsByGroup.get(group.id) ?? [] }))
     .filter((entry) => entry.items.length > 0 || entry.group.pending.length > 0)
   const inGroups = new Set(grouped.flatMap((entry) => entry.items.map((item) => item.id)))
   const single: Item[] = [

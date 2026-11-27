@@ -3,7 +3,7 @@
 
 /** A network that can carry a connection to the peer at hand (one of its addresses has the peer's
  * IP family), with its peers: connected, and being dialled. */
-export interface NetworkLoad {
+interface NetworkLoad {
   id: string
   peers: number
 }

@@ -137,12 +137,6 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   // feedback in between, a slow check reads as the button not having registered the click.
   const [resuming, setResuming] = useState(false)
   const [filesOpen, setFilesOpen] = useState(false)
-  useEffect(() => {
-    if (!isPaused || download.error) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setResuming(false)
-    }
-  }, [isPaused, download.error])
 
   useEffect(() => {
     if (isPaused) {
@@ -169,7 +163,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
     // A queued one is paused out of the queue, as a running one is.
     if (isPaused && !isQueued) {
       setResuming(true)
-      void window.lightning.resumeDownload(download.id)
+      void window.lightning.resumeDownload(download.id).finally(() => setResuming(false))
     } else {
       void window.lightning.pauseDownload(download.id)
     }

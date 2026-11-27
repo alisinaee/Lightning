@@ -22,7 +22,6 @@ export const IpcChannels = {
   clearClipboardHistory: 'clipboard:history-clear',
   downloadClipboardEntry: 'clipboard:history-download',
   clipboardHistoryChanged: 'clipboard:history-changed',
-  openLogs: 'logs:open',
   readLog: 'logs:read',
   openLogFolder: 'logs:open-folder',
   clearLog: 'logs:clear',

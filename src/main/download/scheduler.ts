@@ -79,7 +79,7 @@ export interface SchedulerPolicy {
   minSplitBytes?: number
 }
 
-export interface Requester {
+interface Requester {
   id: number
   networkId: string
   /** How fast this stream fetched its last block, if it has finished one. Without it, a block is

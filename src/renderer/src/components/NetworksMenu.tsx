@@ -2,7 +2,8 @@ import { CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-
 import { useState } from 'react'
 import { useLatencyPolling, useNetworkUsage } from '../hooks/useNetworks'
 import { useNetworkVisuals } from '../hooks/useNetworkVisuals'
-import { isNetworkOff, isVpn } from '@shared/networks'
+import { isNetworkOff } from '@shared/networks'
+import { useNetworkSpeeds } from '../hooks/useActivity'
 import { useAppStore } from '../store/useAppStore'
 import { formatSpeed } from '../utils/format'
 import { DnsPicker } from './DnsPicker'
@@ -43,7 +44,8 @@ export function NetworksMenu({
   const interfaces = useAppStore((store) => store.interfaces)
   const preferences = useAppStore((store) => store.networkPreferences)
   const setNetworkPreference = useAppStore((store) => store.setNetworkPreference)
-  const downloads = useAppStore((store) => store.downloads)
+  // Every running download's speed over each network, added up.
+  const speeds = useNetworkSpeeds()
   const networkVisual = useNetworkVisuals()
   const latencies = useAppStore((store) => store.latencies)
   const [open, setOpen] = useState(false)
@@ -51,15 +53,6 @@ export function NetworksMenu({
   const usage = useNetworkUsage(open)
   useLatencyPolling(open)
 
-  // Every running download's speed over each network, added up.
-  const speeds = new Map<string, number>()
-  for (const download of Object.values(downloads)) {
-    if (download.status !== 'downloading') continue
-    for (const network of download.networks) {
-      if (isVpn(network)) continue
-      speeds.set(network.id, (speeds.get(network.id) ?? 0) + network.speedBytesPerSec)
-    }
-  }
   const on = interfaces.filter((iface) => !isNetworkOff(iface, preferences))
 
   return (
@@ -114,7 +107,7 @@ export function NetworksMenu({
             const used = usage[iface.id] ?? 0
             const dataLimit = preference?.dataLimit
             const reached = dataLimit !== undefined && used >= dataLimit
-            const speed = speeds.get(iface.id) ?? 0
+            const speed = speeds[iface.id] ?? 0
             return (
               <div
                 key={iface.id}

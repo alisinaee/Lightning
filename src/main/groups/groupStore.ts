@@ -112,22 +112,23 @@ export class GroupStore {
     this.onChange()
   }
 
+  /** A group with its pending files, pins and plan, not yet copied (the caller clones it). */
+  private infoOf(group: DownloadGroup): GroupInfo {
+    const base = {
+      ...group,
+      pending: this.saved.pending[group.id] ?? [],
+      pinned: this.saved.pins[group.id] ?? []
+    }
+    const plan = this.planOf?.({ ...base, plan: EMPTY_PLAN, plannedNetworks: {} })
+    return {
+      ...base,
+      plan: plan?.plan ?? EMPTY_PLAN,
+      plannedNetworks: plan?.plannedNetworks ?? {}
+    }
+  }
+
   list(): GroupInfo[] {
-    return structuredClone(
-      this.saved.groups.map((group) => {
-        const base = {
-          ...group,
-          pending: this.saved.pending[group.id] ?? [],
-          pinned: this.saved.pins[group.id] ?? []
-        }
-        const plan = this.planOf?.({ ...base, plan: EMPTY_PLAN, plannedNetworks: {} })
-        return {
-          ...base,
-          plan: plan?.plan ?? EMPTY_PLAN,
-          plannedNetworks: plan?.plannedNetworks ?? {}
-        }
-      })
-    )
+    return this.saved.groups.map((group) => structuredClone(this.infoOf(group)))
   }
 
   /** How many files of the group may run at once, when it has a limit. Cheap: asked often. */
@@ -136,7 +137,19 @@ export class GroupStore {
   }
 
   get(id: string): GroupInfo | undefined {
-    return this.list().find((group) => group.id === id)
+    const group = this.saved.groups.find((entry) => entry.id === id)
+    return group ? structuredClone(this.infoOf(group)) : undefined
+  }
+
+  /** Whether an auto group that is not held has files waiting, or `isLive` says it has a download
+   * running. Cheap: nothing is cloned, so the scheduler can ask every tick. */
+  hasAutoWork(isLive: (groupId: string) => boolean): boolean {
+    return this.saved.groups.some(
+      (group) =>
+        group.mode === 'auto' &&
+        !group.held &&
+        ((this.saved.pending[group.id]?.length ?? 0) > 0 || isLive(group.id))
+    )
   }
 
   create(input: {
@@ -242,6 +255,7 @@ export class GroupStore {
     const pins = this.saved.pins[groupId]
     if (!pins?.includes(itemId)) return
     this.saved.pins[groupId] = [...pins.filter((id) => id !== itemId), downloadId]
+    this.save()
   }
 
   remove(id: string): void {

@@ -3,7 +3,7 @@
  * input unchanged when it is not one / cannot be decoded safely. Mail gateways
  * still put these in Content-Disposition filename= values.
  */
-export function decodeRfc2047Word(value: string): string {
+function decodeRfc2047Word(value: string): string {
   const match = /^=\?([^?]+)\?([bBqQ])\?([^?]*)\?=$/.exec(value.trim())
   if (!match) return value
   const charset = match[1]

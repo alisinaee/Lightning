@@ -29,7 +29,6 @@ import {
 } from './transfer'
 import { ConnectionError, NoCompatibleRouteError, StreamConnection } from '../network/routes'
 import {
-  compareSamples,
   concurrencyFor,
   MAX_SAMPLES,
   median,
@@ -42,8 +41,6 @@ import {
   splittable,
   unlessAborted
 } from './httpHelpers'
-
-export { compareSamples, pickedStreams, splittable }
 
 /** Why an attempt was called off by the manager rather than by a pause or a failure. */
 type AbortReason = 'refresh' | 'lost'
@@ -338,6 +335,8 @@ export class HttpTransfer implements Transfer {
 
   reset(): void {
     this.avoidNetworkByBlock.clear()
+    this.refreshesByBlock.clear()
+    this.hedgesByBlock.clear()
     this.aheadByBlock.clear()
     this.reconciled.clear()
     this.disk.reset()

@@ -350,15 +350,21 @@ export function OnboardingTour(): React.JSX.Element | null {
   // Clicking, or typing into, the thing pointed at is the step done.
   useEffect(() => {
     if (!active) return
+    // The advance a click has started: one at a time, and dropped if the step changes first.
+    let advance: number | undefined
     const onClick = (event: MouseEvent): void => {
+      if (advance !== undefined) return
       if (step.advanceOnClick === undefined && !step.advanceWhen) return
       const target = event.target
       if (!(target instanceof Element)) return
       const el = step.find()
       const hit = step.advanceWhen ? step.advanceWhen(target) : Boolean(el?.contains(target))
       if (el && hit) {
-        window.setTimeout(
-          () => setIndex((now) => (now === index ? index + 1 : now)),
+        advance = window.setTimeout(
+          () => {
+            advance = undefined
+            setIndex((now) => (now === index ? index + 1 : now))
+          },
           step.advanceDelay ?? step.advanceOnClick ?? 300
         )
       }
@@ -366,6 +372,7 @@ export function OnboardingTour(): React.JSX.Element | null {
     document.addEventListener('click', onClick, true)
     return () => {
       document.removeEventListener('click', onClick, true)
+      window.clearTimeout(advance)
     }
   }, [active, step, index])
 

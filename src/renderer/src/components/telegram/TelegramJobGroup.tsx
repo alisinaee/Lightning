@@ -37,8 +37,8 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
   items: TdlItem[]
   open: boolean
   selected: boolean
-  onToggle: () => void
-  onSelect: (on: boolean) => void
+  onToggle: (id: string) => void
+  onSelect: (id: string, on: boolean) => void
 }): React.JSX.Element {
   const columns = useTelegramColumns()
   const homeDir = useAppStore((store) => store.homeDir)
@@ -58,7 +58,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
             data-status={info.status}
             data-selected={selected || undefined}
             onClick={(event) => {
-              if (!onControl(event.target)) onToggle()
+              if (!onControl(event.target)) onToggle(job.id)
             }}
             className={cn(ROW_CLASS, selected && 'bg-primary/10 hover:bg-primary/15')}
             style={{ ...stateEdge(info.status, selected), gridTemplateColumns: columns.template }}
@@ -68,7 +68,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
               <Checkbox
                 aria-label={t('Select {name}', { name: title })}
                 checked={selected}
-                onCheckedChange={onSelect}
+                onCheckedChange={(on) => onSelect(job.id, on)}
               />
             </div>
             <div role="cell" className={cn(cellClass, 'gap-2.5 ps-0')}>
@@ -77,7 +77,7 @@ export const TelegramJobGroup = memo(function TelegramJobGroup({
                 aria-label={
                   open ? t('Collapse {name}', { name: title }) : t('Expand {name}', { name: title })
                 }
-                onClick={onToggle}
+                onClick={() => onToggle(job.id)}
                 className="flex size-6 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Chevron

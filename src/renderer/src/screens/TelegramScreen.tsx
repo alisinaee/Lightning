@@ -3,7 +3,7 @@ import { t } from '@shared/i18n/react'
 import { EmptyStatusIcon } from '../components/EmptyIcon'
 import { TelegramIcon } from '../components/telegram/TelegramIcon'
 import { ListPlus, Plus, Warning as TriangleAlert, User, X } from '@phosphor-icons/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
@@ -138,12 +138,16 @@ export function TelegramScreen({
     }
   }
 
-  const select = (id: string, on: boolean): void => {
-    const next = new Set(selected)
-    if (on) next.add(id)
-    else next.delete(id)
-    setSelected(next)
-  }
+  // Stable (rows are memoized): reads the current selection rather than closing over it.
+  const select = useCallback(
+    (id: string, on: boolean): void => {
+      const next = new Set(useTelegramStore.getState().selected)
+      if (on) next.add(id)
+      else next.delete(id)
+      setSelected(next)
+    },
+    [setSelected]
+  )
 
   const entryJobIds = useMemo(() => entries.map((entry) => entry.job.id), [entries])
   // Keyboard, as on Downloads: Esc lets go of the selection, ⌘/Ctrl+A takes everything listed.
@@ -381,8 +385,8 @@ export function TelegramScreen({
                         items={items}
                         open={expanded.has(job.id)}
                         selected={selected.has(job.id)}
-                        onToggle={() => toggleExpanded(job.id)}
-                        onSelect={(on) => select(job.id, on)}
+                        onToggle={toggleExpanded}
+                        onSelect={select}
                       />
                     ) : (
                       <TelegramItemRow
@@ -390,7 +394,7 @@ export function TelegramScreen({
                         job={job}
                         item={items[0]}
                         selected={selected.has(job.id)}
-                        onSelect={(on) => select(job.id, on)}
+                        onSelect={select}
                       />
                     )
                   )

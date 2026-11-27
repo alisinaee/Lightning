@@ -9,7 +9,8 @@ import { join, relative, resolve, dirname } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const _ew = process.emitWarning
-process.emitWarning = (w, ...a) => (String(w?.message ?? w).includes('MODULE_TYPELESS') ? undefined : _ew.call(process, w, ...a))
+process.emitWarning = (w, ...a) =>
+  String(w?.message ?? w).includes('MODULE_TYPELESS') ? undefined : _ew.call(process, w, ...a)
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const src = join(root, 'src')
@@ -28,11 +29,22 @@ function walk(dir, out = []) {
 }
 
 const unescape = (s, q) =>
-  s.replace(/\\(.)/g, (_, c) => (c === 'n' ? '\n' : c === 't' ? '\t' : c === q || c === '\\' || c === '\'' || c === '"' || c === '`' ? c : '\\' + c))
+  s.replace(/\\(.)/g, (_, c) =>
+    c === 'n'
+      ? '\n'
+      : c === 't'
+        ? '\t'
+        : c === q || c === '\\' || c === "'" || c === '"' || c === '`'
+          ? c
+          : '\\' + c
+  )
 
 const STR = String.raw`(['"\`])((?:\\.|(?!\1)[^\\])*)\1`
 const T_RE = new RegExp(String.raw`(?<![\w.$])t\(\s*${STR}`, 'g')
-const TN_RE = new RegExp(String.raw`(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*${STR}\s*,\s*(['"\`])((?:\\.|(?!\3)[^\\])*)\3`, 'g')
+const TN_RE = new RegExp(
+  String.raw`(?<![\w.$])tn\(\s*[^,()]+(?:\([^()]*\))?[^,()]*,\s*${STR}\s*,\s*(['"\`])((?:\\.|(?!\3)[^\\])*)\3`,
+  'g'
+)
 
 // --- collect used keys
 const used = new Map() // key -> [file:line]
@@ -89,7 +101,9 @@ for (const lang of ['fa', 'ru']) {
   if (!quiet) for (const k of missing) console.log(`  "${k}"  (${used.get(k)[0]})`)
 }
 const unused = (lang) => Object.keys(dicts[lang]).filter((k) => !used.has(k))
-console.log(`\n== unused dictionary entries: fa ${unused('fa').length}, ru ${unused('ru').length} (informational)`)
+console.log(
+  `\n== unused dictionary entries: fa ${unused('fa').length}, ru ${unused('ru').length} (informational)`
+)
 
 console.log(`\n== duplicate conflicts: ${conflicts.length}`)
 for (const c of conflicts) console.log('  ' + c)
@@ -104,7 +118,8 @@ for (const f of files) {
   let n = 0
   for (const m of text.matchAll(JSX_TEXT)) {
     const s = m[1].trim()
-    if (/^[\w$.]+(\s*[=:]|\s*=>)/.test(s) || /^(import|export|return|const|type)\b/.test(s)) continue
+    if (/^[\w$.]+(\s*[=:]|\s*=>)/.test(s) || /^(import|export|return|const|type)\b/.test(s))
+      continue
     if (/[=>]\s*$/.test(m[0].slice(0, -1)) && /^[^A-Za-z]*$/.test(s)) continue
     n++
   }
@@ -112,7 +127,9 @@ for (const f of files) {
   if (n) perFile.push([n, relative(root, f)])
 }
 perFile.sort((a, b) => b[0] - a[0])
-console.log(`\n== possibly untranslated literals (heuristic): ${perFile.reduce((s, [n]) => s + n, 0)} in ${perFile.length} files`)
+console.log(
+  `\n== possibly untranslated literals (heuristic): ${perFile.reduce((s, [n]) => s + n, 0)} in ${perFile.length} files`
+)
 if (!quiet) for (const [n, f] of perFile) console.log(`  ${String(n).padStart(4)}  ${f}`)
 
 if (missingTotal > 0) {

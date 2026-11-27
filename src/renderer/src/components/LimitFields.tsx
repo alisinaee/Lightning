@@ -10,7 +10,7 @@ function formatNumber(value: number): string {
 
 /** A number of `unit`s typed in, as bytes. Anything that isn't a number above zero is flagged (it
  * isn't applied, and holds the form's Save) rather than silently ignored. */
-export function NumberInput({
+function NumberInput({
   bytes,
   unit,
   unitBytes,

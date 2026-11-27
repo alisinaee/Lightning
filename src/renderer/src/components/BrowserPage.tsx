@@ -1,5 +1,5 @@
 import type { BrowserInfo, IntegrationInfo } from '@shared/types'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '@shared/i18n/react'
 import { describeError } from '../utils/format'
 import { Button } from './ui/button'
@@ -58,11 +58,14 @@ export function BrowserPage({
     return () => clearTimeout(timer)
   }, [enabled])
 
+  const copyTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(copyTimer.current), [])
   const copy = async (): Promise<void> => {
     if (!info) return
     await navigator.clipboard.writeText(info.key)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    window.clearTimeout(copyTimer.current)
+    copyTimer.current = window.setTimeout(() => setCopied(false), 1500)
   }
 
   return (

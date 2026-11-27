@@ -289,18 +289,25 @@
   // A status message stays up for a moment; the counts do not overwrite it.
   let flashUntil = 0
 
+  /** Sets a label only when its text changed (the page observer watches this bar too). */
+  function setText(node, text) {
+    if (node.textContent !== text) node.textContent = text
+  }
+
   function updateBar() {
     if (!bar) return
     const count = selected.size
     const loaded = document.querySelectorAll('[data-lightning-card]').length
     // Buttons always follow the picks; only the count text gives way to a status message.
     if (Date.now() >= flashUntil) {
-      bar.count.textContent =
+      setText(
+        bar.count,
         count === 0
           ? t('yt_none')
           : `${t('yt_n', { n: count })}${count >= MAX_BATCH ? ' ' + t('yt_max') : ''}`
+      )
     }
-    bar.send.textContent = count > 0 ? t('yt_dl_n', { n: count }) : t('yt_dl')
+    setText(bar.send, count > 0 ? t('yt_dl_n', { n: count }) : t('yt_dl'))
     bar.send.disabled = count === 0 || busy
     bar.clear.disabled = count === 0 || busy
     bar.invert.disabled = loaded === 0 || busy
@@ -480,9 +487,15 @@
   }
 
   // Lists load as the person scrolls, and YouTube changes pages without reloading: keep up.
+  // The bar's own changes (its labels) are not page changes: they are ignored.
+  const inOwnBar = (node) => {
+    const element = node instanceof Element ? node : node.parentElement
+    return !!element?.closest('#lightning-select-bar, #lightning-select-toggle')
+  }
   let frame = 0
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((records) => {
     if (!active || frame) return
+    if (records.every((record) => inOwnBar(record.target))) return
     frame = requestAnimationFrame(() => {
       frame = 0
       decorate()

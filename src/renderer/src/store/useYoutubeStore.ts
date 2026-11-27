@@ -35,6 +35,15 @@ const sameVideo = (a: string, b: string): boolean =>
 
 let fetchSeq = 0
 
+/** Jobs removed here: a late push for one of them is ignored until a load no longer lists it. */
+const removed = new Set<string>()
+
+/** The same set when every id is still listed; otherwise a copy without the gone ones. */
+const pruneTo = (ids: Set<string>, listed: Set<string>): Set<string> => {
+  const kept = [...ids].filter((id) => listed.has(id))
+  return kept.length === ids.size ? ids : new Set(kept)
+}
+
 /** Tells the person a fetched video is ready to choose. Clicking the notice opens its quality choice. */
 const notifyReady = (id: string, title: string): void => {
   try {
@@ -233,11 +242,19 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
     })
     await get().queueFetch(trimmed, null, { id, inDialog: true })
   },
-  setJob: (job) => set((state) => ({ jobs: { ...state.jobs, [job.id]: job } })),
+  setJob: (job) => {
+    if (removed.has(job.id)) return
+    set((state) => ({ jobs: { ...state.jobs, [job.id]: job } }))
+  },
   loadJobs: async () => {
     try {
       const list = await window.lightning.youtubeListJobs()
-      set({ jobs: Object.fromEntries(list.map((job) => [job.id, job])) })
+      const listed = new Set(list.map((job) => job.id))
+      for (const id of removed) if (!listed.has(id)) removed.delete(id)
+      set((state) => ({
+        jobs: Object.fromEntries(list.map((job) => [job.id, job])),
+        selected: pruneTo(state.selected, listed)
+      }))
     } catch {
       // not available yet
     }
@@ -418,6 +435,7 @@ export const useYoutubeStore = create<YoutubeStore>((set, get) => ({
     await window.lightning.youtubeRetryJob(id)
   },
   removeJob: async (id, deleteFile) => {
+    removed.add(id)
     get().removeJobLocal(id)
     await window.lightning.youtubeRemoveJob(id, deleteFile)
   },

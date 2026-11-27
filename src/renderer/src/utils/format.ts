@@ -72,10 +72,6 @@ export function formatPercent(bytesDownloaded: number, totalBytes: number): numb
   return Math.min(99, Math.round((bytesDownloaded / totalBytes) * 100))
 }
 
-export function fileNameFromPath(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path
-}
-
 /** Short uppercase file-type badge from a name's extension, e.g. "Xcode_16.2.xip" -> "XIP", "photo.jpeg" -> "JPEG". */
 /** A download that is a folder: a torrent's, of its files. */
 export function isFolder(download: DownloadState | FinishedDownload): boolean {

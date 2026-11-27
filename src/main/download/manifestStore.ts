@@ -7,7 +7,7 @@ import type {
 } from '../../shared/types'
 import type { SavedBlocks } from './savedProgress'
 
-export interface PersistedDownloadBase {
+interface PersistedDownloadBase {
   savedAt: number
   partialPath: string
   publicationPath?: string

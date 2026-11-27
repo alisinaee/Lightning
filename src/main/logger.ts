@@ -1,11 +1,12 @@
 import { app } from 'electron'
 import {
-  appendFileSync,
+  createWriteStream,
   mkdirSync,
   readFileSync,
   renameSync,
   statSync,
-  writeFileSync
+  writeFileSync,
+  type WriteStream
 } from 'node:fs'
 import { redactUrlsIn } from '../shared/urlTools'
 import { join } from 'node:path'
@@ -16,6 +17,12 @@ const MAX_BYTES = 2 * 1024 * 1024
 
 let file: string | null = null
 let size = 0
+/** The append stream the lines go through, opened on the first line. */
+let stream: WriteStream | null = null
+/** While the file is being rotated, lines wait here and are written once it is done. */
+let rotating = false
+const queued: string[] = []
+let flushOnQuit = false
 
 function open(): string | null {
   if (file) return file
@@ -52,15 +59,53 @@ function write(level: string, scope: string, message: string, data?: unknown): v
   const path = open()
   if (!path) return
   try {
-    if (size + line.length > MAX_BYTES) {
-      renameSync(path, `${path}.1`)
-      size = 0
-    }
-    appendFileSync(path, line)
+    if (!rotating && size + line.length > MAX_BYTES) rotate(path)
     size += line.length
+    append(path, line)
   } catch {
     // Logging must never break the app.
   }
+}
+
+/** Writes a line through the append stream (opened once, not per line). */
+function append(path: string, line: string): void {
+  if (rotating) {
+    queued.push(line)
+    return
+  }
+  if (!stream) {
+    const opened = createWriteStream(path, { flags: 'a' })
+    // A failed write must not throw out of the stream: the next line opens it again.
+    opened.on('error', () => {
+      if (stream === opened) stream = null
+    })
+    stream = opened
+    if (!flushOnQuit) {
+      flushOnQuit = true
+      app.once('will-quit', () => stream?.end())
+    }
+  }
+  stream.write(line)
+}
+
+/** Moves the full file to its old copy. The stream is closed first, so no line lands in the old
+ * copy after the rename; lines logged meanwhile are written to the new file. */
+function rotate(path: string): void {
+  rotating = true
+  size = 0
+  const old = stream
+  stream = null
+  const finish = (): void => {
+    try {
+      renameSync(path, `${path}.1`)
+    } catch {
+      // Nothing to move: the new file just carries on.
+    }
+    rotating = false
+    for (const line of queued.splice(0)) append(path, line)
+  }
+  if (old) old.end(finish)
+  else finish()
 }
 
 export const log = {

@@ -1,6 +1,7 @@
 import type { DownloadState, FinishedDownload } from '@shared/types'
 import { FolderOpen, PencilSimple as Pencil, Trash as Trash2 } from '@phosphor-icons/react'
 import { useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { t, formatDate } from '@shared/i18n/react'
 import { useAppStore } from '../store/useAppStore'
 import { describeError, formatBytes } from '../utils/format'
@@ -43,7 +44,13 @@ export function HistorySettings({
   onHistoryLimitChange: (limit: number) => void
 }): React.JSX.Element {
   const history = useAppStore((store) => store.history)
-  const downloads = useAppStore((store) => store.downloads)
+  // Only the two totals are kept from the downloads, so a progress update that moves neither
+  // does not re-render this page.
+  const live = useAppStore(
+    useShallow((store) =>
+      liveTotals(store.downloads, new Set(store.history.map((entry) => entry.id)))
+    )
+  )
   const removeDownload = useAppStore((store) => store.removeDownload)
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -65,7 +72,6 @@ export function HistorySettings({
 
   const finishedDown = history.reduce((sum, entry) => sum + entry.bytesDownloaded, 0)
   const finishedUp = history.reduce((sum, entry) => sum + uploadedOf(entry), 0)
-  const live = liveTotals(downloads, new Set(history.map((entry) => entry.id)))
 
   const saveName = async (entry: FinishedDownload): Promise<void> => {
     const name = draft.trim()

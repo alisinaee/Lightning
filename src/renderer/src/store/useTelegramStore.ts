@@ -48,6 +48,12 @@ interface TelegramStore {
   closeLogin: () => void
 }
 
+/** The same set when every id is still listed; otherwise a copy without the gone ones. */
+const pruneTo = (ids: Set<string>, listed: Set<string>): Set<string> => {
+  const kept = [...ids].filter((id) => listed.has(id))
+  return kept.length === ids.size ? ids : new Set(kept)
+}
+
 export const useTelegramStore = create<TelegramStore>((set, get) => ({
   jobs: {},
   status: null,
@@ -65,7 +71,12 @@ export const useTelegramStore = create<TelegramStore>((set, get) => ({
   loadJobs: async () => {
     try {
       const list = await window.lightning.tdlListJobs()
-      set({ jobs: Object.fromEntries(list.map((job) => [job.id, job])) })
+      const listed = new Set(list.map((job) => job.id))
+      set((state) => ({
+        jobs: Object.fromEntries(list.map((job) => [job.id, job])),
+        selected: pruneTo(state.selected, listed),
+        expanded: pruneTo(state.expanded, listed)
+      }))
     } catch {
       // Main has no Telegram support (yet): the section stays empty.
     }

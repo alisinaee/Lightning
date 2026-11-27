@@ -58,7 +58,7 @@ export const fileKindOfMedia = (media: TgMediaKind): FileKind =>
   MEDIA_KINDS.find((entry) => entry.kind === media)?.fileKind ?? 'other'
 
 /** Which columns the list has room for. The name and the status always stay. */
-export interface TelegramColumns {
+interface TelegramColumns {
   eta: boolean
   added: boolean
   template: string

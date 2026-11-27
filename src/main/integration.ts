@@ -25,10 +25,6 @@ export async function regenerateToken(): Promise<string> {
   return token
 }
 
-export function isTokenFormat(value: unknown): value is string {
-  return typeof value === 'string' && TOKEN_FORMAT.test(value)
-}
-
 /** Where the extension's files are: beside the app's resources when packaged, in the project
  * folder in development. */
 export function extensionFolder(): string {

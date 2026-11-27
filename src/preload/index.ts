@@ -127,7 +127,6 @@ const lightningApi = {
   /** Where a file dropped on the window is on disk ('' for one that isn't a file). */
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   readClipboardText: () => invoke('readClipboardText'),
-  openLogs: () => invoke('openLogs'),
   readLog: (limit: number) => invoke('readLog', limit),
   openLogFolder: () => invoke('openLogFolder'),
   clearLog: () => invoke('clearLog'),

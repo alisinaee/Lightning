@@ -30,13 +30,13 @@ export const MAX_STREAMS_PER_NETWORK = 32
  * block each, a stream on a slow network would hold its block while the rest sat idle. */
 const BLOCKS_PER_STREAM = 2
 
-export interface DownloadPlan {
+interface DownloadPlan {
   /** Bytes per block; the last block holds the remainder. */
   blockSizeBytes: number
   blockCount: number
 }
 
-export interface PlanRequest {
+interface PlanRequest {
   /** 0 when unknown. */
   totalBytes: number
   /** false when the server can't serve byte ranges. */
